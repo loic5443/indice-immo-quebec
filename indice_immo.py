@@ -17,8 +17,22 @@ def get_canada_rate():
 def get_us_rate():
     return 5.25
 
-st.title("🏠 ImmoRadar")
-st.write("Assistant intelligent pour analyser le marché immobilier au Canada et aux États-Unis.")
+st.markdown("""
+# 🏠 ImmoRadar Québec
+
+### L’indice immobilier intelligent du Québec et du Canada
+
+Analysez le marché immobilier grâce aux taux d’intérêt, à l’inflation, au chômage et à l’intelligence artificielle.
+
+""")
+
+hero1, hero2, hero3 = st.columns(3)
+
+hero1.metric("📈 Marché Québec", "+4.2%")
+hero2.metric("🏠 Prix moyen", "612 000$")
+hero3.metric("🔥 Opportunité", "Montréal")
+
+st.divider()
 
 st.sidebar.header("⚙️ Paramètres")
 
@@ -176,6 +190,39 @@ st.subheader("📩 Alertes ImmoRadar")
 
 st.write("Recevez des alertes quand le marché immobilier devient plus favorable.")
 
+st.divider()
+
+st.markdown("""
+## 🚀 ImmoRadar Premium
+
+Passez au niveau supérieur avec des analyses immobilières avancées alimentées par l’intelligence artificielle.
+""")
+
+premium1, premium2, premium3 = st.columns(3)
+
+with premium1:
+    st.info("""
+### 📩 Alertes intelligentes
+
+Recevez des alertes automatiques quand le marché devient favorable.
+""")
+
+with premium2:
+    st.info("""
+### 🤖 Analyse IA
+
+Analyse avancée selon votre budget, votre ville et votre stratégie d’investissement.
+""")
+
+with premium3:
+    st.info("""
+### 📈 Historique complet
+
+Suivi des taux, inflation, chômage et tendances immobilières.
+""")
+
+st.button("🔥 Passer au Premium")
+
 email = st.text_input("Votre email")
 
 if st.button("Recevoir les alertes"):
@@ -248,4 +295,3 @@ st.download_button(
     mime="text/plain"
 )
 
-st.caption("ImmoRadar — Prototype SaaS immobilier intelligent.")
