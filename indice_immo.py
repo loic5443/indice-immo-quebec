@@ -2,66 +2,76 @@ import streamlit as st
 import requests
 import json
 import pandas as pd
+import plotly.express as px
+from components.premium import show_premium
+from components.charts import show_market_chart
 from datetime import datetime
+from components.header import show_header
+from components.sidebar import show_sidebar
+from data.economic_data import (
+    get_canada_rate,
+    get_inflation,
+    get_unemployment
+)
 
 st.set_page_config(page_title="ImmoRadar", page_icon="🏠", layout="wide")
 
-def get_canada_rate():
-    try:
-        url = "https://www.bankofcanada.ca/valet/observations/V39079/json"
-        data = requests.get(url, timeout=10).json()
-        return float(data["observations"][-1]["V39079"]["v"])
-    except:
-        return 5.0
+with open("styles/main.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-def get_us_rate():
-    return 5.25
-
-st.markdown("""
-# 🏠 ImmoRadar Québec
-
-### L’indice immobilier intelligent du Québec et du Canada
-
-Analysez le marché immobilier grâce aux taux d’intérêt, à l’inflation, au chômage et à l’intelligence artificielle.
-
-""")
-
-hero1, hero2, hero3 = st.columns(3)
-
-hero1.metric("📈 Marché Québec", "+4.2%")
-hero2.metric("🏠 Prix moyen", "612 000$")
-hero3.metric("🔥 Opportunité", "Montréal")
-
+show_header()
 st.divider()
 
-st.sidebar.header("⚙️ Paramètres")
-
-market = st.sidebar.selectbox("Marché", ["Québec / Canada", "États-Unis"])
-mode = st.sidebar.radio("Mode", ["Données automatiques", "Simulation personnalisée"])
-ville = st.sidebar.text_input("Ville", "Montréal")
-type_propriete = st.sidebar.selectbox("Type de propriété", ["Maison", "Condo", "Duplex", "Triplex", "Immeuble locatif"])
+(
+    market,
+    mode,
+    ville,
+    type_propriete,
+    prix,
+    mise,
+    revenu
+) = show_sidebar()
 
 if market == "Québec / Canada":
+
     taux_auto = get_canada_rate()
-    inflation_auto = 3.0
-    chomage_auto = 6.0
+    inflation_auto = get_inflation()
+    chomage_auto = get_unemployment()
+
 else:
-    taux_auto = get_us_rate()
-    inflation_auto = 3.2
-    chomage_auto = 4.0
+
+    taux_auto = 5.25
+    inflation_auto = 3.0
+    chomage_auto = 4.2
 
 if mode == "Simulation personnalisée":
-    taux = st.sidebar.slider("Taux d’intérêt (%)", 0.0, 12.0, float(taux_auto))
-    inflation = st.sidebar.slider("Inflation (%)", 0.0, 12.0, float(inflation_auto))
-    chomage = st.sidebar.slider("Chômage (%)", 0.0, 15.0, float(chomage_auto))
+
+    taux = st.sidebar.slider(
+        "Taux d’intérêt (%)",
+        0.0,
+        12.0,
+        float(taux_auto)
+    )
+
+    inflation = st.sidebar.slider(
+        "Inflation (%)",
+        0.0,
+        12.0,
+        float(inflation_auto)
+    )
+
+    chomage = st.sidebar.slider(
+        "Chômage (%)",
+        0.0,
+        15.0,
+        float(chomage_auto)
+    )
+
 else:
+
     taux = taux_auto
     inflation = inflation_auto
     chomage = chomage_auto
-
-prix = st.sidebar.number_input("Prix propriété ($)", value=450000, step=10000)
-mise = st.sidebar.number_input("Mise de fonds ($)", value=50000, step=5000)
-revenu = st.sidebar.number_input("Revenu annuel ($)", value=85000, step=5000)
 
 ratio_mise = (mise / prix) * 100
 ratio_prix_revenu = prix / revenu
@@ -158,6 +168,7 @@ with left:
     st.write(message)
 
 with right:
+
     st.subheader("📊 Indicateur visuel")
 
     data = pd.DataFrame({
@@ -165,9 +176,25 @@ with right:
         "Valeur": [40, 60, 75, score]
     })
 
-    st.bar_chart(data.set_index("Zone"))
+    fig = px.bar(
+        data,
+        x="Zone",
+        y="Valeur",
+        text="Valeur",
+        title="Score de risque immobilier"
+    )
+
+    fig.update_layout(
+        paper_bgcolor="#111827",
+        plot_bgcolor="#111827",
+        font_color="white",
+        title_font_size=22
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("🏘️ Résumé")
+
     st.info(f"""
 Marché : {market}
 
@@ -184,6 +211,8 @@ Revenu annuel : {revenu:,}$
 
 st.divider()
 
+show_market_chart(ville)
+
 st.divider()
 
 st.subheader("📩 Alertes ImmoRadar")
@@ -192,36 +221,7 @@ st.write("Recevez des alertes quand le marché immobilier devient plus favorable
 
 st.divider()
 
-st.markdown("""
-## 🚀 ImmoRadar Premium
-
-Passez au niveau supérieur avec des analyses immobilières avancées alimentées par l’intelligence artificielle.
-""")
-
-premium1, premium2, premium3 = st.columns(3)
-
-with premium1:
-    st.info("""
-### 📩 Alertes intelligentes
-
-Recevez des alertes automatiques quand le marché devient favorable.
-""")
-
-with premium2:
-    st.info("""
-### 🤖 Analyse IA
-
-Analyse avancée selon votre budget, votre ville et votre stratégie d’investissement.
-""")
-
-with premium3:
-    st.info("""
-### 📈 Historique complet
-
-Suivi des taux, inflation, chômage et tendances immobilières.
-""")
-
-st.button("🔥 Passer au Premium")
+show_premium()
 
 email = st.text_input("Votre email")
 
@@ -249,14 +249,6 @@ if st.button("Recevoir les alertes"):
     else:
         st.error("❌ Erreur lors de l'inscription.")
 
-st.subheader("🔒 ImmoRadar Premium à venir")
-
-p1, p2, p3 = st.columns(3)
-p1.info("📩 Alertes marché\n\nRecevoir une alerte quand le marché devient favorable.")
-p2.info("🤖 Analyse IA avancée\n\nAnalyse personnalisée selon budget, ville et objectif.")
-p3.info("📈 Historique complet\n\nSuivi des taux, inflation, chômage et score.")
-
-st.divider()
 
 rapport = f"""
 RAPPORT IMMRADAR

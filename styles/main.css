@@ -1,0 +1,53 @@
+.stApp {
+    background: linear-gradient(135deg, #0f172a 0%, #111827 50%, #1e293b 100%);
+    color: #f8fafc;
+}
+
+[data-testid="stSidebar"] {
+    background-color: #020617;
+}
+
+h1, h2, h3, h4, h5, h6, p, label {
+    color: #f8fafc !important;
+}
+
+[data-testid="stMetric"] {
+    background-color: #111827;
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid #334155;
+}
+
+input, textarea, select {
+    background-color: #f8fafc !important;
+    color: #111827 !important;
+}
+
+div.stButton > button {
+    background: linear-gradient(90deg, #2563eb, #7c3aed);
+    color: white !important;
+    border-radius: 12px;
+    padding: 12px 28px;
+    border: none;
+    font-weight: bold;
+}
+
+div.stDownloadButton > button {
+    background: linear-gradient(90deg, #2563eb, #7c3aed);
+    color: white !important;
+    border-radius: 12px;
+    padding: 12px 28px;
+    border: none;
+    font-weight: bold;
+}
+
+div.stButton > button:hover,
+div.stDownloadButton > button:hover {
+    background: linear-gradient(90deg, #1d4ed8, #6d28d9);
+    color: white !important;
+}
+
+[data-testid="stAlert"] {
+    background-color: #172554;
+    color: white !important;
+}
