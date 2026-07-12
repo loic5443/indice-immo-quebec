@@ -11,34 +11,34 @@ def show_market_chart(selected_city):
 
     if selected_city in market_stats:
 
-        infos = market_stats[selected_city]
+        infos_selected = market_stats[selected_city]
 
         st.success(
-            f"📍 {selected_city} — Prix moyen : {infos['prix']} | Variation : {infos['variation']}"
+            f"📍 {selected_city} — Prix moyen : {infos_selected['prix']:,}$ | Variation : +{infos_selected['variation']}%"
         )
 
-    cols = st.columns(4)
+    cols = st.columns(len(market_stats))
 
     for col, (ville, infos) in zip(cols, market_stats.items()):
 
         col.metric(
             f"🏙️ {ville}",
-            infos["prix"],
-            infos["variation"]
+            f"{infos['prix']:,}$",
+            f"+{infos['variation']}%"
         )
 
     historique = pd.DataFrame({
-        "Mois": ["Jan", "Fév", "Mars", "Avr", "Mai", "Juin"],
-        "Montréal": [100, 104, 108, 112, 118, 121],
-        "Québec": [100, 101, 103, 105, 107, 110],
-        "Laval": [100, 102, 106, 107, 109, 113],
-        "Gatineau": [100, 103, 105, 108, 111, 115]
+        "Mois": ["Jan", "Fév", "Mars", "Avr", "Mai", "Juin"]
     })
+
+    for ville, infos in market_stats.items():
+
+        historique[ville] = infos["historique"]
 
     fig2 = px.line(
         historique,
         x="Mois",
-        y=["Montréal", "Québec", "Laval", "Gatineau"],
+        y=list(market_stats.keys()),
         markers=True,
         title="Évolution des prix immobiliers"
     )

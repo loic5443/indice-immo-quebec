@@ -221,7 +221,37 @@ st.write("Recevez des alertes quand le marché immobilier devient plus favorable
 
 st.divider()
 
-show_premium()
+if "premium" not in st.session_state:
+    st.session_state["premium"] = False
+
+if st.session_state["premium"]:
+
+    show_premium(
+        score,
+        ville,
+        prix,
+        mise,
+        revenu,
+        taux,
+        inflation,
+        chomage
+    )
+
+else:
+
+    st.markdown("""
+    ## 🔒 ImmoRadar Premium
+
+    Débloquez :
+    - Prévisions immobilières 12 mois
+    - Score investisseur avancé
+    - Analyse IA détaillée
+    """)
+
+    if st.button("🚀 Passer au Premium"):
+
+        st.session_state["premium"] = True
+        st.rerun()
 
 email = st.text_input("Votre email")
 
