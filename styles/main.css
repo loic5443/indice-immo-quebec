@@ -51,3 +51,11 @@ div.stDownloadButton > button:hover {
     background-color: #172554;
     color: white !important;
 }
+
+[data-testid="stSidebar"] [data-testid="stRadio"] label {
+    padding: 0.35rem 0;
+}
+
+.stApp a {
+    color: #93c5fd;
+}

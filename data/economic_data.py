@@ -2,25 +2,20 @@ import requests
 
 
 def get_canada_rate():
-
+    """Retrieve the latest Bank of Canada policy rate, with a safe fallback."""
     try:
-        url = "https://www.bankofcanada.ca/valet/observations/V39079/json"
-
-        data = requests.get(url, timeout=10).json()
-
-        return float(data["observations"][-1]["V39079"]["v"])
-
-    except:
-        return 5.0
+        response = requests.get(
+            "https://www.bankofcanada.ca/valet/observations/V39079/json", timeout=10
+        )
+        response.raise_for_status()
+        return float(response.json()["observations"][-1]["V39079"]["v"]), True
+    except (requests.RequestException, KeyError, IndexError, TypeError, ValueError):
+        return 5.0, False
 
 
 def get_inflation():
-
-    # Valeur temporaire officielle Canada
     return 2.7
 
 
 def get_unemployment():
-
-    # Valeur temporaire officielle Canada
     return 6.9
