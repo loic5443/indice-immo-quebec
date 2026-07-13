@@ -1,21 +1,16 @@
-import requests
+"""Compatibility layer for the original dashboard modules."""
+
+from data.real_data import get_canada_policy_rate
+from data.simulated_data import SIMULATED_INFLATION, SIMULATED_UNEMPLOYMENT
 
 
 def get_canada_rate():
-    """Retrieve the latest Bank of Canada policy rate, with a safe fallback."""
-    try:
-        response = requests.get(
-            "https://www.bankofcanada.ca/valet/observations/V39079/json", timeout=10
-        )
-        response.raise_for_status()
-        return float(response.json()["observations"][-1]["V39079"]["v"]), True
-    except (requests.RequestException, KeyError, IndexError, TypeError, ValueError):
-        return 5.0, False
+    return get_canada_policy_rate()
 
 
 def get_inflation():
-    return 2.7
+    return SIMULATED_INFLATION
 
 
 def get_unemployment():
-    return 6.9
+    return SIMULATED_UNEMPLOYMENT

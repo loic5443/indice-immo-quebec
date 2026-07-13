@@ -52,6 +52,23 @@ div.stDownloadButton > button:hover {
     color: white !important;
 }
 
+[data-testid="stExpander"] {
+    border: 1px solid #334155;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.55);
+}
+
+@media (max-width: 700px) {
+    [data-testid="stMetric"] {
+        padding: 12px;
+        margin-bottom: 0.5rem;
+    }
+
+    div.stButton > button, div.stDownloadButton > button {
+        width: 100%;
+    }
+}
+
 [data-testid="stSidebar"] [data-testid="stRadio"] label {
     padding: 0.35rem 0;
 }
