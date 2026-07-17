@@ -6,12 +6,12 @@ from data.market_data import market_stats
 
 
 def show_market_chart(selected_city):
-    st.header("Tendances immobilières")
-    st.caption("Données d'exemple — elles ne constituent pas des statistiques de marché en temps réel.")
+    st.subheader("Tendances immobilières")
+    st.caption("Données simulées : elles ne constituent pas des statistiques de marché en temps réel.")
 
     if selected_city in market_stats:
         info = market_stats[selected_city]
-        st.info(f"📍 {selected_city} — Prix moyen indicatif : {info['prix']:,} $ | Variation : +{info['variation']} %")
+        st.info(f"{selected_city} — Prix moyen indicatif : {info['prix']:,} $ | Variation : +{info['variation']} %")
     else:
         st.caption("La ville saisie ne fait pas partie du jeu de données d'exemple ci-dessous.")
 
@@ -24,5 +24,5 @@ def show_market_chart(selected_city):
         historique[ville] = info["historique"]
 
     fig = px.line(historique, x="Mois", y=list(market_stats), markers=True, title="Évolution indicative des prix")
-    fig.update_layout(paper_bgcolor="#111827", plot_bgcolor="#111827", font_color="white", title_font_size=22)
+    fig.update_layout(paper_bgcolor="#ffffff", plot_bgcolor="#ffffff", font_color="#172033", title_font_size=20, legend_title_text="Ville")
     st.plotly_chart(fig, width="stretch", key="main_market_chart")

@@ -1,78 +1,78 @@
+:root {
+    --ink: #172033;
+    --muted: #667085;
+    --line: #e4e8ef;
+    --surface: #ffffff;
+    --canvas: #f6f8fb;
+    --navy: #10233f;
+    --blue: #2563eb;
+    --blue-dark: #1d4ed8;
+    --gold: #d89a32;
+}
+
 .stApp {
-    background: linear-gradient(135deg, #0f172a 0%, #111827 50%, #1e293b 100%);
-    color: #f8fafc;
+    background: var(--canvas);
+    color: var(--ink);
+}
+
+[data-testid="stAppViewContainer"] .main .block-container {
+    max-width: 1180px;
+    padding: 3.2rem 3rem 4rem;
 }
 
 [data-testid="stSidebar"] {
-    background-color: #020617;
+    background: var(--navy);
+    border-right: 1px solid rgba(255,255,255,0.08);
 }
 
-h1, h2, h3, h4, h5, h6, p, label {
-    color: #f8fafc !important;
-}
+[data-testid="stSidebar"] * { color: #f8fafc !important; }
+.brand-mark { background: linear-gradient(135deg, #3b82f6, #d89a32); width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; }
+.sidebar-brand { display: inline-block; margin: 0 0 0 0.55rem; font-size: 1.35rem; vertical-align: middle; }
+.sidebar-tagline { color: #b4c3d8 !important; font-size: 0.84rem; margin-top: 0.6rem; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label { padding: 0.55rem 0.65rem; border-radius: 8px; margin: 0.12rem 0; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: rgba(255,255,255,0.09); }
 
-[data-testid="stMetric"] {
-    background-color: #111827;
-    padding: 18px;
-    border-radius: 16px;
-    border: 1px solid #334155;
-}
+h1, h2, h3 { color: var(--ink) !important; letter-spacing: -0.03em; }
+h1 { font-size: clamp(2.1rem, 4vw, 3.55rem) !important; line-height: 1.08 !important; margin-bottom: 1rem !important; }
+h2 { font-size: clamp(1.55rem, 2.5vw, 2.15rem) !important; }
+h3 { font-size: 1.12rem !important; }
+p, li, label { color: var(--ink); }
 
-input, textarea, select {
-    background-color: #f8fafc !important;
-    color: #111827 !important;
-}
+.hero-panel { padding: 2.5rem 0 1.3rem; max-width: 850px; }
+.hero-copy { color: var(--muted); font-size: 1.2rem; line-height: 1.65; max-width: 760px; }
+.eyebrow { color: var(--blue) !important; font-weight: 800; letter-spacing: 0.12em; font-size: 0.74rem; margin-bottom: 0.6rem; }
+.section-space { height: 3.2rem; }
+.muted-copy, .mini-feature p { color: var(--muted) !important; line-height: 1.55; }
+.feature-icon { color: var(--gold); font-size: 1.15rem; margin-bottom: 0.8rem; }
+.mini-feature { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 1.15rem; min-height: 155px; }
+.final-cta { margin-top: 3.6rem; padding: 2.1rem 2.25rem 1.5rem; border-radius: 18px; background: linear-gradient(115deg, #10233f, #1d4ed8); }
+.final-cta h2, .final-cta p { color: white !important; }
 
-div.stButton > button {
-    background: linear-gradient(90deg, #2563eb, #7c3aed);
-    color: white !important;
-    border-radius: 12px;
-    padding: 12px 28px;
-    border: none;
-    font-weight: bold;
-}
+[data-testid="stVerticalBlockBorderWrapper"] { border: 1px solid var(--line) !important; border-radius: 16px !important; background: var(--surface); box-shadow: 0 5px 20px rgba(16,35,63,0.04); }
+[data-testid="stMetric"] { background: var(--surface); padding: 1rem; border: 1px solid var(--line); border-radius: 14px; }
+[data-testid="stMetricLabel"] { color: var(--muted) !important; }
+[data-testid="stMetricValue"] { color: var(--ink) !important; }
+[data-testid="stExpander"] { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 
-div.stDownloadButton > button {
-    background: linear-gradient(90deg, #2563eb, #7c3aed);
-    color: white !important;
-    border-radius: 12px;
-    padding: 12px 28px;
-    border: none;
-    font-weight: bold;
-}
+.plan-label { color: var(--muted) !important; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; }
+.accent-label { color: var(--blue) !important; }
+.plan-price { font-size: 2.05rem; font-weight: 750; color: var(--ink) !important; margin: 0.4rem 0 1rem; }
+.plan-price span { font-size: 0.92rem; color: var(--muted); font-weight: 500; }
+.plan-feature { color: var(--blue) !important; margin: 0.75rem 0; }
+.plan-feature span { color: var(--ink); margin-left: 0.3rem; }
 
-div.stButton > button:hover,
-div.stDownloadButton > button:hover {
-    background: linear-gradient(90deg, #1d4ed8, #6d28d9);
-    color: white !important;
-}
+div.stButton > button, div.stDownloadButton > button { border-radius: 9px; padding: 0.62rem 1rem; font-weight: 650; border: 1px solid var(--blue); transition: all 0.15s ease; }
+div.stButton > button[kind="primary"] { background: var(--blue); color: white; }
+div.stButton > button[kind="primary"]:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
+div.stButton > button[kind="secondary"] { background: white; color: var(--blue); }
 
-[data-testid="stAlert"] {
-    background-color: #172554;
-    color: white !important;
-}
-
-[data-testid="stExpander"] {
-    border: 1px solid #334155;
-    border-radius: 12px;
-    background: rgba(15, 23, 42, 0.55);
-}
+[data-testid="stAlert"] { border-radius: 12px; }
 
 @media (max-width: 700px) {
-    [data-testid="stMetric"] {
-        padding: 12px;
-        margin-bottom: 0.5rem;
-    }
-
-    div.stButton > button, div.stDownloadButton > button {
-        width: 100%;
-    }
-}
-
-[data-testid="stSidebar"] [data-testid="stRadio"] label {
-    padding: 0.35rem 0;
-}
-
-.stApp a {
-    color: #93c5fd;
+    [data-testid="stAppViewContainer"] .main .block-container { padding: 1.5rem 1rem 3rem; }
+    .hero-panel { padding-top: 0.8rem; }
+    .hero-copy { font-size: 1.05rem; }
+    .section-space { height: 2.3rem; }
+    .final-cta { margin-top: 2.5rem; padding: 1.5rem; }
+    [data-testid="stMetric"] { padding: 0.8rem; }
 }
