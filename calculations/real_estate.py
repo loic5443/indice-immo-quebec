@@ -22,6 +22,7 @@ class AnalysisResult:
     loan_amount: float
     monthly_payment: float
     operating_expenses_monthly: float
+    total_monthly_expenses: float
     net_operating_income_annual: float
     cash_flow_monthly: float
     cash_on_cash_return: float
@@ -82,6 +83,8 @@ def calculate_analysis(inputs: PropertyInputs) -> AnalysisResult:
         + inputs.condo_fees_monthly
         + inputs.other_expenses_monthly
     )
+    # Total monthly outflow combines operating costs with the mortgage payment.
+    total_monthly_expenses = operating_expenses_monthly + monthly_payment
     net_operating_income_annual = (inputs.rental_income_monthly - operating_expenses_monthly) * 12
     cash_flow_monthly = inputs.rental_income_monthly - operating_expenses_monthly - monthly_payment
     # Cash-on-cash return uses annual pre-tax cash flow divided by the cash invested (down payment).
@@ -94,6 +97,7 @@ def calculate_analysis(inputs: PropertyInputs) -> AnalysisResult:
         loan_amount=loan_amount,
         monthly_payment=monthly_payment,
         operating_expenses_monthly=operating_expenses_monthly,
+        total_monthly_expenses=total_monthly_expenses,
         net_operating_income_annual=net_operating_income_annual,
         cash_flow_monthly=cash_flow_monthly,
         cash_on_cash_return=cash_on_cash_return,

@@ -25,6 +25,7 @@ class RealEstateCalculationsTests(unittest.TestCase):
     def test_analysis_ratios_are_calculated_from_inputs(self):
         result = calculate_analysis(self.inputs)
         self.assertAlmostEqual(result.operating_expenses_monthly, 633.33, places=2)
+        self.assertAlmostEqual(result.total_monthly_expenses, 2_959.75, places=2)
         self.assertAlmostEqual(result.net_operating_income_annual, 30_800.00, places=2)
         self.assertAlmostEqual(result.cash_flow_monthly, 240.25, places=2)
         self.assertGreater(result.debt_service_coverage_ratio, 1)

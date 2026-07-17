@@ -20,7 +20,7 @@ DEFAULTS = {
 
 
 def reset_analysis() -> None:
-    """Restore safe, illustrative inputs without touching secrets or external data."""
+    """Restore illustrative inputs without touching secrets or external data."""
     st.session_state.update(DEFAULTS)
 
 
@@ -30,22 +30,18 @@ def _money(value: float) -> str:
 
 def _inputs_from_state() -> PropertyInputs:
     return PropertyInputs(
-        price=st.session_state["property_price"],
-        down_payment=st.session_state["down_payment"],
-        annual_interest_rate=st.session_state["mortgage_rate"],
-        amortization_years=st.session_state["amortization_years"],
-        municipal_taxes_annual=st.session_state["municipal_taxes"],
-        school_taxes_annual=st.session_state["school_taxes"],
-        insurance_monthly=st.session_state["insurance"],
-        condo_fees_monthly=st.session_state["condo_fees"],
-        rental_income_monthly=st.session_state["rental_income"],
-        other_expenses_monthly=st.session_state["other_expenses"],
+        price=st.session_state["property_price"], down_payment=st.session_state["down_payment"],
+        annual_interest_rate=st.session_state["mortgage_rate"], amortization_years=st.session_state["amortization_years"],
+        municipal_taxes_annual=st.session_state["municipal_taxes"], school_taxes_annual=st.session_state["school_taxes"],
+        insurance_monthly=st.session_state["insurance"], condo_fees_monthly=st.session_state["condo_fees"],
+        rental_income_monthly=st.session_state["rental_income"], other_expenses_monthly=st.session_state["other_expenses"],
     )
 
 
 def show_property_analysis() -> None:
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value)
+
     st.title("Analyse immobilière")
     st.write("Saisissez vos hypothèses pour mesurer la viabilité d'un achat locatif. Les résultats sont indicatifs et avant impôt.")
     st.button("Réinitialiser l'analyse", on_click=reset_analysis, type="secondary")
@@ -62,7 +58,6 @@ def show_property_analysis() -> None:
             st.number_input("Amortissement (années)", min_value=5, max_value=30, step=1, key="amortization_years")
             st.number_input("Assurances mensuelles ($)", min_value=0.0, step=25.0, key="insurance")
             st.number_input("Frais de copropriété mensuels ($)", min_value=0.0, step=25.0, key="condo_fees")
-
         revenus, depenses = st.columns(2)
         with revenus:
             st.number_input("Revenus locatifs mensuels ($)", min_value=0.0, step=100.0, key="rental_income")
@@ -76,18 +71,28 @@ def show_property_analysis() -> None:
             st.error(error)
         st.info("Corrigez les champs indiqués pour obtenir une analyse fiable.")
         return
-
-    result = calculate_analysis(inputs)
-    _show_results(inputs, result)
+    _show_results(inputs, calculate_analysis(inputs))
 
 
 def _show_results(inputs: PropertyInputs, result: AnalysisResult) -> None:
     st.subheader("Résultats de votre analyse")
-    payment_col, cashflow_col, return_col, dscr_col = st.columns(4)
+    payment_col, expenses_col = st.columns(2)
     payment_col.metric("Paiement hypothécaire mensuel", _money(result.monthly_payment))
+    payment_col.caption("Montant versé chaque mois pour rembourser le prêt.")
+    expenses_col.metric("Dépenses mensuelles totales", _money(result.total_monthly_expenses))
+    expenses_col.caption("Dépenses d'exploitation plus paiement hypothécaire.")
+
+    cashflow_col, return_col = st.columns(2)
     cashflow_col.metric("Flux de trésorerie mensuel", _money(result.cash_flow_monthly))
-    return_col.metric("Rendement sur la mise", f"{result.cash_on_cash_return:.2f} %")
-    dscr_col.metric("Couverture de la dette", f"{result.debt_service_coverage_ratio:.2f}x")
+    cashflow_col.caption("Loyers moins toutes les dépenses mensuelles, avant impôt.")
+    return_col.metric("Rendement annuel sur la mise", f"{result.cash_on_cash_return:.2f} %")
+    return_col.caption("Flux annuel avant impôt divisé par votre mise de fonds.")
+
+    cap_col, dscr_col = st.columns(2)
+    cap_col.metric("Taux de capitalisation", f"{result.capitalization_rate:.2f} %")
+    cap_col.caption("RNE annuel divisé par le prix; il exclut le financement.")
+    dscr_col.metric("Ratio de couverture de la dette", f"{result.debt_service_coverage_ratio:.2f}x")
+    dscr_col.caption("Au-dessus de 1,00x, le RNE annuel couvre la dette.")
 
     if result.cash_flow_monthly >= 0:
         st.success("Le projet génère un flux de trésorerie mensuel positif avec les hypothèses saisies.")
@@ -106,17 +111,18 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult) -> None:
             "Assurances / copropriété": f"{_money(inputs.insurance_monthly)} / {_money(inputs.condo_fees_monthly)} par mois",
             "Revenus locatifs": f"{_money(inputs.rental_income_monthly)} par mois",
             "Dépenses d'exploitation": f"{_money(result.operating_expenses_monthly)} par mois",
+            "Dépenses mensuelles totales": f"{_money(result.total_monthly_expenses)} par mois",
             "Revenu net d'exploitation (RNE)": f"{_money(result.net_operating_income_annual)} par année",
-            "Taux de capitalisation": f"{result.capitalization_rate:.2f} %",
         }
         for label, value in rows.items():
-            st.write(f"**{label}**  \\n+{value}")
+            st.markdown(f"**{label}**  \n{value}")
 
     with explanations:
         st.subheader("Comment lire les résultats")
         st.write("**Paiement hypothécaire** — remboursement mensuel du prêt selon le taux et l'amortissement.")
+        st.write("**Dépenses totales** — dépenses d'exploitation et remboursement hypothécaire réunis.")
         st.write("**Flux de trésorerie** — loyers moins dépenses d'exploitation et paiement hypothécaire, avant impôt.")
-        st.write("**Rendement sur la mise** — flux annuel avant impôt divisé par votre mise de fonds. Il mesure le rendement de votre argent investi.")
-        st.write("**Taux de capitalisation** — revenu net d'exploitation annuel divisé par le prix. Il exclut le financement.")
-        st.write("**Ratio de couverture de la dette** — RNE annuel divisé par les versements hypothécaires annuels. Au-dessus de 1,00x, le RNE couvre la dette.")
+        st.write("**Rendement sur la mise** — flux annuel avant impôt divisé par votre mise de fonds.")
+        st.write("**Taux de capitalisation** — revenu net d'exploitation annuel divisé par le prix; il exclut le financement.")
+        st.write("**Couverture de la dette** — RNE annuel divisé par les versements hypothécaires annuels.")
         st.caption("Les résultats n'incluent pas l'impôt, les frais de notaire, les frais d'acquisition, la vacance, ni les rénovations majeures sauf si vous les ajoutez aux autres dépenses.")
