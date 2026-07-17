@@ -1,6 +1,7 @@
 """ImmoRadar entry point: UI composition only; calculations live in calculations/."""
 
 import json
+from pathlib import Path
 
 import requests
 import streamlit as st
@@ -16,7 +17,9 @@ from data.simulated_data import SIMULATED_INFLATION, SIMULATED_UNEMPLOYMENT
 
 st.set_page_config(page_title="ImmoRadar", page_icon="🏠", layout="wide", initial_sidebar_state="expanded")
 
-with open("styles/main.css", encoding="utf-8") as css:
+# Resolve assets from this file so `streamlit run` works from any working directory.
+css_path = Path(__file__).resolve().parent / "styles" / "main.css"
+with css_path.open(encoding="utf-8") as css:
     st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
 
 page = show_sidebar()
