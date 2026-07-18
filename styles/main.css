@@ -79,6 +79,10 @@ p, li, label { color: var(--ink); }
 .premium-notice { margin-top: 2rem; padding: 1.35rem 1.5rem; border-left: 4px solid var(--blue); border-radius: 12px; background: #eaf1ff; }
 .premium-notice h3 { margin: 0 0 0.45rem !important; }
 .premium-notice p { color: var(--muted) !important; margin: 0; }
+.account-summary, .save-analysis-panel { margin: 1rem 0 1.5rem; padding: 1.45rem; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--shadow); }
+.account-summary h2 { margin: 0.75rem 0 0.2rem !important; }
+.account-summary p { color: var(--muted) !important; margin: 0.25rem 0; }
+.save-analysis-panel h3 { margin-top: 0 !important; }
 
 .market-card { min-height: 310px; margin-bottom: 1rem; padding: 1.35rem; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--shadow); }
 .market-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }

@@ -3,6 +3,9 @@
 import streamlit as st
 
 from calculations.real_estate import AnalysisResult, PropertyInputs, calculate_analysis, validate_inputs
+from components.account import current_user, is_authenticated
+from components.sidebar import go_to
+from data.database import save_analysis
 
 
 DEFAULTS = {
@@ -98,6 +101,33 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult) -> None:
         st.success("Le projet génère un flux de trésorerie mensuel positif avec les hypothèses saisies.")
     else:
         st.warning("Le flux de trésorerie est négatif : ajustez le prix, le financement, les revenus ou les dépenses.")
+
+    st.markdown("<div class='save-analysis-panel'><h3>Sauvegarder cette analyse</h3>", unsafe_allow_html=True)
+    if is_authenticated():
+        property_name = st.text_input("Nom ou adresse de la propriété", key="saved_property_name", placeholder="Ex. Duplex – Montréal")
+        if st.button("Sauvegarder dans Mes analyses", type="primary", key="save_analysis"):
+            if not property_name.strip():
+                st.error("Veuillez donner un nom ou une adresse à cette analyse.")
+            else:
+                save_analysis(
+                    current_user()["id"],
+                    property_name,
+                    {
+                        "price": inputs.price,
+                        "down_payment": inputs.down_payment,
+                        "rental_income": inputs.rental_income_monthly,
+                        "monthly_expenses": result.total_monthly_expenses,
+                        "cash_flow": result.cash_flow_monthly,
+                        "cash_on_cash_return": result.cash_on_cash_return,
+                        "capitalization_rate": result.capitalization_rate,
+                        "debt_service_coverage_ratio": result.debt_service_coverage_ratio,
+                    },
+                )
+                st.success("Analyse sauvegardée dans Mes analyses.")
+    else:
+        st.write("Connectez-vous pour conserver cette analyse dans votre historique personnel.")
+        st.button("Créer un compte ou se connecter", on_click=go_to, args=("Mon compte",), key="save_analysis_login")
+    st.markdown("</div>", unsafe_allow_html=True)
 
     details, explanations = st.columns([1.1, 1])
     with details:
