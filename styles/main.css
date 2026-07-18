@@ -74,6 +74,22 @@ p, li, label { color: var(--ink); }
 .plan-price span { font-size: 0.92rem; color: var(--muted); font-weight: 500; }
 .plan-feature { color: var(--blue) !important; margin: 0.75rem 0; }
 .plan-feature span { color: var(--ink); margin-left: 0.3rem; }
+.plan-card { min-height: 470px; padding: 1.6rem; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+.premium-card { border-color: #b9d6ff; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 42%); }
+.premium-notice { margin-top: 2rem; padding: 1.35rem 1.5rem; border-left: 4px solid var(--blue); border-radius: 12px; background: #eaf1ff; }
+.premium-notice h3 { margin: 0 0 0.45rem !important; }
+.premium-notice p { color: var(--muted) !important; margin: 0; }
+
+.market-card { min-height: 310px; margin-bottom: 1rem; padding: 1.35rem; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--shadow); }
+.market-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.market-card-top h3 { margin: 0 !important; }
+.market-price { display: block; margin-top: 1.15rem; color: var(--ink); font-size: 1.65rem; letter-spacing: -0.045em; }
+.market-price-label { color: var(--muted); font-size: 0.82rem; }
+.market-details { display: grid; gap: 0.52rem; margin: 1.15rem 0; }
+.market-details span { display: flex; justify-content: space-between; gap: 0.5rem; color: var(--muted); font-size: 0.86rem; }
+.market-details b { color: var(--ink); text-align: right; }
+.market-card p, .comparison-detail { color: var(--muted) !important; font-size: 0.8rem; line-height: 1.55; }
+.comparison-city { color: var(--blue) !important; font-weight: 800; font-size: 1.2rem; margin-bottom: 0.7rem; }
 
 div.stButton > button, div.stDownloadButton > button { border-radius: 9px; padding: 0.62rem 1rem; font-weight: 650; border: 1px solid var(--blue); transition: all 0.15s ease; }
 div.stButton > button[kind="primary"] { background: var(--blue); color: white; }
@@ -90,6 +106,7 @@ div.stButton > button[kind="secondary"] { background: white; color: var(--blue);
     .section-space { height: 2.8rem; }
     .compact-space { height: 1rem; }
     .stat-card, .step-card, .benefit-card { min-height: auto; margin-bottom: 0.75rem; }
+    .plan-card, .market-card { min-height: auto; margin-bottom: 0.9rem; }
     .final-cta { margin-top: 2.8rem; padding: 1.65rem; }
     [data-testid="stMetric"] { padding: 0.8rem; }
 }
