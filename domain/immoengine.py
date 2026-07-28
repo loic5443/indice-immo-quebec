@@ -162,7 +162,7 @@ def _confidence(inputs: PropertyInputs, result: AnalysisResult, profile: str) ->
     core = all(isfinite(value) for value in (inputs.price, inputs.down_payment, inputs.annual_interest_rate, result.monthly_payment))
     operating = all(isfinite(value) and value >= 0 for value in (inputs.municipal_taxes_annual, inputs.school_taxes_annual, inputs.insurance_monthly, inputs.condo_fees_monthly, inputs.other_expenses_monthly))
     rental_ready = inputs.rental_income_monthly > 0 or profile != "Investisseur locatif"
-    score = (35 if core else 0) + (25 if operating else 0) + (20 if rental_ready else 0) + 20
+    score = (30 if core else 0) + (25 if operating else 0) + (20 if rental_ready else 0) + 15
     # All inputs are user-declared and no property/market verification is present;
     # confidence is therefore capped at 80 and is not a recommendation probability.
     return min(score, 80)

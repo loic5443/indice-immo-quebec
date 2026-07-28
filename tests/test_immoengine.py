@@ -47,6 +47,11 @@ class ImmoEngineTests(unittest.TestCase):
         self.assertLessEqual(engine_result.confidence_index, 80)
         self.assertIn("Revenu brut du ménage", engine_result.missing_data)
 
+        incomplete_inputs = PropertyInputs(**{**self.inputs.__dict__, "rental_income_monthly": 0})
+        incomplete_result = calculate_analysis(incomplete_inputs)
+        incomplete_engine = evaluate_immoengine(incomplete_inputs, incomplete_result, "Investisseur locatif")
+        self.assertLess(incomplete_engine.confidence_index, engine_result.confidence_index)
+
     def test_engine_does_not_import_or_use_simulated_market_data(self):
         source = inspect.getsource(immoengine)
         self.assertNotIn("simulated_data", source)
