@@ -5,3 +5,5 @@ __pycache__/
 streamlit-test.log
 data/*.db
 data/*.sqlite
+output/pdf/*.pdf
+tmp/pdfs/

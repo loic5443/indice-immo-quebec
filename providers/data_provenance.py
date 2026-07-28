@@ -7,6 +7,6 @@ from domain.models import ImmoEngineMetadata
 # deliberately does not infer a value, turn illustrative market data into fact,
 # or call a generative AI service.
 IMMOENGINE_METADATA = ImmoEngineMetadata(
-    version="ImmoEngine 1.0.0-deterministic",
+    version="ImmoEngine 1.1.0-financial-scenarios",
     data_provenance="Hypothèses saisies par l'utilisateur; calculs financiers ImmoRadar; aucune estimation de valeur.",
 )

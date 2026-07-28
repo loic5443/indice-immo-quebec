@@ -75,7 +75,7 @@ def evaluate_immoengine(inputs: PropertyInputs, result: AnalysisResult | None, p
 
     dimensions = {
         "finances": _financial_structure(inputs),
-        "abordabilite": _affordability(),
+        "abordabilite": _affordability(inputs, result),
         "rentabilite": _rental_profitability(inputs, result),
         "securite": _safety_margin(inputs, result),
         "financement": _financing_sensitivity(inputs, result),
@@ -111,9 +111,17 @@ def _financial_structure(inputs: PropertyInputs) -> EngineDimension:
     return EngineDimension("Finances", round(score, 1), True, positives, negatives, [])
 
 
-def _affordability() -> EngineDimension:
-    missing = ["Revenu brut du ménage", "Autres dettes et obligations mensuelles"]
-    return EngineDimension("Abordabilité", None, False, [], [], missing)
+def _affordability(inputs: PropertyInputs, result: AnalysisResult) -> EngineDimension:
+    """Use declared income and debts only; this is not a lender qualification rule."""
+    if inputs.household_income_annual is None:
+        return EngineDimension("Abordabilité", None, False, [], [], ["Revenu brut du ménage", "Autres dettes et obligations mensuelles"])
+    ratio = result.housing_cost_ratio
+    if ratio is None:
+        return EngineDimension("Abordabilité", None, False, [], [], ["Revenu brut du ménage"])
+    score = _clamp((50 - ratio) / 20 * 100, 0, 100)
+    positives = [f"Ratio déclaré des coûts de logement et dettes : {ratio:.1f} %."] if ratio <= 35 else []
+    negatives = [f"Ratio déclaré des coûts de logement et dettes : {ratio:.1f} %."] if ratio > 35 else []
+    return EngineDimension("Abordabilité", round(score, 1), True, positives, negatives, [])
 
 
 def _rental_profitability(inputs: PropertyInputs, result: AnalysisResult) -> EngineDimension:
@@ -162,10 +170,11 @@ def _confidence(inputs: PropertyInputs, result: AnalysisResult, profile: str) ->
     core = all(isfinite(value) for value in (inputs.price, inputs.down_payment, inputs.annual_interest_rate, result.monthly_payment))
     operating = all(isfinite(value) and value >= 0 for value in (inputs.municipal_taxes_annual, inputs.school_taxes_annual, inputs.insurance_monthly, inputs.condo_fees_monthly, inputs.other_expenses_monthly))
     rental_ready = inputs.rental_income_monthly > 0 or profile != "Investisseur locatif"
-    score = (30 if core else 0) + (25 if operating else 0) + (20 if rental_ready else 0) + 15
+    affordability_ready = inputs.household_income_annual is not None or profile not in {"Premier acheteur", "Propriétaire"}
+    score = (25 if core else 0) + (25 if operating else 0) + (15 if rental_ready else 0) + (15 if affordability_ready else 0) + 15
     # All inputs are user-declared and no property/market verification is present;
-    # confidence is therefore capped at 80 and is not a recommendation probability.
-    return min(score, 80)
+    # confidence is therefore capped at 85 and is not a recommendation probability.
+    return min(score, 85)
 
 
 def _verdict(score: float, confidence: int) -> str:

@@ -11,7 +11,7 @@ from repositories.sqlite_repository import SQLiteRepository
 
 
 def save_user_analysis(
-    user_id: int, property_name: str, values: dict[str, float], database_path: Path | str,
+    user_id: int, property_name: str, values: dict[str, Any], database_path: Path | str,
     profile: str = "Investisseur locatif", engine_result: ImmoEngineResult | None = None,
 ) -> int:
     """Persist user assumptions and calculated outputs; no value estimate is produced."""
@@ -30,6 +30,9 @@ def save_user_analysis(
         "missing_data_json": json.dumps(snapshot.get("missing_data", []), ensure_ascii=False),
         "recommended_checks_json": json.dumps(snapshot.get("recommended_checks", []), ensure_ascii=False),
         "immodna_json": json.dumps(snapshot.get("dimensions", {}), ensure_ascii=False),
+        "financial_inputs_json": json.dumps(values.get("financial_inputs", {}), ensure_ascii=False),
+        "scenarios_json": json.dumps(values.get("scenarios", []), ensure_ascii=False),
+        "resilience_json": json.dumps(values.get("resilience", {}), ensure_ascii=False),
     }
     return SQLiteRepository(database_path).save_analysis(user_id, property_name.strip(), payload)
 

@@ -44,7 +44,7 @@ class ImmoEngineTests(unittest.TestCase):
     def test_confidence_is_distinct_from_score(self):
         engine_result = evaluate_immoengine(self.inputs, self.result, "Investisseur locatif")
         self.assertNotEqual(engine_result.confidence_index, engine_result.score)
-        self.assertLessEqual(engine_result.confidence_index, 80)
+        self.assertLessEqual(engine_result.confidence_index, 85)
         self.assertIn("Revenu brut du ménage", engine_result.missing_data)
 
         incomplete_inputs = PropertyInputs(**{**self.inputs.__dict__, "rental_income_monthly": 0})

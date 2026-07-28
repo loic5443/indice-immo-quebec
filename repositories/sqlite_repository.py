@@ -59,15 +59,17 @@ class SQLiteRepository:
                 monthly_expenses, cash_flow, cash_on_cash_return, capitalization_rate,
                 debt_service_coverage_ratio, engine_version, data_provenance, user_profile,
                 immo_score, confidence_index, engine_verdict, positive_factors_json,
-                negative_factors_json, missing_data_json, recommended_checks_json, immodna_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                negative_factors_json, missing_data_json, recommended_checks_json, immodna_json,
+                financial_inputs_json, scenarios_json, resilience_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (user_id, property_name, values["created_at"], values["price"], values["down_payment"],
                  values["rental_income"], values["monthly_expenses"], values["cash_flow"],
                  values["cash_on_cash_return"], values["capitalization_rate"],
                  values["debt_service_coverage_ratio"], values["engine_version"], values["data_provenance"],
                  values["user_profile"], values["immo_score"], values["confidence_index"],
                  values["engine_verdict"], values["positive_factors_json"], values["negative_factors_json"],
-                 values["missing_data_json"], values["recommended_checks_json"], values["immodna_json"]),
+                 values["missing_data_json"], values["recommended_checks_json"], values["immodna_json"],
+                 values["financial_inputs_json"], values["scenarios_json"], values["resilience_json"]),
             )
         return int(cursor.lastrowid)
 

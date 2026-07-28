@@ -6,6 +6,7 @@ import streamlit as st
 from components.account import current_user, is_authenticated
 from components.sidebar import go_to
 from data.database import delete_analysis, list_analyses, toggle_favorite
+from services.report_service import generate_report_pdf
 
 
 def _money(value: float) -> str:
@@ -61,6 +62,23 @@ def show_saved_analyses() -> None:
                     st.write("**Points à surveiller :** " + " · ".join(negatives))
                 if missing:
                     st.write("**Données manquantes :** " + " · ".join(missing))
+            scenarios = json.loads(analysis.get("scenarios_json", "[]"))
+            resilience = json.loads(analysis.get("resilience_json", "{}"))
+            if scenarios:
+                st.markdown("**Scénarios sauvegardés**")
+                st.dataframe([
+                    {"Scénario": item["name"], "Flux mensuel": _money(item["financial"]["cash_flow_monthly"]),
+                     "DSCR": f"{item['financial']['debt_service_coverage_ratio']:.2f}x", "Verdict": item["engine"]["verdict"]}
+                    for item in scenarios
+                ], hide_index=True, width="stretch")
+            if resilience:
+                st.write(f"**Résistance financière :** {resilience.get('status', 'Non calculée')}")
+            # Temporary development access for free accounts; entitlement checks can be added later.
+            st.download_button(
+                "Télécharger le rapport PDF", generate_report_pdf(analysis),
+                file_name=f"immoradar-analyse-{analysis['id']}.pdf", mime="application/pdf",
+                key=f"pdf_{analysis['id']}", use_container_width=True,
+            )
             actions, delete_column, _ = st.columns([1, 1, 2])
             favorite_label = "Retirer des favoris" if analysis["is_favorite"] else "Ajouter aux favoris"
             if actions.button(favorite_label, key=f"favorite_{analysis['id']}", use_container_width=True):
