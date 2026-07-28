@@ -16,4 +16,4 @@ def show_about() -> None:
             st.subheader("Ce qu’ImmoRadar ne fait pas")
             st.write("Il ne remplace pas un courtier, un fiscaliste, un conseiller financier ou une évaluation professionnelle.")
     st.subheader("Données et limites")
-    st.write("Le taux directeur canadien est récupéré lorsque la source est accessible. Les indicateurs économiques et les tendances de villes marqués « simulés » sont des exemples en attendant l’intégration de sources vérifiées.")
+    st.write("Le taux directeur canadien provient de la Banque du Canada lorsqu'une valeur officielle est disponible. Les prix, rendements et comparaisons de villes ne sont pas affichés tant qu'une source, une licence et une méthode ne sont pas validées. Les données de démonstration ne font pas partie de l'expérience publique.")

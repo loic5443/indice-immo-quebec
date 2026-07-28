@@ -10,3 +10,7 @@ Ce dossier conserve les six volumes Markdown de la documentation ImmoRadar v1.0.
 6. [Data, Legal & Operations](06_Data_Legal_Operations.md) — provenance, qualité, conformité et opérations.
 
 Les documents Word d’origine restent hors du dépôt, à leur emplacement fourni. Toute décision technique durable qui s’écarte de ces volumes doit être documentée dans Git.
+
+## Mise en œuvre Sprint 4
+
+La fondation de données officielles est décrite dans [ADR-008](ADR-008_Sprint4_Official_Data_Foundation.md). Le [registre des sources](source_registry.json), la [matrice de décision](SPRINT4_SOURCE_DECISION_MATRIX.md), le [dictionnaire](DATA_DICTIONARY.md) et les procédures de cycle de vie complètent les volumes officiels sans les remplacer.

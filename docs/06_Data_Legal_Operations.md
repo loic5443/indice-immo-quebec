@@ -262,3 +262,7 @@ Les liens figurent dans la bibliographie du présent volume. L’intégration te
 - service après annulation;
 - protection des consommateurs validée;
 - tests en production contrôlée.
+
+## Mise à jour Sprint 4 — données officielles
+
+Le registre versionné, la matrice de décision et les procédures d’ajout, de retrait et d’indisponibilité font partie de l’exploitation. Une observation est visible uniquement après validation de son schéma, unité, date, territoire et plage plausible. Les valeurs invalides sont mises en quarantaine; l’interface affiche la dernière valeur valide avec sa fraîcheur ou « donnée indisponible ». Les simulations ne sont pas des données publiques et ne sont ni affichées ni utilisées par les analyses.

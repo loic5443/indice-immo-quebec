@@ -64,12 +64,12 @@ class DatabaseTests(unittest.TestCase):
         self.assertGreaterEqual(len(errors), 3)
 
     def test_versioned_migrations_add_profile_and_engine_metadata(self):
-        self.assertEqual(applied_migrations(self.database_path), ["0001", "0002", "0003", "0004"])
+        self.assertEqual(applied_migrations(self.database_path), ["0001", "0002", "0003", "0004", "0005"])
         with closing(sqlite3.connect(self.database_path)) as connection:
             user_columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
             analysis_columns = {row[1] for row in connection.execute("PRAGMA table_info(analyses)")}
         self.assertTrue({"user_type", "investment_horizon", "risk_tolerance"}.issubset(user_columns))
-        self.assertTrue({"engine_version", "data_provenance", "immo_score", "confidence_index", "engine_verdict", "immodna_json", "financial_inputs_json", "scenarios_json", "resilience_json"}.issubset(analysis_columns))
+        self.assertTrue({"engine_version", "data_provenance", "immo_score", "confidence_index", "engine_verdict", "immodna_json", "financial_inputs_json", "scenarios_json", "resilience_json", "market_context_json"}.issubset(analysis_columns))
 
     def test_save_and_delete_analysis(self):
         user = self._create_and_login("Alice", "alice@example.com")
@@ -99,7 +99,15 @@ class DatabaseTests(unittest.TestCase):
         self.assertIn("vacancy_rate_pct", saved[0]["financial_inputs_json"])
         self.assertIn("Scénario de base", saved[0]["scenarios_json"])
         self.assertTrue(delete_analysis(user["id"], analysis_id, self.database_path))
-        self.assertEqual(list_analyses(user["id"], self.database_path), [])
+
+    def test_saved_analysis_keeps_external_context_separate_from_engine(self):
+        user = self._create_and_login("Context", "context@example.com")
+        analysis_id = save_analysis(user["id"], "Context", self.analysis_values | {
+            "market_context": [{"source_id": "bank_of_canada_valet", "metric": "policy_rate", "value": 4.5}],
+        }, self.database_path)
+        saved = list_analyses(user["id"], self.database_path)[0]
+        self.assertEqual(saved["id"], analysis_id)
+        self.assertIn("bank_of_canada_valet", saved["market_context_json"])
 
     def test_migrations_preserve_an_existing_legacy_database(self):
         legacy_path = Path(self.temporary_directory.name) / "legacy.db"
@@ -119,7 +127,7 @@ class DatabaseTests(unittest.TestCase):
             connection.execute(
                 "INSERT INTO users VALUES (1, 'Ancien compte', 'ancien@example.com', 'hash', 'salt', 'free', '2026-01-01')"
             )
-        self.assertEqual(apply_migrations(legacy_path), ["0001", "0002", "0003", "0004"])
+        self.assertEqual(apply_migrations(legacy_path), ["0001", "0002", "0003", "0004", "0005"])
         with closing(sqlite3.connect(legacy_path)) as connection:
             profile = connection.execute(
                 "SELECT user_type, investment_horizon, risk_tolerance FROM users WHERE id = 1"

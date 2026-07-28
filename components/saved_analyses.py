@@ -73,6 +73,11 @@ def show_saved_analyses() -> None:
                 ], hide_index=True, width="stretch")
             if resilience:
                 st.write(f"**Résistance financière :** {resilience.get('status', 'Non calculée')}")
+            market_context = json.loads(analysis.get("market_context_json", "[]"))
+            if market_context:
+                st.markdown("**Contexte de marché observé lors de la sauvegarde**")
+                for item in market_context:
+                    st.write(f"{item['metric']} : {item['value']} {item['unit']} · observé le {item['observed_at']} · [source officielle]({item['source_url']})")
             # Temporary development access for free accounts; entitlement checks can be added later.
             st.download_button(
                 "Télécharger le rapport PDF", generate_report_pdf(analysis),

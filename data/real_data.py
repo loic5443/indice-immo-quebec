@@ -1,15 +1,10 @@
-"""External data sources. Each value reports whether the live request succeeded."""
+"""Backward-compatible access to the official-data cache; never returns a fictitious fallback."""
 
-import requests
+from data.database import DATABASE_PATH
+from services.market_data_service import cached_policy_rate
 
 
-def get_canada_policy_rate() -> tuple[float, bool]:
-    """Fetch the latest Bank of Canada policy rate; never expose credentials."""
-    try:
-        response = requests.get(
-            "https://www.bankofcanada.ca/valet/observations/V39079/json", timeout=10
-        )
-        response.raise_for_status()
-        return float(response.json()["observations"][-1]["V39079"]["v"]), True
-    except (requests.RequestException, KeyError, IndexError, TypeError, ValueError):
-        return 5.0, False
+def get_canada_policy_rate() -> tuple[float | None, bool]:
+    """Return the cached official rate, or ``None`` when it is unavailable."""
+    observation = cached_policy_rate(str(DATABASE_PATH))
+    return (float(observation["value"]), True) if observation else (None, False)

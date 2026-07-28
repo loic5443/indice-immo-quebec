@@ -42,6 +42,7 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
     negatives = _json(analysis.get("negative_factors_json"), [])
     missing = _json(analysis.get("missing_data_json"), [])
     checks = _json(analysis.get("recommended_checks_json"), [])
+    market_context = _json(analysis.get("market_context_json"), [])
     story = []
 
     story += [Spacer(1, 1.4 * inch), Paragraph("IMMORADAR", styles["cover_brand"]),
@@ -94,6 +95,7 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
     story += _heading("9. Méthodologie, sources et limites", styles)
     story += [Paragraph("Les revenus effectifs appliquent le taux de vacance aux loyers; le RNE exclut le service de la dette; le paiement suit la convention hypothécaire canadienne de composition semestrielle. Les projections utilisent uniquement les taux de croissance saisis.", styles["body"]),
               Paragraph(f"Version du moteur : {escape(str(analysis.get('engine_version', 'Non renseignée')))}<br/>Provenance : {escape(str(analysis.get('data_provenance', 'Hypothèses utilisateur et calculs déterministes.')))}", styles["body"]),
+              Paragraph(_market_context_text(market_context), styles["note"]),
               Spacer(1, 0.12 * inch), Paragraph("Avertissement : ce rapport est indicatif. Il ne constitue ni une évaluation officielle ni un conseil financier, juridique, fiscal ou immobilier. Faites vérifier les renseignements importants par des professionnels qualifiés avant une décision.", styles["warning"])]
     document.build(story, onFirstPage=_footer, onLaterPages=_footer)
     return stream.getvalue()
@@ -189,6 +191,15 @@ def _noi(inputs, analysis):
 def _json(value, default):
     try: return json.loads(value) if value else default
     except (TypeError, json.JSONDecodeError): return default
+
+
+def _market_context_text(context):
+    if not context:
+        return "Aucun indicateur externe officiel n'était disponible dans le contexte sauvegardé."
+    return "Contexte externe observé (informatif, sans effet sur le score) : " + "; ".join(
+        f"{item.get('metric')} {item.get('value')} {item.get('unit')} — observé le {item.get('observed_at')} — {item.get('source_url')}"
+        for item in context
+    )
 
 
 def _money(value): return f"{float(value):,.0f} $".replace(",", " ")

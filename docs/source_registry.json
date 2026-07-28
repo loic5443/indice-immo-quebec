@@ -1,0 +1,38 @@
+{
+  "registry_version": "1.0.0",
+  "updated_at": "2026-07-28",
+  "sources": [
+    {
+      "source_id": "bank_of_canada_valet",
+      "name": "Banque du Canada — API Valet, taux directeur V39079",
+      "owner": "Banque du Canada",
+      "status": "integrated",
+      "classification": "observed",
+      "geography": "Canada",
+      "metrics": ["policy_rate"],
+      "official_url": "https://www.bankofcanada.ca/valet/observations/V39079/json",
+      "human_url": "https://www.bankofcanada.ca/core-functions/monetary-policy/key-interest-rate/",
+      "license_summary": "Source publique officielle; consulter les conditions d'utilisation de la Banque du Canada.",
+      "refresh_frequency": "daily",
+      "retention": "historique immuable local",
+      "quality_rules": "schéma V39079, taux 0–25 %, date ISO, provenance HTTPS",
+      "user_display": "Donnée observée officielle"
+    },
+    {
+      "source_id": "quebec_city_market_indicators",
+      "name": "Indicateurs de marché par ville du Québec",
+      "owner": "À confirmer",
+      "status": "deferred",
+      "classification": "observed",
+      "geography": "Québec",
+      "metrics": ["average_price", "annual_variation", "rental_yield"],
+      "official_url": "https://www.quebec.ca/",
+      "human_url": "https://www.quebec.ca/",
+      "license_summary": "Non intégré tant que la licence, le périmètre géographique et la méthode ne sont pas validés.",
+      "refresh_frequency": "to_be_validated",
+      "retention": "not_applicable",
+      "quality_rules": "À définir après validation de la source",
+      "user_display": "Non disponible"
+    }
+  ]
+}

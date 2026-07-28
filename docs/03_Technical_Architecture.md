@@ -276,3 +276,4 @@ Les mots de passe existants peuvent être réhachés à la prochaine connexion s
 - ADR-004 : moteur déterministe séparé du texte génératif.
 - ADR-005 : droits séparés de la facturation.
 - ADR-006 : refus explicite quand les données sont insuffisantes.
+- ADR-008 : registre versionné, fournisseurs officiels, validation, quarantaine et cache de dernière valeur valide (Sprint 4).

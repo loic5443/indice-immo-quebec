@@ -10,7 +10,9 @@ from components.immoengine import show_immoengine_result
 from components.scenarios import show_scenarios
 from components.sidebar import go_to
 from data.database import save_analysis
+from data.database import DATABASE_PATH
 from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
+from services.market_data_service import market_context_snapshot
 
 
 DEFAULTS = {
@@ -151,6 +153,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str) 
                     "capitalization_rate": result.capitalization_rate,
                     "debt_service_coverage_ratio": result.debt_service_coverage_ratio,
                     "financial_inputs": asdict(inputs), "scenarios": scenarios, "resilience": resilience,
+                    "market_context": market_context_snapshot(str(DATABASE_PATH)),
                 }, profile=engine_result.profile, engine_result=engine_result)
                 st.success("Analyse, scénarios et tests de résistance sauvegardés dans Mes analyses.")
     else:

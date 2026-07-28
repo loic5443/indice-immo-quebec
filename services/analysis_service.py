@@ -33,6 +33,8 @@ def save_user_analysis(
         "financial_inputs_json": json.dumps(values.get("financial_inputs", {}), ensure_ascii=False),
         "scenarios_json": json.dumps(values.get("scenarios", []), ensure_ascii=False),
         "resilience_json": json.dumps(values.get("resilience", {}), ensure_ascii=False),
+        # Informative provenance snapshot; it does not enter ImmoEngine's score or verdict.
+        "market_context_json": json.dumps(values.get("market_context", []), ensure_ascii=False),
     }
     return SQLiteRepository(database_path).save_analysis(user_id, property_name.strip(), payload)
 
