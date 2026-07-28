@@ -48,8 +48,11 @@ def count_analyses(user_id: int, database_path: Path | str = DATABASE_PATH) -> i
     return count_user_analyses(user_id, database_path)
 
 
-def save_analysis(user_id: int, property_name: str, values: dict[str, float], database_path: Path | str = DATABASE_PATH) -> int:
-    return save_user_analysis(user_id, property_name, values, database_path)
+def save_analysis(
+    user_id: int, property_name: str, values: dict[str, float], database_path: Path | str = DATABASE_PATH,
+    profile: str = "Investisseur locatif", engine_result=None,
+) -> int:
+    return save_user_analysis(user_id, property_name, values, database_path, profile, engine_result)
 
 
 def list_analyses(user_id: int, database_path: Path | str = DATABASE_PATH) -> list[dict[str, Any]]:

@@ -1,20 +1,35 @@
 """Saved-analysis service with ImmoEngine traceability metadata."""
 
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 from typing import Any
 
 from providers.data_provenance import IMMOENGINE_METADATA
+from domain.immoengine import ImmoEngineResult
 from repositories.sqlite_repository import SQLiteRepository
 
 
-def save_user_analysis(user_id: int, property_name: str, values: dict[str, float], database_path: Path | str) -> int:
+def save_user_analysis(
+    user_id: int, property_name: str, values: dict[str, float], database_path: Path | str,
+    profile: str = "Investisseur locatif", engine_result: ImmoEngineResult | None = None,
+) -> int:
     """Persist user assumptions and calculated outputs; no value estimate is produced."""
+    snapshot = engine_result.to_snapshot() if engine_result else {}
     payload: dict[str, Any] = {
         **values,
         "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "engine_version": IMMOENGINE_METADATA.version,
         "data_provenance": IMMOENGINE_METADATA.data_provenance,
+        "user_profile": profile,
+        "immo_score": snapshot.get("score"),
+        "confidence_index": snapshot.get("confidence_index"),
+        "engine_verdict": snapshot.get("verdict"),
+        "positive_factors_json": json.dumps(snapshot.get("positive_factors", []), ensure_ascii=False),
+        "negative_factors_json": json.dumps(snapshot.get("negative_factors", []), ensure_ascii=False),
+        "missing_data_json": json.dumps(snapshot.get("missing_data", []), ensure_ascii=False),
+        "recommended_checks_json": json.dumps(snapshot.get("recommended_checks", []), ensure_ascii=False),
+        "immodna_json": json.dumps(snapshot.get("dimensions", {}), ensure_ascii=False),
     }
     return SQLiteRepository(database_path).save_analysis(user_id, property_name.strip(), payload)
 

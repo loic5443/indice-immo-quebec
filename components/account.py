@@ -83,7 +83,7 @@ def show_account() -> None:
             email = st.text_input("Adresse courriel", key="register_email")
             password = st.text_input("Mot de passe", type="password", key="register_password")
             confirmation = st.text_input("Confirmer le mot de passe", type="password")
-            user_type = st.selectbox("Type d'utilisateur", ["Investisseur", "Propriétaire occupant", "Courtier / professionnel", "Curieux"])
+            user_type = st.selectbox("Type d'utilisateur", ["Premier acheteur", "Investisseur locatif", "Propriétaire", "Courtier ou analyste"])
             investment_horizon = st.selectbox("Horizon d'investissement", ["Moins de 2 ans", "2 à 5 ans", "Plus de 5 ans"])
             risk_tolerance = st.selectbox("Tolérance au risque", ["Prudent", "Modéré", "Élevé"], index=1)
             submitted = st.form_submit_button("Créer mon compte", type="primary", use_container_width=True)

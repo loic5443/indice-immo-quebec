@@ -7,7 +7,7 @@ from dataclasses import dataclass
 class UserProfile:
     """Non-sensitive profile choices used to tailor future product flows."""
 
-    user_type: str = "Investisseur"
+    user_type: str = "Investisseur locatif"
     investment_horizon: str = "2 à 5 ans"
     risk_tolerance: str = "Modéré"
 

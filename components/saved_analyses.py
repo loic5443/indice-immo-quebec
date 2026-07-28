@@ -1,5 +1,6 @@
 """Saved-analysis history, always scoped to the signed-in user."""
 
+import json
 import streamlit as st
 
 from components.account import current_user, is_authenticated
@@ -44,6 +45,22 @@ def show_saved_analyses() -> None:
                 f"**Moteur :** {analysis['engine_version']}  \n"
                 f"**Provenance :** {analysis['data_provenance']}"
             )
+            if analysis["immo_score"] is not None:
+                st.markdown(
+                    f"**Profil ImmoEngine :** {analysis['user_profile']}  \n"
+                    f"**Score ImmoRadar :** {analysis['immo_score']:.0f} / 100  \n"
+                    f"**Indice de confiance :** {analysis['confidence_index']:.0f} / 100  \n"
+                    f"**Verdict :** {analysis['engine_verdict']}"
+                )
+                positives = json.loads(analysis["positive_factors_json"])
+                negatives = json.loads(analysis["negative_factors_json"])
+                missing = json.loads(analysis["missing_data_json"])
+                if positives:
+                    st.write("**Facteurs positifs :** " + " · ".join(positives))
+                if negatives:
+                    st.write("**Points à surveiller :** " + " · ".join(negatives))
+                if missing:
+                    st.write("**Données manquantes :** " + " · ".join(missing))
             actions, delete_column, _ = st.columns([1, 1, 2])
             favorite_label = "Retirer des favoris" if analysis["is_favorite"] else "Ajouter aux favoris"
             if actions.button(favorite_label, key=f"favorite_{analysis['id']}", use_container_width=True):

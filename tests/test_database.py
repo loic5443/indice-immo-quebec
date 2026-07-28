@@ -16,6 +16,8 @@ from data.database import (
     toggle_favorite,
     validate_registration,
 )
+from domain.immoengine import evaluate_immoengine
+from calculations.real_estate import PropertyInputs, calculate_analysis
 from migrations.runner import applied_migrations, apply_migrations
 
 
@@ -62,20 +64,32 @@ class DatabaseTests(unittest.TestCase):
         self.assertGreaterEqual(len(errors), 3)
 
     def test_versioned_migrations_add_profile_and_engine_metadata(self):
-        self.assertEqual(applied_migrations(self.database_path), ["0001", "0002"])
+        self.assertEqual(applied_migrations(self.database_path), ["0001", "0002", "0003"])
         with closing(sqlite3.connect(self.database_path)) as connection:
             user_columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
             analysis_columns = {row[1] for row in connection.execute("PRAGMA table_info(analyses)")}
         self.assertTrue({"user_type", "investment_horizon", "risk_tolerance"}.issubset(user_columns))
-        self.assertTrue({"engine_version", "data_provenance"}.issubset(analysis_columns))
+        self.assertTrue({"engine_version", "data_provenance", "immo_score", "confidence_index", "engine_verdict", "immodna_json"}.issubset(analysis_columns))
 
     def test_save_and_delete_analysis(self):
         user = self._create_and_login("Alice", "alice@example.com")
-        analysis_id = save_analysis(user["id"], "Duplex Alice", self.analysis_values, self.database_path)
+        inputs = PropertyInputs(
+            price=500_000, down_payment=100_000, annual_interest_rate=5.0, amortization_years=25,
+            municipal_taxes_annual=3_600, school_taxes_annual=400, insurance_monthly=100,
+            condo_fees_monthly=0, rental_income_monthly=3_200, other_expenses_monthly=200,
+        )
+        engine_result = evaluate_immoengine(inputs, calculate_analysis(inputs), "Investisseur locatif")
+        analysis_id = save_analysis(
+            user["id"], "Duplex Alice", self.analysis_values, self.database_path,
+            profile="Investisseur locatif", engine_result=engine_result,
+        )
         saved = list_analyses(user["id"], self.database_path)
         self.assertEqual(len(saved), 1)
-        self.assertEqual(saved[0]["engine_version"], "ImmoEngine 0.1.0-preparation")
+        self.assertEqual(saved[0]["engine_version"], "ImmoEngine 1.0.0-deterministic")
         self.assertIn("aucune estimation de valeur", saved[0]["data_provenance"])
+        self.assertEqual(saved[0]["user_profile"], "Investisseur locatif")
+        self.assertEqual(saved[0]["immo_score"], engine_result.score)
+        self.assertEqual(saved[0]["engine_verdict"], engine_result.verdict)
         self.assertTrue(delete_analysis(user["id"], analysis_id, self.database_path))
         self.assertEqual(list_analyses(user["id"], self.database_path), [])
 
@@ -97,12 +111,12 @@ class DatabaseTests(unittest.TestCase):
             connection.execute(
                 "INSERT INTO users VALUES (1, 'Ancien compte', 'ancien@example.com', 'hash', 'salt', 'free', '2026-01-01')"
             )
-        self.assertEqual(apply_migrations(legacy_path), ["0001", "0002"])
+        self.assertEqual(apply_migrations(legacy_path), ["0001", "0002", "0003"])
         with closing(sqlite3.connect(legacy_path)) as connection:
             profile = connection.execute(
                 "SELECT user_type, investment_horizon, risk_tolerance FROM users WHERE id = 1"
             ).fetchone()
-        self.assertEqual(profile, ("Investisseur", "2 à 5 ans", "Modéré"))
+        self.assertEqual(profile, ("Investisseur locatif", "2 à 5 ans", "Modéré"))
 
     def test_favorites_and_user_data_are_isolated(self):
         alice = self._create_and_login("Alice", "alice@example.com")

@@ -4,8 +4,10 @@ import streamlit as st
 
 from calculations.real_estate import AnalysisResult, PropertyInputs, calculate_analysis, validate_inputs
 from components.account import current_user, is_authenticated
+from components.immoengine import show_immoengine_result
 from components.sidebar import go_to
 from data.database import save_analysis
+from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 
 
 DEFAULTS = {
@@ -74,10 +76,16 @@ def show_property_analysis() -> None:
             st.error(error)
         st.info("Corrigez les champs indiqués pour obtenir une analyse fiable.")
         return
-    _show_results(inputs, calculate_analysis(inputs))
+    if is_authenticated():
+        profile = current_user()["user_type"]
+        st.caption(f"Profil ImmoEngine appliqué : {profile} (depuis Mon compte).")
+    else:
+        profile = st.selectbox("Profil ImmoEngine", list(PROFILE_WEIGHTS), key="analysis_engine_profile")
+        st.caption("Créez un compte pour enregistrer votre profil et sauvegarder cette analyse.")
+    _show_results(inputs, calculate_analysis(inputs), profile)
 
 
-def _show_results(inputs: PropertyInputs, result: AnalysisResult) -> None:
+def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str) -> None:
     st.subheader("Résultats de votre analyse")
     payment_col, expenses_col = st.columns(2)
     payment_col.metric("Paiement hypothécaire mensuel", _money(result.monthly_payment))
@@ -102,6 +110,9 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult) -> None:
     else:
         st.warning("Le flux de trésorerie est négatif : ajustez le prix, le financement, les revenus ou les dépenses.")
 
+    engine_result = evaluate_immoengine(inputs, result, profile)
+    show_immoengine_result(engine_result)
+
     st.markdown("<div class='save-analysis-panel'><h3>Sauvegarder cette analyse</h3>", unsafe_allow_html=True)
     if is_authenticated():
         property_name = st.text_input("Nom ou adresse de la propriété", key="saved_property_name", placeholder="Ex. Duplex – Montréal")
@@ -122,6 +133,8 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult) -> None:
                         "capitalization_rate": result.capitalization_rate,
                         "debt_service_coverage_ratio": result.debt_service_coverage_ratio,
                     },
+                    profile=engine_result.profile,
+                    engine_result=engine_result,
                 )
                 st.success("Analyse sauvegardée dans Mes analyses.")
     else:
