@@ -40,7 +40,9 @@ def show_saved_analyses() -> None:
                 f"**Mise de fonds :** {_money(analysis['down_payment'])}  \n"
                 f"**Revenus mensuels :** {_money(analysis['rental_income'])}  \n"
                 f"**Dépenses mensuelles :** {_money(analysis['monthly_expenses'])}  \n"
-                f"**Couverture de dette :** {analysis['debt_service_coverage_ratio']:.2f}x"
+                f"**Couverture de dette :** {analysis['debt_service_coverage_ratio']:.2f}x  \n"
+                f"**Moteur :** {analysis['engine_version']}  \n"
+                f"**Provenance :** {analysis['data_provenance']}"
             )
             actions, delete_column, _ = st.columns([1, 1, 2])
             favorite_label = "Retirer des favoris" if analysis["is_favorite"] else "Ajouter aux favoris"

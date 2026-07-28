@@ -1,0 +1,87 @@
+"""SQLite repository: all analysis mutations are scoped by their owner."""
+
+import sqlite3
+from contextlib import closing
+from pathlib import Path
+from typing import Any
+
+
+class SQLiteRepository:
+    """Local repository with parameterized statements and explicit ownership checks."""
+
+    def __init__(self, database_path: Path | str):
+        self.database_path = Path(database_path)
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.database_path)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        return connection
+
+    def create_user(self, values: dict[str, str]) -> bool:
+        try:
+            with closing(self._connect()) as connection, connection:
+                connection.execute(
+                    """INSERT INTO users (
+                    name, email, password_hash, password_salt, plan, created_at,
+                    user_type, investment_horizon, risk_tolerance
+                    ) VALUES (?, ?, ?, ?, 'free', ?, ?, ?, ?)""",
+                    (
+                        values["name"], values["email"], values["password_hash"],
+                        values["password_salt"], values["created_at"], values["user_type"],
+                        values["investment_horizon"], values["risk_tolerance"],
+                    ),
+                )
+        except sqlite3.IntegrityError:
+            return False
+        return True
+
+    def get_user_by_email(self, email: str) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        return dict(row) if row else None
+
+    def get_user_by_id(self, user_id: int) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+    def count_analyses(self, user_id: int) -> int:
+        with closing(self._connect()) as connection:
+            row = connection.execute("SELECT COUNT(*) FROM analyses WHERE user_id = ?", (user_id,)).fetchone()
+        return int(row[0])
+
+    def save_analysis(self, user_id: int, property_name: str, values: dict[str, Any]) -> int:
+        with closing(self._connect()) as connection, connection:
+            cursor = connection.execute(
+                """INSERT INTO analyses (
+                user_id, property_name, created_at, price, down_payment, rental_income,
+                monthly_expenses, cash_flow, cash_on_cash_return, capitalization_rate,
+                debt_service_coverage_ratio, engine_version, data_provenance
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, property_name, values["created_at"], values["price"], values["down_payment"],
+                 values["rental_income"], values["monthly_expenses"], values["cash_flow"],
+                 values["cash_on_cash_return"], values["capitalization_rate"],
+                 values["debt_service_coverage_ratio"], values["engine_version"], values["data_provenance"]),
+            )
+        return int(cursor.lastrowid)
+
+    def list_analyses(self, user_id: int) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT * FROM analyses WHERE user_id = ? ORDER BY is_favorite DESC, created_at DESC", (user_id,)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def delete_analysis(self, user_id: int, analysis_id: int) -> bool:
+        with closing(self._connect()) as connection, connection:
+            cursor = connection.execute("DELETE FROM analyses WHERE id = ? AND user_id = ?", (analysis_id, user_id))
+        return cursor.rowcount == 1
+
+    def toggle_favorite(self, user_id: int, analysis_id: int) -> bool:
+        with closing(self._connect()) as connection, connection:
+            cursor = connection.execute(
+                """UPDATE analyses SET is_favorite = CASE is_favorite WHEN 1 THEN 0 ELSE 1 END
+                WHERE id = ? AND user_id = ?""", (analysis_id, user_id)
+            )
+        return cursor.rowcount == 1

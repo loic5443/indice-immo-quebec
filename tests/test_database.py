@@ -16,6 +16,7 @@ from data.database import (
     toggle_favorite,
     validate_registration,
 )
+from migrations.runner import applied_migrations, apply_migrations
 
 
 class DatabaseTests(unittest.TestCase):
@@ -60,12 +61,48 @@ class DatabaseTests(unittest.TestCase):
         errors = validate_registration("A", "invalide", "court", "different")
         self.assertGreaterEqual(len(errors), 3)
 
+    def test_versioned_migrations_add_profile_and_engine_metadata(self):
+        self.assertEqual(applied_migrations(self.database_path), ["0001", "0002"])
+        with closing(sqlite3.connect(self.database_path)) as connection:
+            user_columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
+            analysis_columns = {row[1] for row in connection.execute("PRAGMA table_info(analyses)")}
+        self.assertTrue({"user_type", "investment_horizon", "risk_tolerance"}.issubset(user_columns))
+        self.assertTrue({"engine_version", "data_provenance"}.issubset(analysis_columns))
+
     def test_save_and_delete_analysis(self):
         user = self._create_and_login("Alice", "alice@example.com")
         analysis_id = save_analysis(user["id"], "Duplex Alice", self.analysis_values, self.database_path)
-        self.assertEqual(len(list_analyses(user["id"], self.database_path)), 1)
+        saved = list_analyses(user["id"], self.database_path)
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0]["engine_version"], "ImmoEngine 0.1.0-preparation")
+        self.assertIn("aucune estimation de valeur", saved[0]["data_provenance"])
         self.assertTrue(delete_analysis(user["id"], analysis_id, self.database_path))
         self.assertEqual(list_analyses(user["id"], self.database_path), [])
+
+    def test_migrations_preserve_an_existing_legacy_database(self):
+        legacy_path = Path(self.temporary_directory.name) / "legacy.db"
+        with closing(sqlite3.connect(legacy_path)) as connection, connection:
+            connection.executescript(
+                """CREATE TABLE users (
+                id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL, password_salt TEXT NOT NULL,
+                plan TEXT NOT NULL, created_at TEXT NOT NULL);
+                CREATE TABLE analyses (
+                id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, property_name TEXT NOT NULL,
+                created_at TEXT NOT NULL, price REAL NOT NULL, down_payment REAL NOT NULL,
+                rental_income REAL NOT NULL, monthly_expenses REAL NOT NULL, cash_flow REAL NOT NULL,
+                cash_on_cash_return REAL NOT NULL, capitalization_rate REAL NOT NULL,
+                debt_service_coverage_ratio REAL NOT NULL, is_favorite INTEGER NOT NULL DEFAULT 0);"""
+            )
+            connection.execute(
+                "INSERT INTO users VALUES (1, 'Ancien compte', 'ancien@example.com', 'hash', 'salt', 'free', '2026-01-01')"
+            )
+        self.assertEqual(apply_migrations(legacy_path), ["0001", "0002"])
+        with closing(sqlite3.connect(legacy_path)) as connection:
+            profile = connection.execute(
+                "SELECT user_type, investment_horizon, risk_tolerance FROM users WHERE id = 1"
+            ).fetchone()
+        self.assertEqual(profile, ("Investisseur", "2 à 5 ans", "Modéré"))
 
     def test_favorites_and_user_data_are_isolated(self):
         alice = self._create_and_login("Alice", "alice@example.com")
