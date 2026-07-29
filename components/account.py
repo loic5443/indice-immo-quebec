@@ -7,6 +7,8 @@ from data.database import authenticate_user, count_analyses, create_user, get_us
 from data.database import DATABASE_PATH
 from domain.models import UserProfile
 from services.privacy_service import delete_account, export_user_data
+from services.onboarding_service import STEPS, complete, progress
+from repositories.sqlite_repository import SQLiteRepository
 
 
 def is_authenticated() -> bool:
@@ -49,6 +51,9 @@ def show_account() -> None:
     st.markdown("<p class='eyebrow'>ESPACE PERSONNEL</p><h1>Mon compte</h1>", unsafe_allow_html=True)
     if is_authenticated():
         user = current_user()
+        if not user.get("onboarding_completed"):
+            _show_onboarding(user)
+            return
         st.markdown(
             f"<div class='account-summary'><span class='data-pill real'>Connecté</span>"
             f"<h2>{user['name']}</h2><p>{user['email']}</p><p>Forfait : <b>{'Premium' if user['plan'] == 'premium' else 'Gratuit'}</b></p>"
@@ -110,3 +115,30 @@ def show_account() -> None:
                     st.success(message)
                 else:
                     st.error(message)
+
+
+def _show_onboarding(user: dict) -> None:
+    step = int(user.get("onboarding_step") or 1)
+    st.markdown("<p class='eyebrow'>DÉMARRAGE</p><h1>Bienvenue dans ImmoRadar</h1>", unsafe_allow_html=True)
+    st.progress(step / len(STEPS), text=f"Étape {step} sur {len(STEPS)} — {STEPS[step-1]}")
+    if step == 1: st.write("Analysez vos hypothèses avec plus de clarté, avant d'en discuter avec un professionnel.")
+    elif step == 2: progress(user["id"], DATABASE_PATH, user_type=st.selectbox("Votre profil", ["Premier acheteur", "Investisseur locatif", "Propriétaire", "Courtier ou analyste"], index=1 if user["user_type"] == "Investisseur locatif" else 0))
+    elif step == 3: progress(user["id"], DATABASE_PATH, user_objective=st.text_input("Votre objectif principal", value=user.get("user_objective") or ""))
+    elif step == 4: progress(user["id"], DATABASE_PATH, investment_horizon=st.selectbox("Horizon (facultatif)", ["", "Moins de 2 ans", "2 à 5 ans", "5 à 10 ans", "Plus de 10 ans"], index=0))
+    elif step == 5: progress(user["id"], DATABASE_PATH, risk_tolerance=st.selectbox("Tolérance au risque (facultatif)", ["", "Prudente", "Équilibrée", "Élevée"], index=0))
+    elif step == 6: st.info("ImmoValue propose une fourchette expérimentale à partir des comparables que vous fournissez.")
+    elif step == 7: st.info("ImmoScore mesure l'adéquation de vos hypothèses financières à votre profil.")
+    elif step == 8: st.info("La confiance mesure la qualité et la complétude des données, pas la probabilité d'un bon achat.")
+    else:
+        accepted=st.checkbox("Je reconnais qu'ImmoRadar n'est pas une évaluation officielle, ne remplace pas un professionnel et ne garantit aucune recommandation.")
+        if accepted: progress(user["id"], DATABASE_PATH, limitations_accepted=1)
+    left,right=st.columns(2)
+    if left.button("Précédent", disabled=step==1): progress(user["id"], DATABASE_PATH, onboarding_step=step-1); st.rerun()
+    if step < len(STEPS):
+        if right.button("Suivant"):
+            if step==2 and not SQLiteRepository(DATABASE_PATH).get_user_by_id(user["id"])["user_type"]: st.error("Profil requis.")
+            elif step==3 and not SQLiteRepository(DATABASE_PATH).get_user_by_id(user["id"])["user_objective"]: st.error("Objectif requis.")
+            else: progress(user["id"], DATABASE_PATH, onboarding_step=step+1); st.rerun()
+    elif right.button("Terminer"):
+        if complete(user["id"], DATABASE_PATH): st.success("Onboarding terminé."); st.rerun()
+        else: st.error("Profil, objectif et reconnaissance des limites requis.")

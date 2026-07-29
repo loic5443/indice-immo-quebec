@@ -64,7 +64,7 @@ def get_user(user_id: int, database_path: Path | str) -> dict[str, Any] | None:
 
 
 def _public_user(user: dict[str, Any]) -> dict[str, Any]:
-    return {key: user[key] for key in ("id", "name", "email", "plan", "user_type", "investment_horizon", "risk_tolerance", "role", "onboarding_completed", "marketing_consent", "analytics_consent")}
+    return {key: user[key] for key in ("id", "name", "email", "plan", "user_type", "investment_horizon", "risk_tolerance", "role", "onboarding_completed", "onboarding_step", "user_objective", "limitations_accepted", "marketing_consent", "analytics_consent")}
 
 
 def _now() -> str:

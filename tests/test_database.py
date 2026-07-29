@@ -64,7 +64,7 @@ class DatabaseTests(unittest.TestCase):
         self.assertGreaterEqual(len(errors), 3)
 
     def test_versioned_migrations_add_profile_and_engine_metadata(self):
-        self.assertEqual(applied_migrations(self.database_path), ["0001", "0002", "0003", "0004", "0005", "0006", "0007"])
+        self.assertEqual(applied_migrations(self.database_path), ["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008"])
         with closing(sqlite3.connect(self.database_path)) as connection:
             user_columns = {row[1] for row in connection.execute("PRAGMA table_info(users)")}
             analysis_columns = {row[1] for row in connection.execute("PRAGMA table_info(analyses)")}
@@ -127,7 +127,7 @@ class DatabaseTests(unittest.TestCase):
             connection.execute(
                 "INSERT INTO users VALUES (1, 'Ancien compte', 'ancien@example.com', 'hash', 'salt', 'free', '2026-01-01')"
             )
-        self.assertEqual(apply_migrations(legacy_path), ["0001", "0002", "0003", "0004", "0005", "0006", "0007"])
+        self.assertEqual(apply_migrations(legacy_path), ["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008"])
         with closing(sqlite3.connect(legacy_path)) as connection:
             profile = connection.execute(
                 "SELECT user_type, investment_horizon, risk_tolerance FROM users WHERE id = 1"
