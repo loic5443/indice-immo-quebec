@@ -266,3 +266,7 @@ Les liens figurent dans la bibliographie du présent volume. L’intégration te
 ## Mise à jour Sprint 4 — données officielles
 
 Le registre versionné, la matrice de décision et les procédures d’ajout, de retrait et d’indisponibilité font partie de l’exploitation. Une observation est visible uniquement après validation de son schéma, unité, date, territoire et plage plausible. Les valeurs invalides sont mises en quarantaine; l’interface affiche la dernière valeur valide avec sa fraîcheur ou « donnée indisponible ». Les simulations ne sont pas des données publiques et ne sont ni affichées ni utilisées par les analyses.
+
+## Mise à jour Sprint 5 — comparables fournis par l'utilisateur
+
+Les comparables ne sont ni collectés ni enrichis par ImmoRadar. L'utilisateur confirme le droit d'utilisation et la qualité de vente conclue; une annonce active est exclue. L'import CSV est local, volontaire et validé. Une provenance déclarée reste déclarée et ne devient pas une donnée officielle.

@@ -43,6 +43,7 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
     missing = _json(analysis.get("missing_data_json"), [])
     checks = _json(analysis.get("recommended_checks_json"), [])
     market_context = _json(analysis.get("market_context_json"), [])
+    immovalue = _json(analysis.get("immovalue_json"), {})
     story = []
 
     story += [Spacer(1, 1.4 * inch), Paragraph("IMMORADAR", styles["cover_brand"]),
@@ -97,6 +98,13 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
               Paragraph(f"Version du moteur : {escape(str(analysis.get('engine_version', 'Non renseignée')))}<br/>Provenance : {escape(str(analysis.get('data_provenance', 'Hypothèses utilisateur et calculs déterministes.')))}", styles["body"]),
               Paragraph(_market_context_text(market_context), styles["note"]),
               Spacer(1, 0.12 * inch), Paragraph("Avertissement : ce rapport est indicatif. Il ne constitue ni une évaluation officielle ni un conseil financier, juridique, fiscal ou immobilier. Faites vérifier les renseignements importants par des professionnels qualifiés avant une décision.", styles["warning"])]
+    if immovalue:
+        story += _heading("10. ImmoValue expérimental", styles)
+        if immovalue.get("available"):
+            story += [_table([["Valeur expérimentale", _money(immovalue.get("estimated_value", 0))], ["Fourchette", f"{_money(immovalue.get('low', 0))} à {_money(immovalue.get('high', 0))}"], ["Confiance", _score(immovalue.get("confidence"))]], styles, [2.2 * inch, 4.55 * inch])]
+        else:
+            story += [Paragraph("Aucune estimation ImmoValue disponible : au moins trois comparables admissibles sont requis.", styles["note"])]
+        story += [Paragraph("ImmoValue expérimental est fondé sur les comparables déclarés par l'utilisateur; il ne constitue pas une évaluation officielle.", styles["warning"])]
     document.build(story, onFirstPage=_footer, onLaterPages=_footer)
     return stream.getvalue()
 

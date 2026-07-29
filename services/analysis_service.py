@@ -35,6 +35,7 @@ def save_user_analysis(
         "resilience_json": json.dumps(values.get("resilience", {}), ensure_ascii=False),
         # Informative provenance snapshot; it does not enter ImmoEngine's score or verdict.
         "market_context_json": json.dumps(values.get("market_context", []), ensure_ascii=False),
+        "immovalue_json": json.dumps(values.get("immovalue", {}), ensure_ascii=False),
     }
     return SQLiteRepository(database_path).save_analysis(user_id, property_name.strip(), payload)
 

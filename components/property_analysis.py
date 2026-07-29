@@ -13,6 +13,7 @@ from data.database import save_analysis
 from data.database import DATABASE_PATH
 from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 from services.market_data_service import market_context_snapshot
+from domain.immovalue import SubjectProperty, estimate_immovalue
 
 
 DEFAULTS = {
@@ -136,6 +137,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str) 
     st.caption(f"Projection à {inputs.holding_period_years} ans : flux mensuel hypothétique {_money(result.projected_cash_flow_monthly)}, fondé seulement sur les croissances de loyers et dépenses saisies.")
 
     engine_result = evaluate_immoengine(inputs, result, profile)
+    immovalue = _show_immovalue()
     show_immoengine_result(engine_result)
     scenarios, resilience = show_scenarios(inputs, engine_result.profile)
 
@@ -154,9 +156,58 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str) 
                     "debt_service_coverage_ratio": result.debt_service_coverage_ratio,
                     "financial_inputs": asdict(inputs), "scenarios": scenarios, "resilience": resilience,
                     "market_context": market_context_snapshot(str(DATABASE_PATH)),
+                    "immovalue": immovalue,
                 }, profile=engine_result.profile, engine_result=engine_result)
                 st.success("Analyse, scénarios et tests de résistance sauvegardés dans Mes analyses.")
     else:
         st.write("Connectez-vous pour conserver cette analyse, ses scénarios et ses tests de résistance.")
         st.button("Créer un compte ou se connecter", on_click=go_to, args=("Mon compte",), key="save_analysis_login")
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _show_immovalue() -> dict:
+    """A local-only workspace; declared comparables stay separate from financial scoring."""
+    st.markdown("<div class='section-space'></div><h2>Estimation ImmoValue</h2>", unsafe_allow_html=True)
+    st.warning("ImmoValue expérimental — fondé sur les informations et comparables fournis par l'utilisateur. Il ne constitue pas une évaluation officielle.")
+    with st.expander("1. Informations sur la propriété et 3. Comparables manuels", expanded=False):
+        a, b, c = st.columns(3)
+        with a:
+            name = st.text_input("Adresse ou nom déclaré", key="iv_name")
+            property_type = st.selectbox("Type déclaré", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="iv_type")
+            units = st.number_input("Unités déclarées", 0, 20, key="iv_units")
+        with b:
+            living_area = st.number_input("Superficie habitable déclarée", 0.0, key="iv_area")
+            land_area = st.number_input("Terrain déclaré", 0.0, key="iv_land")
+            year = st.number_input("Année de construction déclarée", 0, 2100, key="iv_year")
+        with c:
+            asking = st.number_input("Prix demandé facultatif", 0.0, key="iv_asking")
+            st.text_area("Rénovations et notes déclarées", key="iv_notes")
+        st.caption("Tous les renseignements ci-dessus sont déclarés par l'utilisateur et non vérifiés.")
+        comparables=[]
+        for index in range(3):
+            st.markdown(f"**Comparable {index + 1}**")
+            x, y, z = st.columns(3)
+            with x:
+                address=st.text_input("Adresse ou identifiant", key=f"iv_address_{index}")
+                sale_price=st.number_input("Prix de vente", 0.0, key=f"iv_price_{index}")
+                area=st.number_input("Superficie", 0.0, key=f"iv_carea_{index}")
+            with y:
+                ctype=st.selectbox("Type", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key=f"iv_ctype_{index}")
+                distance=st.number_input("Distance approximative (km)", 0.0, key=f"iv_distance_{index}")
+                c_units=st.number_input("Unités", 0, 20, key=f"iv_cunits_{index}")
+            with z:
+                source=st.text_input("Source déclarée", key=f"iv_source_{index}")
+                closed=st.checkbox("Vente conclue déclarée (pas une annonce active)", key=f"iv_closed_{index}")
+                rights=st.checkbox("Je confirme disposer du droit d'utilisation", key=f"iv_rights_{index}")
+            comparables.append({"address": address, "sale_date": "2026-01-01", "sale_price": sale_price, "living_area": area, "property_type": ctype, "units": c_units, "distance_km": distance, "source_declared": source, "declared_closed_sale": closed, "usage_right_confirmed": rights})
+    subject=SubjectProperty(name=name, property_type=property_type, units=units or None, living_area=living_area or None, land_area=land_area or None, year_built=year or None, asking_price=asking or None, notes=st.session_state.get("iv_notes", ""))
+    estimate=estimate_immovalue(subject, comparables)
+    if estimate["available"]:
+        one, two, three = st.columns(3); one.metric("Valeur expérimentale", f"{estimate['estimated_value']:,.0f} $".replace(',', ' ')); two.metric("Fourchette prudente", f"{estimate['low']:,.0f} $ à {estimate['high']:,.0f} $".replace(',', ' ')); three.metric("Confiance ImmoValue", f"{estimate['confidence']} / 100")
+        st.caption(f"{estimate['used_count']} comparables utilisés · dispersion {estimate['dispersion_pct']} % · {estimate['method']}")
+        if estimate["asking_comparison"]: st.info(f"Prix demandé : {estimate['asking_comparison']} (écart indicatif {estimate['asking_gap']:,.0f} $).")
+    else: st.info("Aucune estimation : ajoutez au moins trois comparables admissibles et la superficie du sujet.")
+    if estimate["comparables"]:
+        st.dataframe([{"Comparable": item.get("address") or "Non renseigné", "Statut": item["status"], "Similarité": f"{item['similarity']:.0f} / 100", "Raison": item["reason"]} for item in estimate["comparables"]], hide_index=True, width="stretch")
+    st.caption("ImmoValue est séparé d'ImmoScore : cette estimation n'influence pas le score financier et décisionnel.")
+    return estimate

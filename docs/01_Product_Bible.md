@@ -274,3 +274,7 @@ Une estimation est débitée seulement lorsqu’un résultat complet est produit
 - Les tests critiques passent dans un environnement propre.
 - Une évaluation de sécurité et de confidentialité est réalisée.
 - Les limites du produit sont visibles avant et après l’analyse.
+
+## Mise à jour Sprint 5
+
+ImmoValue est une estimation expérimentale distincte d'ImmoScore. Elle requiert au moins trois ventes comparables déclarées par l'utilisateur, affiche une fourchette et ne constitue jamais une évaluation officielle ou une recommandation d'offre.

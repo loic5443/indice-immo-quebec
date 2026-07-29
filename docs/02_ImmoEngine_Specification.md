@@ -347,3 +347,7 @@ Chaque analyse conserve les paramètres, sources, versions et facteurs calculés
 - source et date pour chaque donnée;
 - tests de non-régression;
 - tests de sensibilité : hausse du taux ne doit pas améliorer artificiellement l’abordabilité.
+
+## Mise à jour Sprint 5
+
+ImmoValue ne modifie pas ImmoScore dans cette première version. Le score décisionnel conserve exclusivement les hypothèses financières et les calculs déterministes documentés.

@@ -60,8 +60,8 @@ class SQLiteRepository:
                 debt_service_coverage_ratio, engine_version, data_provenance, user_profile,
                 immo_score, confidence_index, engine_verdict, positive_factors_json,
                 negative_factors_json, missing_data_json, recommended_checks_json, immodna_json,
-                financial_inputs_json, scenarios_json, resilience_json, market_context_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                financial_inputs_json, scenarios_json, resilience_json, market_context_json, immovalue_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (user_id, property_name, values["created_at"], values["price"], values["down_payment"],
                  values["rental_income"], values["monthly_expenses"], values["cash_flow"],
                  values["cash_on_cash_return"], values["capitalization_rate"],
@@ -70,7 +70,7 @@ class SQLiteRepository:
                  values["engine_verdict"], values["positive_factors_json"], values["negative_factors_json"],
                  values["missing_data_json"], values["recommended_checks_json"], values["immodna_json"],
                  values["financial_inputs_json"], values["scenarios_json"], values["resilience_json"],
-                 values["market_context_json"]),
+                 values["market_context_json"], values["immovalue_json"]),
             )
         return int(cursor.lastrowid)
 
