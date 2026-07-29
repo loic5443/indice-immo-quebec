@@ -15,6 +15,7 @@ from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 from services.market_data_service import market_context_snapshot
 from domain.immovalue import SubjectProperty, estimate_immovalue
 from services.comparable_csv import csv_template, validate_csv_rows
+from services.analysis_workflow import STEPS
 
 
 DEFAULTS = {
@@ -59,6 +60,12 @@ def show_property_analysis() -> None:
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value)
     st.title("Analyse immobilière")
+    step = st.session_state.setdefault("analysis_step", 1)
+    completed = st.session_state.setdefault("analysis_completed_steps", {1})
+    st.progress(step / len(STEPS), text=f"Étape {step}/9 — {STEPS[step-1]}")
+    selected = st.selectbox("Étape du parcours", list(range(1, len(STEPS)+1)), index=step-1, format_func=lambda value: f"{value}. {STEPS[value-1]}")
+    if selected <= max(completed): st.session_state["analysis_step"] = selected
+    st.caption("Les valeurs restent dans le brouillon de cette session; une analyse n'est sauvegardée dans l'historique qu'après votre confirmation.")
     st.write("Saisissez vos hypothèses. Les résultats sont indicatifs, déterministes et avant impôt; ils ne constituent pas une évaluation officielle.")
     st.button("Réinitialiser l'analyse", on_click=reset_analysis, type="secondary")
 
