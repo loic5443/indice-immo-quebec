@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS beta_settings (id INTEGER PRIMARY KEY CHECK(id=1), registrations_open INTEGER NOT NULL DEFAULT 1, invitation_required INTEGER NOT NULL DEFAULT 0, max_participants INTEGER NOT NULL DEFAULT 100, banner_active INTEGER NOT NULL DEFAULT 1, message TEXT NOT NULL DEFAULT 'Bêta privée — fonctionnalités expérimentales.');
+INSERT OR IGNORE INTO beta_settings(id) VALUES (1);
+ALTER TABLE beta_invitations ADD COLUMN code_hash TEXT;
+ALTER TABLE beta_invitations ADD COLUMN label TEXT;
+ALTER TABLE beta_invitations ADD COLUMN expires_at TEXT;
+ALTER TABLE beta_invitations ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE beta_invitations ADD COLUMN uses_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE beta_invitations ADD COLUMN creator_id INTEGER;
+ALTER TABLE beta_invitations ADD COLUMN revoked_at TEXT;
+ALTER TABLE beta_invitations ADD COLUMN notes TEXT;
+CREATE TABLE IF NOT EXISTS admin_audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, actor_id INTEGER, action TEXT NOT NULL, metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE SET NULL);
