@@ -8,6 +8,7 @@ from data.database import DATABASE_PATH
 from domain.models import UserProfile
 from services.privacy_service import delete_account, export_user_data
 from services.onboarding_service import STEPS, complete, progress
+from services.beta_service import registration_allowed, consume_invitation
 from repositories.sqlite_repository import SQLiteRepository
 
 
@@ -99,6 +100,7 @@ def show_account() -> None:
             email = st.text_input("Adresse courriel", key="register_email")
             password = st.text_input("Mot de passe", type="password", key="register_password")
             confirmation = st.text_input("Confirmer le mot de passe", type="password")
+            invitation_code = st.text_input("Code d'invitation bêta (si requis)")
             user_type = st.selectbox("Type d'utilisateur", ["Premier acheteur", "Investisseur locatif", "Propriétaire", "Courtier ou analyste"])
             investment_horizon = st.selectbox("Horizon d'investissement", ["Moins de 2 ans", "2 à 5 ans", "Plus de 5 ans"])
             risk_tolerance = st.selectbox("Tolérance au risque", ["Prudent", "Modéré", "Élevé"], index=1)
@@ -110,9 +112,15 @@ def show_account() -> None:
                 for error in errors:
                     st.error(error)
             else:
+                allowed, beta_message = registration_allowed(invitation_code, DATABASE_PATH)
+                if not allowed:
+                    st.error(beta_message)
+                    return
                 created, message = create_user(name, email, password, profile=profile)
                 if created:
-                    st.success(message)
+                    if invitation_code and not consume_invitation(invitation_code, DATABASE_PATH):
+                        st.error("Compte créé, mais le code n'a pas pu être consommé. Contactez l'administrateur.")
+                    else: st.success(message)
                 else:
                     st.error(message)
 

@@ -20,3 +20,20 @@ def validate_invitation(code,database_path):
  return invitation_status(row)
 def revoke_invitation(actor_id, invitation_id,database_path):
  with closing(SQLiteRepository(database_path)._connect()) as c,c: c.execute("UPDATE beta_invitations SET active=0,revoked_at=? WHERE rowid=?",(datetime.now(timezone.utc).isoformat(),invitation_id));c.execute("INSERT INTO admin_audit_log(actor_id,action) VALUES(?,?)",(actor_id,"invitation_revoked"))
+
+def registration_allowed(code,database_path,development_mode=False):
+ """Return a neutral result before account creation; no invitation is consumed here."""
+ with closing(SQLiteRepository(database_path)._connect()) as c:
+  settings=c.execute("SELECT * FROM beta_settings WHERE id=1").fetchone(); count=c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+ if not settings["registrations_open"]: return False,"Inscriptions momentanément fermées."
+ if count>=settings["max_participants"]: return False,"La capacité bêta est atteinte."
+ if settings["invitation_required"] and not development_mode:
+  return (validate_invitation(code or "",database_path)=="active", "Code d'invitation invalide ou indisponible.")
+ return True,""
+
+def consume_invitation(code,database_path):
+ """Atomically consume exactly one active invitation after successful registration."""
+ with closing(SQLiteRepository(database_path)._connect()) as c,c:
+  row=c.execute("SELECT rowid,* FROM beta_invitations WHERE code_hash=?",(_hash(code),)).fetchone()
+  if invitation_status(row)!="active": return False
+  return c.execute("UPDATE beta_invitations SET uses_count=uses_count+1 WHERE rowid=? AND uses_count<max_uses",(row[0],)).rowcount==1
