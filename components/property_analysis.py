@@ -14,6 +14,7 @@ from data.database import DATABASE_PATH
 from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 from services.market_data_service import market_context_snapshot
 from domain.immovalue import SubjectProperty, estimate_immovalue
+from services.comparable_csv import csv_template, validate_csv_rows
 
 
 DEFAULTS = {
@@ -183,7 +184,20 @@ def _show_immovalue() -> dict:
             asking = st.number_input("Prix demandé facultatif", 0.0, key="iv_asking")
             st.text_area("Rénovations et notes déclarées", key="iv_notes")
         st.caption("Tous les renseignements ci-dessus sont déclarés par l'utilisateur et non vérifiés.")
-        comparables=[]
+        st.download_button("Télécharger le modèle CSV", csv_template(), "comparables-immoradar.csv", "text/csv")
+        uploaded = st.file_uploader("Importer un CSV local (jamais transmis à un service externe)", type="csv", key="comparables_csv")
+        sales_confirmed = st.checkbox("Je confirme que les lignes représentent des ventes conclues", key="csv_sales_confirmed")
+        import_rights = st.checkbox("Je confirme mon droit d'utilisation pour ce fichier", key="csv_import_rights")
+        if uploaded:
+            valid_rows, row_errors = validate_csv_rows(uploaded.getvalue().decode("utf-8-sig", errors="replace"), import_rights, sales_confirmed)
+            st.caption(f"Prévisualisation locale : {len(valid_rows)} ligne(s) valide(s), {len(row_errors)} erreur(s).")
+            if valid_rows: st.dataframe(valid_rows, hide_index=True, width="stretch")
+            for error in row_errors: st.error(f"Ligne {error['line']} : {error['error']}")
+            if st.button("Importer les lignes valides", disabled=not valid_rows, key="confirm_csv_import"):
+                st.session_state["iv_csv_comparables"] = valid_rows; st.success("Lignes valides importées localement.")
+            if st.button("Annuler l'import", key="cancel_csv_import"):
+                st.session_state.pop("iv_csv_comparables", None); st.info("Import annulé sans sauvegarde.")
+        comparables=list(st.session_state.get("iv_csv_comparables", []))
         for index in range(3):
             st.markdown(f"**Comparable {index + 1}**")
             x, y, z = st.columns(3)

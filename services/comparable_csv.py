@@ -19,3 +19,19 @@ def parse_comparables_csv(text: str, usage_right_confirmed: bool) -> list[dict]:
             if row[key]: row[key] = float(row[key])
         result.append(row)
     return result
+
+def validate_csv_rows(text: str, usage_right_confirmed: bool, sales_confirmed: bool) -> tuple[list[dict], list[dict]]:
+    """Return valid rows and explicit line errors; processing remains entirely local."""
+    if not usage_right_confirmed or not sales_confirmed:
+        return [], [{"line": 0, "error": "Confirmez les ventes conclues et votre droit d'utilisation."}]
+    try: rows = parse_comparables_csv(text, True)
+    except (ValueError, csv.Error) as error: return [], [{"line": 0, "error": str(error)}]
+    valid, errors, seen = [], [], set()
+    for line, row in enumerate(rows, start=2):
+        key=(str(row.get("address", "")).strip().lower(), str(row.get("sale_date", "")), row.get("sale_price"))
+        if key in seen: errors.append({"line":line,"error":"Doublon détecté dans le fichier."}); continue
+        seen.add(key)
+        if not row["declared_closed_sale"]: errors.append({"line":line,"error":"Une annonce active ne peut pas être importée."}); continue
+        if row.get("sale_price",0)<=0 or row.get("living_area",0)<=0: errors.append({"line":line,"error":"Prix de vente et superficie doivent être supérieurs à zéro."}); continue
+        valid.append(row)
+    return valid, errors
