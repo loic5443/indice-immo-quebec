@@ -4,7 +4,9 @@ import streamlit as st
 
 from components.sidebar import go_to
 from data.database import authenticate_user, count_analyses, create_user, get_user, validate_registration
+from data.database import DATABASE_PATH
 from domain.models import UserProfile
+from services.privacy_service import delete_account, export_user_data
 
 
 def is_authenticated() -> bool:
@@ -59,6 +61,15 @@ def show_account() -> None:
         view, sign_out, _ = st.columns([1, 1, 2])
         view.button("Voir mes analyses", type="primary", on_click=go_to, args=("Mes analyses",), use_container_width=True)
         sign_out.button("Se déconnecter", on_click=logout, use_container_width=True)
+        st.divider()
+        st.subheader("Vie privée et contrôle")
+        st.download_button("Télécharger mes données", export_user_data(user["id"], DATABASE_PATH), "immoradar-mes-donnees.json", "application/json")
+        st.caption("L'export contient votre profil et vos analyses, jamais votre mot de passe. La suppression efface définitivement le compte, ses analyses et ses retours.")
+        confirmation = st.text_input("Pour supprimer, tapez SUPPRIMER", key="delete_account_confirmation")
+        if st.button("Supprimer définitivement mon compte", type="secondary"):
+            if confirmation != "SUPPRIMER": st.error("Confirmation requise : tapez SUPPRIMER.")
+            elif delete_account(user["id"], DATABASE_PATH):
+                logout(); st.success("Compte supprimé."); st.rerun()
         st.caption("Le statut Premium est prévu techniquement; aucun paiement réel n'est activé.")
         return
 

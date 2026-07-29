@@ -27,8 +27,8 @@ def validate_registration(name: str, email: str, password: str, confirmation: st
         errors.append("Veuillez saisir un nom d'au moins 2 caractères.")
     if "@" not in email or email.startswith("@") or email.endswith("@"):
         errors.append("Veuillez saisir une adresse courriel valide.")
-    if len(password) < 8:
-        errors.append("Le mot de passe doit contenir au moins 8 caractères.")
+    if len(password) < 12:
+        errors.append("Le mot de passe doit contenir au moins 12 caractères.")
     if password != confirmation:
         errors.append("La confirmation du mot de passe ne correspond pas.")
     if profile and not all((profile.user_type, profile.investment_horizon, profile.risk_tolerance)):
@@ -64,7 +64,7 @@ def get_user(user_id: int, database_path: Path | str) -> dict[str, Any] | None:
 
 
 def _public_user(user: dict[str, Any]) -> dict[str, Any]:
-    return {key: user[key] for key in ("id", "name", "email", "plan", "user_type", "investment_horizon", "risk_tolerance")}
+    return {key: user[key] for key in ("id", "name", "email", "plan", "user_type", "investment_horizon", "risk_tolerance", "role", "onboarding_completed", "marketing_consent", "analytics_consent")}
 
 
 def _now() -> str:
