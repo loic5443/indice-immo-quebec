@@ -1,5 +1,7 @@
 """Private beta invitations: opaque codes are shown once and stored only as hashes."""
 import hashlib,secrets
+import csv
+from io import StringIO
 from contextlib import closing
 from datetime import datetime,timezone
 from repositories.sqlite_repository import SQLiteRepository
@@ -37,3 +39,23 @@ def consume_invitation(code,database_path):
   row=c.execute("SELECT rowid,* FROM beta_invitations WHERE code_hash=?",(_hash(code),)).fetchone()
   if invitation_status(row)!="active": return False
   return c.execute("UPDATE beta_invitations SET uses_count=uses_count+1 WHERE rowid=? AND uses_count<max_uses",(row[0],)).rowcount==1
+
+def _admin(actor,database_path):
+ with closing(SQLiteRepository(database_path)._connect()) as c: row=c.execute("SELECT role FROM users WHERE id=?",(actor,)).fetchone()
+ if not row or row[0]!="admin": raise PermissionError("Accès refusé")
+def invitations(actor,database_path,status=None,label=None,page=1,size=20,sort="created_at DESC"):
+ _admin(actor,database_path);where=[];p=[]
+ if label: where.append("label LIKE ?");p.append("%"+label+"%")
+ allowed={"created_at DESC","expires_at ASC","uses_count DESC"};sort=sort if sort in allowed else "created_at DESC"
+ with closing(SQLiteRepository(database_path)._connect()) as c:
+  rows=c.execute("SELECT rowid,label,created_at,expires_at,uses_count,max_uses,revoked_at,creator_id,active FROM beta_invitations"+(" WHERE "+" AND ".join(where) if where else "")+" ORDER BY "+sort+" LIMIT ? OFFSET ?",(*p,size,(page-1)*size)).fetchall()
+ return [dict(x)|{"status":invitation_status(x)} for x in rows if not status or invitation_status(x)==status]
+def _safe(v): return "'"+str(v) if str(v)[:1] in "=+-@" else v
+def export_invitations(actor,database_path):
+ rows=invitations(actor,database_path,size=10000);o=StringIO();w=csv.DictWriter(o,fieldnames=["id","label","status","created_at","expires_at","uses_count","max_uses","revoked_at","creator_id"]);w.writeheader();[w.writerow({k:_safe(x.get(k)) for k in w.fieldnames}) for x in rows];return o.getvalue()
+def admin_log(actor,database_path,page=1,size=20):
+ _admin(actor,database_path)
+ with closing(SQLiteRepository(database_path)._connect()) as c: rows=c.execute("SELECT id,actor_id,action,created_at FROM admin_audit_log ORDER BY created_at DESC LIMIT ? OFFSET ?",(size,(page-1)*size)).fetchall()
+ return [dict(x) for x in rows]
+def export_admin_log(actor,database_path):
+ rows=admin_log(actor,database_path,size=10000);o=StringIO();w=csv.DictWriter(o,fieldnames=["id","created_at","actor_id","action"]);w.writeheader();[w.writerow({k:_safe(x[k]) for k in w.fieldnames}) for x in rows];return o.getvalue()
