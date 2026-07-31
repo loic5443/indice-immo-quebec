@@ -25,12 +25,14 @@ def show_admin():
    with repo._connect() as c,c: c.execute("UPDATE beta_settings SET registrations_open=? WHERE id=1",(0 if settings['registrations_open'] else 1,));c.execute("INSERT INTO admin_audit_log(actor_id,action) VALUES(?,?)",(actor,"registration_toggle"));st.rerun()
   st.checkbox("Invitation obligatoire",value=bool(settings['invitation_required']),key="beta_invitation_required")
  with st.expander("Retours bêta",expanded=True):
-  feedback=list_feedback(actor,DATABASE_PATH,True);st.metric("Retours",len(feedback));st.download_button("Exporter les retours expurgés",export_feedback_csv(actor,DATABASE_PATH),"retours-beta.csv","text/csv")
+  category=st.text_input("Filtrer catégorie");status_filter=st.selectbox("Filtrer statut",["","new","in_review","resolved","closed"]);page=st.number_input("Page",1,100,1)
+  feedback=list_feedback(actor,DATABASE_PATH,True,category=category or None,status=status_filter or None,page=int(page));st.metric("Résultats",len(feedback));st.download_button("Exporter les retours expurgés",export_feedback_csv(actor,DATABASE_PATH),"retours-beta.csv","text/csv")
   for item in feedback:
    with st.container(border=True):
     st.write(f"#{item['id']} · {item['category']} · {item['usefulness']}/5 · {item['status']}");st.write(item['comment'])
     status=st.selectbox("Statut",["new","in_review","resolved","closed"],key=f"status_{item['id']}")
     if st.button("Mettre à jour",key=f"update_{item['id']}"): update_status(actor,item['id'],status,"",DATABASE_PATH);st.rerun()
  with st.expander("Mesures agrégées"):
-  st.json(aggregate_events(DATABASE_PATH))
+  measures=aggregate_events(DATABASE_PATH)
+  st.json({key:(value if value is not None else "données insuffisantes") for key,value in measures.items()})
  st.info("Diagnostics sûrs : base SQLite disponible; aucun secret ni donnée d'analyse n'est affiché.")
