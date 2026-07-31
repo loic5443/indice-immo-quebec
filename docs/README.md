@@ -14,3 +14,9 @@ Les documents Word d’origine restent hors du dépôt, à leur emplacement four
 ## Mise en œuvre Sprint 4
 
 La fondation de données officielles est décrite dans [ADR-008](ADR-008_Sprint4_Official_Data_Foundation.md). Le [registre des sources](source_registry.json), la [matrice de décision](SPRINT4_SOURCE_DECISION_MATRIX.md), le [dictionnaire](DATA_DICTIONARY.md) et les procédures de cycle de vie complètent les volumes officiels sans les remplacer.
+
+## Sprint 6
+
+- [Rapport de clôture](SPRINT6_COMPLETION_REPORT.md)
+- [Guide du parcours d'analyse](GUIDE_PARCOURS_ANALYSE.md)
+- [Checklist bêta privée](CHECKLIST_LANCEMENT_BETA.md)
