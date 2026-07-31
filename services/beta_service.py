@@ -40,6 +40,13 @@ def consume_invitation(code,database_path):
   if invitation_status(row)!="active": return False
   return c.execute("UPDATE beta_invitations SET uses_count=uses_count+1 WHERE rowid=? AND uses_count<max_uses",(row[0],)).rowcount==1
 
+def update_beta_settings(actor,database_path,registrations_open,invitation_required,max_participants,banner_active,message):
+ _admin(actor,database_path)
+ if not 1 <= int(max_participants) <= 10_000 or not message.strip(): raise ValueError("Limite ou message invalide.")
+ with closing(SQLiteRepository(database_path)._connect()) as c,c:
+  c.execute("UPDATE beta_settings SET registrations_open=?,invitation_required=?,max_participants=?,banner_active=?,message=? WHERE id=1",(int(registrations_open),int(invitation_required),int(max_participants),int(banner_active),message.strip()))
+  c.execute("INSERT INTO admin_audit_log(actor_id,action,metadata) VALUES(?,?,?)",(actor,"beta_settings_updated",'{"confirmed":true}'))
+
 def _admin(actor,database_path):
  with closing(SQLiteRepository(database_path)._connect()) as c: row=c.execute("SELECT role FROM users WHERE id=?",(actor,)).fetchone()
  if not row or row[0]!="admin": raise PermissionError("Accès refusé")

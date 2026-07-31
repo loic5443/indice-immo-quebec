@@ -4,7 +4,7 @@ from components.account import current_user,is_authenticated
 from data.database import DATABASE_PATH
 from migrations.runner import applied_migrations
 from repositories.sqlite_repository import SQLiteRepository
-from services.beta_service import create_invitation,revoke_invitation,invitation_status,invitations,export_invitations,admin_log,export_admin_log
+from services.beta_service import create_invitation,revoke_invitation,invitation_status,invitations,export_invitations,admin_log,export_admin_log,update_beta_settings
 from services.feedback_service import list_feedback,update_status,export_feedback_csv
 from services.telemetry_service import aggregate_events
 from services.diagnostics_service import set_source_enabled
@@ -18,9 +18,9 @@ def show_admin():
  st.title("Administration")
  st.metric("Comptes bêta",accounts);st.write(f"Inscriptions : {'ouvertes' if settings['registrations_open'] else 'fermées'} · limite {settings['max_participants']}");st.caption("Migrations : "+", ".join(applied_migrations(DATABASE_PATH)))
  with st.expander("Invitations",expanded=True):
-  label=st.text_input("Libellé interne"); uses=st.number_input("Utilisations",1,100,1)
+  label=st.text_input("Libellé interne"); uses=st.number_input("Utilisations",1,100,1); expires=st.date_input("Expiration facultative",value=None)
   if st.button("Créer une invitation"):
-   st.success("Copiez ce code maintenant (il ne sera plus affiché) : "+create_invitation(actor,DATABASE_PATH,label,int(uses)))
+   st.success("Copiez ce code maintenant (il ne sera plus affiché) : "+create_invitation(actor,DATABASE_PATH,label,int(uses),expires.isoformat() if expires else None))
   status=st.selectbox("Statut invitation",["","active","expired","exhausted","revoked"]);ipage=st.number_input("Page invitations",1,100,1)
   st.download_button("Exporter invitations expurgées",export_invitations(actor,DATABASE_PATH),"invitations.csv","text/csv")
   for item in invitations(actor,DATABASE_PATH,status or None,page=int(ipage)): st.write(f"{item.get('label') or 'Invitation'} — {item['status']} — {item['uses_count']}/{item['max_uses']} · expiration {item['expires_at'] or '—'}")
@@ -28,9 +28,15 @@ def show_admin():
   st.download_button("Exporter le journal expurgé",export_admin_log(actor,DATABASE_PATH),"journal-admin.csv","text/csv")
   st.dataframe(admin_log(actor,DATABASE_PATH),hide_index=True,width="stretch")
  with st.expander("Configuration bêta"):
-  if st.button("Ouvrir / fermer les inscriptions"):
-   with repo._connect() as c,c: c.execute("UPDATE beta_settings SET registrations_open=? WHERE id=1",(0 if settings['registrations_open'] else 1,));c.execute("INSERT INTO admin_audit_log(actor_id,action) VALUES(?,?)",(actor,"registration_toggle"));st.rerun()
-  st.checkbox("Invitation obligatoire",value=bool(settings['invitation_required']),key="beta_invitation_required")
+  opened=st.checkbox("Inscriptions ouvertes",value=bool(settings['registrations_open']))
+  required=st.checkbox("Invitation obligatoire",value=bool(settings['invitation_required']))
+  limit=st.number_input("Limite maximale",1,10000,int(settings['max_participants']))
+  banner=st.checkbox("Bannière Bêta privée active",value=bool(settings['banner_active']))
+  message=st.text_area("Message de bannière",value=settings['message'])
+  confirm=st.checkbox("Je confirme cette modification")
+  if st.button("Enregistrer la configuration"):
+   if not confirm: st.error("Confirmation requise.")
+   else: update_beta_settings(actor,DATABASE_PATH,opened,required,limit,banner,message);st.success("Configuration sauvegardée.");st.rerun()
  with st.expander("Retours bêta",expanded=True):
   category=st.text_input("Filtrer catégorie");status_filter=st.selectbox("Filtrer statut",["","new","in_review","resolved","closed"]);page=st.number_input("Page",1,100,1)
   feedback=list_feedback(actor,DATABASE_PATH,True,category=category or None,status=status_filter or None,page=int(page));st.metric("Résultats",len(feedback));st.download_button("Exporter les retours expurgés",export_feedback_csv(actor,DATABASE_PATH),"retours-beta.csv","text/csv")
