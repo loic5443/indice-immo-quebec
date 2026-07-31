@@ -10,5 +10,6 @@ class FeedbackAdminTests(unittest.TestCase):
   submit_feedback(2,"Accueil","Suggestion",5,"=formule",False,self.db)
   with self.assertRaises(PermissionError):update_status(2,1,"resolved","x",self.db)
   from repositories.sqlite_repository import SQLiteRepository
-  with SQLiteRepository(self.db)._connect() as c,c:c.execute("UPDATE users SET role='admin' WHERE id=1")
+  from contextlib import closing
+  with closing(SQLiteRepository(self.db)._connect()) as c,c:c.execute("UPDATE users SET role='admin' WHERE id=1")
   update_status(1,1,"resolved","interne",self.db);self.assertIn("'=formule",export_feedback_csv(1,self.db))
