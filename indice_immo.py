@@ -6,6 +6,7 @@ import streamlit as st
 
 from components.about import show_about
 from components.admin import show_admin
+from components.feedback import show_feedback
 from components.account import initialize_session, show_account
 from components.alerts import show_alert_signup
 from components.home import show_home
@@ -43,5 +44,7 @@ elif page == "Mon compte":
     show_account()
 elif page == "Administration":
     show_admin()
+elif page == "Donner mon avis":
+    show_feedback()
 else:
     show_about()
