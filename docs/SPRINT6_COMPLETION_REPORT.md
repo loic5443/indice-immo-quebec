@@ -19,6 +19,10 @@ ImmoValue et ses comparables sont déclaratifs et non une évaluation officielle
 
 Paiements, Stripe, accès public, collecte automatique d'annonces, comparables autorisés externes, IA générative et quotas.
 
+## Validation automatisée
+
+Le test `tests/test_beta_end_to_end.py` exécute 58 vérifications tracées dans une base temporaire isolée, sans réseau ni données réelles.
+
 ## Intervention humaine nécessaire
 
 Valider les licences de nouvelles sources, nommer le premier administrateur avec la commande locale, et effectuer la revue de sécurité avant ouverture publique.

@@ -4,5 +4,6 @@
 - [x] Administration réservée aux rôles administrateurs
 - [x] Données simulées séparées du parcours Marchés public
 - [x] Exports et événements expurgés
+- [x] Parcours bêta automatisé isolé (58 vérifications)
 - [ ] Revue humaine des licences et de sécurité
 - [ ] Approbation avant publication ou envoi GitHub
