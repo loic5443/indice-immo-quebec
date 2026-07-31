@@ -15,7 +15,8 @@ class PrivacyTests(unittest.TestCase):
     def test_export_excludes_password_and_deletion_removes_account(self):
         exported=export_user_data(1,self.db); self.assertNotIn("password_hash",exported); self.assertTrue(delete_account(1,self.db)); self.assertIsNone(export_user_data(1,self.db))
     def test_telemetry_uses_only_allowlisted_event_name(self):
-        record_event(1,"analysis_started",self.db); record_event(1,"address",self.db)
+        record_event(1,"analysis_started",self.db)
+        with self.assertRaises(ValueError): record_event(1,"address",self.db)
         from repositories.sqlite_repository import SQLiteRepository
         from contextlib import closing
         with closing(SQLiteRepository(self.db)._connect()) as con: self.assertEqual(con.execute("SELECT COUNT(*) FROM privacy_events").fetchone()[0],1)
