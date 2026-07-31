@@ -10,6 +10,9 @@ from services.data_quality import freshness_label, validate_observation
 
 
 def refresh_source(database_path: str, provider: OfficialDataProvider) -> list[MarketObservation]:
+    from services.diagnostics_service import source_enabled
+    if not source_enabled(provider.source_id, database_path):
+        return []
     registry = load_source_registry()
     source = registry[provider.source_id]
     repository = MarketDataRepository(database_path)

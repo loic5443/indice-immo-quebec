@@ -7,6 +7,8 @@ from repositories.sqlite_repository import SQLiteRepository
 from services.beta_service import create_invitation,revoke_invitation,invitation_status,invitations,export_invitations,admin_log,export_admin_log
 from services.feedback_service import list_feedback,update_status,export_feedback_csv
 from services.telemetry_service import aggregate_events
+from services.diagnostics_service import set_source_enabled
+from providers.source_registry import load_source_registry
 
 def show_admin():
  if not is_authenticated() or current_user().get("role")!="admin": st.error("Accès Administration refusé.");return
@@ -40,4 +42,12 @@ def show_admin():
  with st.expander("Mesures agrégées"):
   measures=aggregate_events(DATABASE_PATH)
   st.json({key:(value if value is not None else "données insuffisantes") for key,value in measures.items()})
+ with st.expander("Sources et diagnostics"):
+  st.write("Base disponible · diagnostics expurgés · aucune donnée utilisateur affichée.")
+  for source in load_source_registry().values():
+   st.write(f"{source['source_id']} — {source['name']} — {source['status']}")
+   reason=st.text_input("Raison",key=f"reason_{source['source_id']}")
+   if st.button("Activer/désactiver",key=f"toggle_{source['source_id']}"):
+    try:set_source_enabled(actor,source['source_id'],False,reason,DATABASE_PATH);st.success("Source désactivée.")
+    except ValueError as error:st.error(str(error))
  st.info("Diagnostics sûrs : base SQLite disponible; aucun secret ni donnée d'analyse n'est affiché.")
