@@ -16,6 +16,7 @@ from services.market_data_service import market_context_snapshot
 from domain.immovalue import SubjectProperty, estimate_immovalue
 from services.comparable_csv import csv_template, validate_csv_rows
 from services.analysis_workflow import STEPS
+from services.entitlements_service import quota_status, consume_estimation
 
 
 DEFAULTS = {
@@ -224,7 +225,22 @@ def _show_immovalue() -> dict:
                 rights=st.checkbox("Je confirme disposer du droit d'utilisation", key=f"iv_rights_{index}")
             comparables.append({"address": address, "sale_date": "2026-01-01", "sale_price": sale_price, "living_area": area, "property_type": ctype, "units": c_units, "distance_km": distance, "source_declared": source, "declared_closed_sale": closed, "usage_right_confirmed": rights})
     subject=SubjectProperty(name=name, property_type=property_type, units=units or None, living_area=living_area or None, land_area=land_area or None, year_built=year or None, asking_price=asking or None, notes=st.session_state.get("iv_notes", ""))
-    estimate=estimate_immovalue(subject, comparables)
+    draft_key = f"immovalue:{hash((subject.name, subject.living_area, tuple(str(item) for item in comparables)))}"
+    estimate = st.session_state.get("immovalue_generated_result")
+    if is_authenticated():
+        user=current_user(); quota=quota_status(user["id"],user,DATABASE_PATH)
+        st.caption(quota["label"] + (" · Le quota est désactivé pendant la bêta." if not _quota_enforced() else ""))
+        if st.button("Produire l'estimation ImmoValue", type="primary", key="generate_immovalue"):
+            candidate=estimate_immovalue(subject, comparables)
+            if not candidate["available"]:
+                st.info("Estimation indisponible : ajoutez au moins trois comparables admissibles.")
+            elif not _quota_enforced() or consume_estimation(user["id"],user,DATABASE_PATH,draft_key):
+                st.session_state["immovalue_generated_result"]=candidate;estimate=candidate;st.success("Estimation produite.")
+            else:
+                st.warning("Votre estimation gratuite du mois est utilisée. L'analyse financière reste disponible.")
+                st.button("Découvrir Premium",on_click=go_to,args=("Premium",))
+    else:
+        estimate=estimate_immovalue(subject, comparables)
     if estimate["available"]:
         one, two, three = st.columns(3); one.metric("Valeur expérimentale", f"{estimate['estimated_value']:,.0f} $".replace(',', ' ')); two.metric("Fourchette prudente", f"{estimate['low']:,.0f} $ à {estimate['high']:,.0f} $".replace(',', ' ')); three.metric("Confiance ImmoValue", f"{estimate['confidence']} / 100")
         st.caption(f"{estimate['used_count']} comparables utilisés · dispersion {estimate['dispersion_pct']} % · {estimate['method']}")
@@ -234,3 +250,10 @@ def _show_immovalue() -> dict:
         st.dataframe([{"Comparable": item.get("address") or "Non renseigné", "Statut": item["status"], "Similarité": f"{item['similarity']:.0f} / 100", "Raison": item["reason"]} for item in estimate["comparables"]], hide_index=True, width="stretch")
     st.caption("ImmoValue est séparé d'ImmoScore : cette estimation n'influence pas le score financier et décisionnel.")
     return estimate
+
+
+def _quota_enforced() -> bool:
+    from repositories.sqlite_repository import SQLiteRepository
+    with SQLiteRepository(DATABASE_PATH)._connect() as connection:
+        row=connection.execute("SELECT quota_enforced FROM beta_settings WHERE id=1").fetchone()
+    return bool(row and row[0])
