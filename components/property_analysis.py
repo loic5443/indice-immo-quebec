@@ -17,6 +17,8 @@ from domain.immovalue import SubjectProperty, estimate_immovalue
 from services.comparable_csv import csv_template, validate_csv_rows
 from services.analysis_workflow import STEPS
 from services.entitlements_service import quota_status, consume_estimation
+from domain.address import normalize_address
+from services.address_lookup_service import lookup
 
 
 DEFAULTS = {
@@ -61,6 +63,17 @@ def show_property_analysis() -> None:
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value)
     st.title("Analyse immobilière")
+    with st.expander("Commencer par une adresse", expanded=True):
+        street,city,postal=st.columns(3)
+        with street: address_street=st.text_input("Adresse",key="address_street")
+        with city: address_city=st.text_input("Ville",key="address_city")
+        with postal: address_postal=st.text_input("Code postal",key="address_postal")
+        consent=st.checkbox("J'accepte qu'ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",key="address_consent")
+        if st.button("Rechercher les renseignements disponibles",key="address_lookup"):
+            try:
+                result=lookup(normalize_address(address_street,address_city,address_postal),consent);st.session_state["address_lookup_result"]=result;st.info(result["message"])
+            except ValueError as error: st.error(str(error))
+        st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     step = st.session_state.setdefault("analysis_step", 1)
     completed = st.session_state.setdefault("analysis_completed_steps", {1})
     st.progress(step / len(STEPS), text=f"Étape {step}/9 — {STEPS[step-1]}")
