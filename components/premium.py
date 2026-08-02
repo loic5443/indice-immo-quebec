@@ -1,70 +1,23 @@
-"""Premium product page. No payments or account actions are enabled."""
-
-import pandas as pd
+"""Clear, payment-free Premium proposition for the private beta."""
 import streamlit as st
+from components.account import current_user,is_authenticated
+from data.database import DATABASE_PATH
+from repositories.sqlite_repository import SQLiteRepository
 
-
-FREE_FEATURES = [
-    "Analyse immobilière de base",
-    "Calcul du paiement et des dépenses",
-    "Flux de trésorerie mensuel",
-    "Ratios de rendement essentiels",
-    "Repères de marché identifiés",
-]
-
-PREMIUM_FEATURES = [
-    "Analyses illimitées",
-    "Rapports détaillés",
-    "Historique des analyses",
-    "Alertes de marché enrichies",
-    "Comparaisons avancées",
-    "Export PDF",
-    "Données enrichies",
-]
-
-
-def _feature_list(items: list[str]) -> None:
-    for item in items:
-        st.markdown(f"<p class='plan-feature'>✓ <span>{item}</span></p>", unsafe_allow_html=True)
-
-
-def show_premium() -> None:
-    """Present the planned paid tier without initiating a commercial transaction."""
-    st.markdown(
-        "<p class='eyebrow'>IMMORADAR PREMIUM</p><h1>Des outils prévus pour aller plus loin.</h1>"
-        "<p class='section-intro'>Comparez le plan gratuit à la feuille de route Premium. "
-        "Les fonctions annoncées sont présentées de façon transparente avant leur activation.</p>",
-        unsafe_allow_html=True,
-    )
-    st.warning("Aucun paiement réel, Stripe ni compte utilisateur n'est activé dans cette version.")
-
-    free, premium = st.columns(2)
-    with free:
-        st.markdown("<section class='plan-card'><p class='plan-label'>GRATUIT</p><h2>Essentiel</h2><p class='plan-price'>0 $ <span>/ mois</span></p><p>Pour évaluer les fondamentaux d'un projet.</p>", unsafe_allow_html=True)
-        _feature_list(FREE_FEATURES)
-        st.button("Disponible maintenant", disabled=True, use_container_width=True, key="free_plan")
-        st.markdown("</section>", unsafe_allow_html=True)
-    with premium:
-        st.markdown("<section class='plan-card premium-card'><p class='plan-label accent-label'>PREMIUM · BIENTÔT</p><h2>Investisseur</h2><p class='plan-price'>19 $ <span>/ mois · prix provisoire</span></p><p>Pour multiplier les scénarios et consolider votre recherche.</p>", unsafe_allow_html=True)
-        _feature_list(PREMIUM_FEATURES)
-        st.button("Premium bientôt disponible", disabled=True, use_container_width=True, key="premium_plan")
-        st.markdown("</section>", unsafe_allow_html=True)
-
-    st.markdown("<div class='section-space'></div><p class='eyebrow'>COMPARAISON DES FORFAITS</p><h2>Ce qui est prévu dans chaque expérience.</h2>", unsafe_allow_html=True)
-    comparison = pd.DataFrame(
-        [
-            ("Analyse immobilière", "Inclus", "Inclus"),
-            ("Analyses illimitées", "—", "Prévu"),
-            ("Rapports détaillés", "—", "Prévu"),
-            ("Historique des analyses", "—", "Prévu"),
-            ("Alertes", "Aperçu", "Enrichies · prévu"),
-            ("Comparaisons", "Villes", "Avancées · prévu"),
-            ("Export PDF", "—", "Prévu"),
-            ("Données enrichies", "—", "Prévu"),
-        ],
-        columns=["Fonctionnalité", "Gratuit", "Premium"],
-    )
-    st.dataframe(comparison, hide_index=True, width="stretch")
-    st.caption("« Prévu » indique une fonctionnalité annoncée, mais non encore active dans cette version.")
-
-    st.markdown("<div class='premium-notice'><h3>Activation responsable</h3><p>Premium sera activé seulement lorsque les données et les fonctionnalités annoncées seront prêtes. Aucun prélèvement ne peut être effectué aujourd'hui.</p></div>", unsafe_allow_html=True)
+def show_premium():
+ st.markdown("<section class='hero-image-panel'><div class='hero-content'><p class='hero-eyebrow notranslate'>IMMORADAR PREMIUM</p><h1>Plus d'outils, toujours expliqués.</h1><p class='hero-copy'>Préparez vos projets avec des rapports, scénarios et alertes en préparation.</p></div></section>",unsafe_allow_html=True)
+ st.info("Premium est actuellement en préparation. Aucun paiement n'est demandé pendant la bêta privée.")
+ free,premium=st.columns(2)
+ with free: st.markdown("<article class='plan-card'><h2>Gratuit</h2><p><b>1 estimation complète par mois</b></p><p>Analyse financière · résultats expliqués · aperçu d'alertes verrouillé.</p><span class='data-pill real'>Disponible</span></article>",unsafe_allow_html=True)
+ with premium: st.markdown("<article class='plan-card premium-card'><h2 class='notranslate'>Premium</h2><p><b>Tarif à confirmer</b></p><p>Estimations illimitées · historique · PDF · scénarios avancés · alertes personnalisées.</p><span class='data-pill simulated'>Expérimental / bientôt disponible</span></article>",unsafe_allow_html=True)
+ st.subheader("Ce qui arrive avec Premium")
+ st.dataframe([{"Fonction":"Rapports PDF complets","Statut":"Disponible"},{"Fonction":"Alertes personnalisées","Statut":"Expérimental"},{"Fonction":"Comparaison de villes, données enrichies, Radar des occasions","Statut":"Bientôt disponible"}],hide_index=True,width="stretch")
+ if not is_authenticated(): st.button("Se connecter pour rejoindre la liste",disabled=True)
+ else:
+  user=current_user()
+  with SQLiteRepository(DATABASE_PATH)._connect() as c: interest=c.execute("SELECT 1 FROM premium_interest WHERE user_id=?",(user['id'],)).fetchone()
+  consent=st.checkbox("Je souhaite être avisé localement du lancement Premium",value=bool(interest))
+  if st.button("M'avertir au lancement"):
+   with SQLiteRepository(DATABASE_PATH)._connect() as c,c:
+    if consent:c.execute("INSERT INTO premium_interest(user_id,consent) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET consent=1",(user['id'],));st.success("Votre intérêt est enregistré localement.")
+    else:c.execute("DELETE FROM premium_interest WHERE user_id=?",(user['id'],));st.info("Vous avez été retiré de la liste.")
