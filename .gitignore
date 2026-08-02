@@ -6,4 +6,6 @@ streamlit-test.log
 data/*.db
 data/*.sqlite
 output/pdf/*.pdf
+data/cache/
+data/downloads/
 tmp/pdfs/
