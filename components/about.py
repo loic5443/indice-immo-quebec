@@ -1,19 +1,12 @@
-"""About page for product positioning and data transparency."""
-
+"""About page focused on product value and transparent decision support."""
 import streamlit as st
-
+from components.sidebar import go_to
 
 def show_about() -> None:
-    st.title("À propos d’ImmoRadar")
-    st.write("ImmoRadar est un outil d’aide à la décision conçu pour rendre l’analyse immobilière plus claire avant une offre, une négociation ou une discussion avec un professionnel.")
-    first, second = st.columns(2)
-    with first:
-        with st.container(border=True):
-            st.subheader("Notre approche")
-            st.write("Nous séparons vos hypothèses, les calculs et les repères de marché afin que chaque résultat reste compréhensible.")
-    with second:
-        with st.container(border=True):
-            st.subheader("Ce qu’ImmoRadar ne fait pas")
-            st.write("Il ne remplace pas un courtier, un fiscaliste, un conseiller financier ou une évaluation professionnelle.")
-    st.subheader("Données et limites")
-    st.write("Le taux directeur canadien provient de la Banque du Canada lorsqu'une valeur officielle est disponible. Les prix, rendements et comparaisons de villes ne sont pas affichés tant qu'une source, une licence et une méthode ne sont pas validées. Les données de démonstration ne font pas partie de l'expérience publique.")
+    st.markdown("<p class='eyebrow notranslate'>À PROPOS D'IMMORADAR</p><h1>Comprendre les chiffres avant une grande décision.</h1><p class='section-intro'>ImmoRadar rend l'analyse immobilière plus simple, compréhensible et utile. Il rassemble vos hypothèses, les calculs financiers et les données disponibles pour mieux évaluer une propriété.</p>", unsafe_allow_html=True)
+    columns=st.columns(3)
+    for column,title,copy in zip(columns,["1. Vos informations","2. Des calculs expliqués","3. Vos prochaines vérifications"],["Vous gardez le contrôle sur les renseignements saisis.","Les résultats présentent d'abord ce qu'ils signifient, puis les ratios techniques.","Les forces, risques et données manquantes sont visibles."]):
+        with column: st.markdown(f"<article class='benefit-card'><h3>{title}</h3><p>{copy}</p></article>",unsafe_allow_html=True)
+    st.markdown("<div class='section-space'></div><h2>Un outil conçu pour mieux préparer vos décisions</h2><p>ImmoRadar vous aide à comprendre les chiffres, à repérer les forces et les risques et à préparer vos échanges avec les professionnels concernés par votre transaction.</p><h2>Des données transparentes</h2><p>Chaque donnée externe affiche sa source, sa date et sa fraîcheur. Les données non disponibles ne sont jamais remplacées par des chiffres inventés.</p>",unsafe_allow_html=True)
+    a,b,_=st.columns([1,1,2]);a.button("Commencer une analyse",type="primary",on_click=go_to,args=("Analyse immobilière",));b.button("Découvrir Premium",on_click=go_to,args=("Premium",))
+    st.caption("ImmoRadar est un outil d'aide à la décision : vérifiez les renseignements importants avant une transaction immobilière.")
