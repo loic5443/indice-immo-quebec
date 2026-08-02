@@ -10,6 +10,7 @@ from services.privacy_service import delete_account, export_user_data
 from services.onboarding_service import STEPS, complete, progress
 from services.beta_service import registration_allowed, consume_invitation
 from repositories.sqlite_repository import SQLiteRepository
+from services.entitlements_service import quota_status
 
 
 def is_authenticated() -> bool:
@@ -64,6 +65,7 @@ def show_account() -> None:
         analyses, plan = st.columns(2)
         analyses.metric("Analyses sauvegardées", count_analyses(user["id"]))
         plan.metric("Statut du forfait", "Premium" if user["plan"] == "premium" else "Gratuit")
+        st.caption(quota_status(user["id"], user, DATABASE_PATH)["label"])
         view, sign_out, _ = st.columns([1, 1, 2])
         view.button("Voir mes analyses", type="primary", on_click=go_to, args=("Mes analyses",), use_container_width=True)
         sign_out.button("Se déconnecter", on_click=logout, use_container_width=True)
