@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS role_territory_imports (territory_code TEXT PRIMARY KEY, source_version TEXT NOT NULL, role_year INTEGER, checksum TEXT NOT NULL, imported_units INTEGER NOT NULL, rejected_units INTEGER NOT NULL, synced_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);

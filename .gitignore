@@ -8,4 +8,5 @@ data/*.sqlite
 output/pdf/*.pdf
 data/cache/
 data/downloads/
+tmp/RM*.xml
 tmp/pdfs/
