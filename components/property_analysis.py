@@ -66,7 +66,9 @@ def show_property_analysis() -> None:
     selected = st.selectbox("Étape du parcours", list(range(1, len(STEPS)+1)), index=step-1, format_func=lambda value: f"{value}. {STEPS[value-1]}")
     if selected <= max(completed): st.session_state["analysis_step"] = selected
     st.caption("Les valeurs restent dans le brouillon de cette session; une analyse n'est sauvegardée dans l'historique qu'après votre confirmation.")
-    st.write("Saisissez vos hypothèses. Les résultats sont indicatifs, déterministes et avant impôt; ils ne constituent pas une évaluation officielle.")
+    st.write("Saisissez vos hypothèses pour obtenir une analyse financière claire et personnalisée. Les calculs sont reproductibles et présentés avant impôt.")
+    with st.expander("Portée de l'analyse"):
+        st.write("ImmoRadar fonde ses résultats sur les renseignements et hypothèses fournis. La qualité de l'analyse dépend donc de leur exactitude et de leur exhaustivité.")
     st.button("Réinitialiser l'analyse", on_click=reset_analysis, type="secondary")
 
     with st.expander("Acquisition et financement", expanded=True):

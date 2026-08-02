@@ -114,3 +114,7 @@ div.stButton > button[kind="secondary"] { background: white; color: var(--blue);
     .final-cta { margin-top: 2.8rem; padding: 1.65rem; }
     [data-testid="stMetric"] { padding: 0.8rem; }
 }
+/* Prevent browser translation and long labels from breaking the main navigation. */
+.notranslate, .sidebar-brand, .brand-mark { white-space: nowrap; }
+button, .stButton > button { white-space: normal; overflow-wrap: anywhere; min-height: 2.7rem; }
+@media (max-width: 700px) { .hero-content, .plan-card, .market-card { padding: 1.25rem; } }
