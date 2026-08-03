@@ -66,7 +66,7 @@ class AddressFormUiTests(unittest.TestCase):
         app.text_input(key="address_form_city").set_value("Beauharnois")
         app.text_input(key="address_form_postal").set_value("J6N0A4")
         app.checkbox(key="address_form_consent").set_value(True)
-        app.button(key="FormSubmitter:official_address_lookup_form-Rechercher les renseignements disponibles").click().run(timeout=20)
+        app.button(key="address_lookup_submit").click().run(timeout=20)
 
     def test_exact_submission_visible_values_and_two_reruns_are_consistent(self):
         app = self._app()
@@ -83,7 +83,7 @@ class AddressFormUiTests(unittest.TestCase):
         app.text_input(key="address_form_city").set_value("Beauharnois")
         app.text_input(key="address_form_postal").set_value("J6N 0A4")
         app.checkbox(key="address_form_consent").set_value(True)
-        app.button(key="FormSubmitter:official_address_lookup_form-Rechercher les renseignements disponibles").click().run(timeout=20)
+        app.button(key="address_lookup_submit").click().run(timeout=20)
         self.assertEqual(app.text_input(key="address_form_street").value, "262 Rue Edgar-Hébert")
         self.assertEqual(app.text_input(key="address_form_city").value, "Beauharnois")
         self.assertEqual(app.text_input(key="address_form_postal").value, "J6N 0A4")
@@ -102,11 +102,11 @@ class AddressFormUiTests(unittest.TestCase):
         app.text_input(key="address_form_street").set_value("262 Rue Edgar-Hébert")
         app.text_input(key="address_form_city").set_value("")
         app.text_input(key="address_form_postal").set_value("J6N0A4")
-        app.button(key="FormSubmitter:official_address_lookup_form-Rechercher les renseignements disponibles").click().run(timeout=20)
+        app.button(key="address_lookup_submit").click().run(timeout=20)
         self.assertTrue(any("Ce champ est requis." in item.value for item in app.error))
         app.text_input(key="address_form_city").set_value("Beauharnois")
         app.checkbox(key="address_form_consent").set_value(True)
-        app.button(key="FormSubmitter:official_address_lookup_form-Rechercher les renseignements disponibles").click().run(timeout=20)
+        app.button(key="address_lookup_submit").click().run(timeout=20)
         self.assertEqual(list(app.error), [])
         self.assertEqual(app.text_input(key="address_form_city").value, "Beauharnois")
 

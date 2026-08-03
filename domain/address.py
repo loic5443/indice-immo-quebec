@@ -29,6 +29,19 @@ def _token(value):
 def _postal(value):
  value=re.sub(r"\s+","",value).upper()
  return value if POSTAL_RE.fullmatch(value) else None
+
+
+def normalize_canadian_postal_code(value: str) -> str | None:
+ """Return a display-safe Canadian postal code or ``None``.
+
+ This small public helper is deliberately shared by the address form and the
+ consented suggestion provider.  Keeping it here prevents a provider result
+ from being formatted with rules that differ from the final form validation.
+ """
+ if not isinstance(value, str):
+  return None
+ compact = _postal(value)
+ return f"{compact[:3]} {compact[3:]}" if compact else None
 def _parse_street_input(value, field_city, field_postal):
  """Accept a street alone or a map-style address without guessing conflicting cities."""
  original=_compact(value,"street",160); postal_in_address=None
@@ -66,5 +79,5 @@ def normalize_address(street,city,postal,unit=""):
  if unit:
   unit=_compact(unit,"unit",30)
   if not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9]",unit): raise AddressValidationError("unit","Vérifiez l’appartement ou le local.")
- formatted=f"{raw_postal[:3]} {raw_postal[3:]}"
+ formatted=normalize_canadian_postal_code(raw_postal)
  return QuebecAddress(f"{street}, {city}, QC {formatted}",street,city,formatted,unit,_search(street),_search(city),city,original_street)

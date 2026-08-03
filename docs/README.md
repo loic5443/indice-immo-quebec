@@ -15,6 +15,8 @@ Les documents Word d’origine restent hors du dépôt, à leur emplacement four
 
 La fondation de données officielles est décrite dans [ADR-008](ADR-008_Sprint4_Official_Data_Foundation.md). Le [registre des sources](source_registry.json), la [matrice de décision](SPRINT4_SOURCE_DECISION_MATRIX.md), le [dictionnaire](DATA_DICTIONARY.md) et les procédures de cycle de vie complètent les volumes officiels sans les remplacer.
 
+Les suggestions consenties du géocodeur officiel sont décrites dans [SOURCE_ADRESSES_QUEBEC_GEOCODEUR.md](SOURCE_ADRESSES_QUEBEC_GEOCODEUR.md). Elles n’enregistrent pas une adresse automatiquement et restent indépendantes d’ImmoValue et d’ImmoScore.
+
 ## Sprint 6
 
 - [Rapport de clôture](SPRINT6_COMPLETION_REPORT.md)

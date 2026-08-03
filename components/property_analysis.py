@@ -27,6 +27,15 @@ from services.address_form_service import (
     serialize_address_form,
     submit_address_form,
 )
+from services.quebec_address_geocoder import (
+    SOURCE_ID,
+    SOURCE_LABEL,
+    SuggestionResponse,
+    suggest_addresses,
+    useful_query,
+)
+from domain.address import normalize_canadian_postal_code
+from services.diagnostics_service import source_enabled
 
 
 DEFAULTS = {
@@ -44,6 +53,8 @@ ADDRESS_STATE_KEY = "address_form_state"
 ADDRESS_LOOKUP_KEY = "address_form_lookup"
 ADDRESS_OWNER_KEY = "address_form_owner"
 ADDRESS_HYDRATE_KEY = "address_form_hydrate"
+ADDRESS_SUGGESTIONS_KEY = "address_form_suggestions"
+ADDRESS_SUGGESTION_QUERY_KEY = "address_form_suggestion_query"
 ADDRESS_WIDGET_KEYS = {
     "street": "address_form_street",
     "city": "address_form_city",
@@ -91,6 +102,7 @@ def _address_state_for_current_user() -> AddressFormState:
         st.session_state[ADDRESS_STATE_KEY] = state
         st.session_state[ADDRESS_HYDRATE_KEY] = True
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+        _clear_address_suggestions()
     state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
     if st.session_state.pop(ADDRESS_HYDRATE_KEY, False):
         _hydrate_address_widgets(state)
@@ -105,6 +117,118 @@ def _persist_address_draft(state: AddressFormState) -> None:
     draft, step = load_draft(owner_id, DATABASE_PATH)
     draft["address_form"] = serialize_address_form(state)
     save_draft(owner_id, draft, step, DATABASE_PATH)
+
+
+def _clear_address_suggestions() -> None:
+    """Suggestions are ephemeral: they are never saved in drafts or telemetry."""
+
+    st.session_state.pop(ADDRESS_SUGGESTIONS_KEY, None)
+    st.session_state.pop(ADDRESS_SUGGESTION_QUERY_KEY, None)
+
+
+def _edit_address_field(field: str) -> None:
+    """Invalidate only an edited canonical submission before the next confirmation."""
+
+    state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+    values = dict(state.values)
+    value = st.session_state.get(ADDRESS_WIDGET_KEYS[field], "")
+    if field == "postal" and value:
+        normalized = normalize_canadian_postal_code(value)
+        if normalized:
+            value = normalized
+            st.session_state[ADDRESS_WIDGET_KEYS[field]] = normalized
+    values[field] = value
+    errors = {name: message for name, message in state.errors.items() if name != field}
+    st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors=errors)
+    st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+
+
+def _request_address_suggestions() -> None:
+    """Call the official service only after consent and a meaningful edit."""
+
+    try:
+        enabled = source_enabled(SOURCE_ID, DATABASE_PATH)
+    except Exception:
+        # A local diagnostic-store problem must never prevent manual analysis
+        # and must not generate an address-bearing diagnostic.
+        enabled = False
+    if not enabled:
+        response = SuggestionResponse("unavailable", message="Les suggestions d’adresse sont temporairement indisponibles. Vous pouvez poursuivre manuellement.")
+    else:
+        response = suggest_addresses(
+            st.session_state.get(ADDRESS_WIDGET_KEYS["street"], ""),
+            bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
+        )
+    st.session_state[ADDRESS_SUGGESTIONS_KEY] = response
+    st.session_state[ADDRESS_SUGGESTION_QUERY_KEY] = useful_query(
+        st.session_state.get(ADDRESS_WIDGET_KEYS["street"], "")
+    )
+
+
+def _on_address_street_change() -> None:
+    _edit_address_field("street")
+    _request_address_suggestions()
+
+
+def _on_address_city_change() -> None:
+    _edit_address_field("city")
+    _clear_address_suggestions()
+
+
+def _on_address_postal_change() -> None:
+    _edit_address_field("postal")
+
+
+def _on_address_unit_change() -> None:
+    _edit_address_field("unit")
+
+
+def _on_address_consent_change() -> None:
+    _edit_address_field("consent")
+    if st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False):
+        _request_address_suggestions()
+    else:
+        _clear_address_suggestions()
+
+
+def _select_address_suggestion(suggestion: dict[str, str]) -> None:
+    """Fill visible editors together; final saving still needs the normal confirmation."""
+
+    state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+    values = dict(state.values)
+    values.update(
+        {
+            "street": suggestion["street"],
+            "city": suggestion["city"] or values.get("city", ""),
+            "postal": suggestion["postal_code"] or values.get("postal", ""),
+            "unit": suggestion["unit"] or values.get("unit", ""),
+            "consent": bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
+        }
+    )
+    st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors={})
+    st.session_state[ADDRESS_HYDRATE_KEY] = True
+    st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+    _clear_address_suggestions()
+
+
+def _submit_address_lookup() -> None:
+    """Validate and persist the exact same widget values in one explicit action."""
+
+    state = prepare_address_submission(
+        st.session_state.get(ADDRESS_WIDGET_KEYS["street"], ""),
+        st.session_state.get(ADDRESS_WIDGET_KEYS["city"], ""),
+        st.session_state.get(ADDRESS_WIDGET_KEYS["postal"], ""),
+        st.session_state.get(ADDRESS_WIDGET_KEYS["unit"], ""),
+        bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
+    )
+    st.session_state[ADDRESS_STATE_KEY] = state
+    _persist_address_draft(state)
+    if state.valid:
+        st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(state)
+    else:
+        st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+    st.session_state[ADDRESS_HYDRATE_KEY] = True
+    _clear_address_suggestions()
 
 
 def _official_lookup(state: AddressFormState) -> dict:
@@ -220,52 +344,67 @@ def show_property_analysis() -> None:
     st.title("Analyse immobilière")
     address_state = _address_state_for_current_user()
     with st.expander("Commencer par une adresse", expanded=True):
-        with st.form("official_address_lookup_form", clear_on_submit=False):
-            street, city, postal, unit = st.columns(4)
-            error_slots = {}
-            with street:
-                submitted_street = st.text_input("Adresse", key=ADDRESS_WIDGET_KEYS["street"])
-                error_slots["street"] = st.empty()
-                if "street" in address_state.errors:
-                    error_slots["street"].error(address_state.errors["street"])
-            with city:
-                submitted_city = st.text_input("Ville", key=ADDRESS_WIDGET_KEYS["city"])
-                error_slots["city"] = st.empty()
-                if "city" in address_state.errors:
-                    error_slots["city"].error(address_state.errors["city"])
-            with postal:
-                submitted_postal = st.text_input("Code postal", key=ADDRESS_WIDGET_KEYS["postal"])
-                error_slots["postal"] = st.empty()
-                if "postal" in address_state.errors:
-                    error_slots["postal"].error(address_state.errors["postal"])
-            with unit:
-                submitted_unit = st.text_input("Appartement / local (facultatif)", key=ADDRESS_WIDGET_KEYS["unit"])
-                error_slots["unit"] = st.empty()
-                if "unit" in address_state.errors:
-                    error_slots["unit"].error(address_state.errors["unit"])
-            submitted_consent = st.checkbox(
-                "J'accepte qu'ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",
-                key=ADDRESS_WIDGET_KEYS["consent"],
+        street, city, postal, unit = st.columns(4)
+        with street:
+            st.text_input(
+                "Adresse",
+                key=ADDRESS_WIDGET_KEYS["street"],
+                placeholder="Ex. 262 Rue Edgar-Hébert",
+                on_change=_on_address_street_change,
             )
-            submitted = st.form_submit_button("Rechercher les renseignements disponibles", type="primary")
-        if submitted:
-            address_state = prepare_address_submission(
-                submitted_street, submitted_city, submitted_postal, submitted_unit, submitted_consent
+            if "street" in address_state.errors:
+                st.error(address_state.errors["street"])
+        with city:
+            st.text_input("Ville", key=ADDRESS_WIDGET_KEYS["city"], on_change=_on_address_city_change)
+            if "city" in address_state.errors:
+                st.error(address_state.errors["city"])
+        with postal:
+            st.text_input("Code postal", key=ADDRESS_WIDGET_KEYS["postal"], on_change=_on_address_postal_change)
+            if "postal" in address_state.errors:
+                st.error(address_state.errors["postal"])
+        with unit:
+            st.text_input("Appartement / local (facultatif)", key=ADDRESS_WIDGET_KEYS["unit"], on_change=_on_address_unit_change)
+            if "unit" in address_state.errors:
+                st.error(address_state.errors["unit"])
+        st.checkbox(
+            "J’accepte qu’ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",
+            key=ADDRESS_WIDGET_KEYS["consent"],
+            on_change=_on_address_consent_change,
+        )
+        if st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False):
+            st.caption("Saisissez au moins quatre caractères utiles : des suggestions apparaissent après une modification confirmée du champ.")
+            st.button(
+                "Voir les suggestions d’adresse",
+                key="address_suggestions_request",
+                on_click=_request_address_suggestions,
+                type="secondary",
             )
-            for error_slot in error_slots.values():
-                error_slot.empty()
-            for field, message in address_state.errors.items():
-                error_slots[field].error(message)
-            st.session_state[ADDRESS_STATE_KEY] = address_state
-            _persist_address_draft(address_state)
-            if address_state.valid:
-                st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(address_state)
-            else:
-                st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
-            # Widget state is only changed before rendering widgets, on the next
-            # rerun.  No stale value is validated during that rerun.
-            st.session_state[ADDRESS_HYDRATE_KEY] = True
-            st.rerun()
+        else:
+            st.caption("Activez le consentement de recherche publique pour obtenir des suggestions d’adresse. La saisie manuelle reste disponible.")
+
+        suggestion_response = st.session_state.get(ADDRESS_SUGGESTIONS_KEY)
+        current_query = useful_query(st.session_state.get(ADDRESS_WIDGET_KEYS["street"], ""))
+        if suggestion_response and st.session_state.get(ADDRESS_SUGGESTION_QUERY_KEY) == current_query:
+            if suggestion_response.status == "ok" and suggestion_response.suggestions:
+                st.caption(f"Source : {SOURCE_LABEL} · résultats publics, non enregistrés automatiquement.")
+                for index, suggestion in enumerate(suggestion_response.suggestions):
+                    st.button(
+                        suggestion.label,
+                        key=f"address_suggestion_{index}",
+                        on_click=_select_address_suggestion,
+                        args=(suggestion.to_dict(),),
+                        width="stretch",
+                    )
+            elif suggestion_response.status in {"unavailable", "rate_limited"}:
+                st.info(suggestion_response.message)
+            elif suggestion_response.status == "ok":
+                st.info("Aucune suggestion trouvée. Vous pouvez poursuivre avec la saisie manuelle.")
+        st.button(
+            "Rechercher les renseignements disponibles",
+            key="address_lookup_submit",
+            type="primary",
+            on_click=_submit_address_lookup,
+        )
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
     if address_lookup and address_lookup["coverage"] is False:

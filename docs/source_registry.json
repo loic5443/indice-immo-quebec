@@ -49,6 +49,22 @@
       "retention": "not_applicable",
       "quality_rules": "À définir avant intégration; ne pas télécharger le jeu complet (environ 596 Mo) sans décision dédiée.",
       "user_display": "Prévu — validation provinciale d’adresse"
+    },
+    {
+      "source_id": "mrnf_adresses_quebec_geocoder",
+      "name": "Adresses Québec — REST (géocodeur)",
+      "owner": "Ministère des Ressources naturelles et des Forêts du Québec",
+      "status": "integrated",
+      "classification": "observed",
+      "geography": "Québec",
+      "metrics": ["address_suggestion"],
+      "official_url": "https://servicescarto.mrnf.gouv.qc.ca/pes/rest/services/Territoire/Adresse_Geocodage/GeocodeServer",
+      "human_url": "https://www.donneesquebec.ca/recherche/dataset/adresses-quebec/resource/64cbcdfc-4dd6-42e7-9a5d-489e775da83b",
+      "license_summary": "Service officiel MRNF référencé par Données Québec. Attribution : MRNF — Adresses Québec. Les conditions de la ressource officielle s’appliquent.",
+      "refresh_frequency": "on_demand_consent_only",
+      "retention": "cache mémoire de 30 secondes; aucune adresse ni coordonnée n’est conservée par ImmoRadar avant la confirmation normale de l’analyse.",
+      "quality_rules": "HTTPS, hôte officiel strict, délai maximal de 3 secondes, 8 résultats maximum, schéma candidates/attributes validé. Champs utilisés : Num, Odonyme, Dir, Unite, SufNum, City, ZIP. Coordonnées, score et Match_addr sont écartés.",
+      "user_display": "Suggestions publiques avec consentement — mode manuel si indisponible"
     }
   ]
 }
