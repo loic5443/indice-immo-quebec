@@ -20,7 +20,7 @@ class BetaEndToEndTests(unittest.TestCase):
  def step(self,n,description,fn):
   start=time.monotonic();fn();self.trace.append((n,description,round(time.monotonic()-start,4)))
  def test_58_step_private_beta_journey(self):
-  self.step(1,"migrations appliquées",lambda: initialize_database(self.db));self.assertEqual(applied_migrations(self.db)[-1],"0016")
+  self.step(1,"migrations appliquées",lambda: initialize_database(self.db));self.assertEqual(applied_migrations(self.db)[-1],"0017")
   self.step(2,"compte fondateur",lambda:create_user("Fondateur","founder@example.com","motdepasse-solide",self.db,UserProfile()))
   with closing(SQLiteRepository(self.db)._connect()) as c,c:c.execute("UPDATE users SET role='admin',analytics_consent=1 WHERE id=1");c.execute("UPDATE beta_settings SET invitation_required=1,registrations_open=1")
   self.step(3,"promotion administrateur",lambda:self.assertEqual(SQLiteRepository(self.db).get_user_by_id(1)["role"],"admin"))
