@@ -10,12 +10,19 @@ from services.telemetry_service import aggregate_events
 from services.diagnostics_service import set_source_enabled
 from providers.source_registry import load_source_registry
 from services.quebec_role_admin_service import refresh_index,territories,import_territory,set_territory_enabled,remove_local_cache,coverage_summary
+from services.municipal_comparison_service import import_profile
 
 def _show_role_data_admin(actor):
  with st.expander("Données foncières du Québec",expanded=True):
   st.caption("MAMH / Données Québec · rôle d’évaluation foncière ouvert · consultation locale seulement.")
   summary=coverage_summary(actor,DATABASE_PATH)
   st.caption(f"Index : {summary['indexed']} territoires · synchronisés : {summary['synced']} · unités locales : {summary['units']} · dernière réussite : {summary['last_success'] or '—'}")
+  profile_confirm=st.checkbox("Je confirme l’import du Profil financier officiel CC-BY 4.0",key="profile_confirm")
+  if st.button("Actualiser les repères municipaux",key="profile_refresh"):
+   if not profile_confirm: st.error("Confirmation requise.")
+   else:
+    try: st.success(f"Profil importé : {import_profile(actor,DATABASE_PATH)['municipalities']} municipalités.")
+    except Exception: st.error("Source indisponible ou schéma incompatible; la dernière version valide est conservée.")
   confirmed=st.checkbox("Je confirme l’actualisation de l’index officiel",key="role_index_confirm")
   if st.button("Actualiser la liste des municipalités",key="role_index_refresh"):
    if not confirmed: st.error("Confirmation requise.")

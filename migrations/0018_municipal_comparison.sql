@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS municipal_indicators (municipality_code TEXT NOT NULL, municipality_name TEXT NOT NULL, year INTEGER NOT NULL, indicator_code TEXT NOT NULL, value REAL NOT NULL, unit TEXT NOT NULL, source_id TEXT NOT NULL, source_url TEXT NOT NULL, retrieved_at TEXT NOT NULL, quality TEXT NOT NULL, PRIMARY KEY(municipality_code,year,indicator_code,source_id));
+CREATE INDEX IF NOT EXISTS idx_municipal_compare ON municipal_indicators(year, municipality_name, indicator_code);
