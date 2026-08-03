@@ -19,6 +19,7 @@ from services.analysis_workflow import STEPS
 from services.entitlements_service import quota_status, consume_estimation
 from domain.address import normalize_address
 from services.address_lookup_service import lookup
+from services.quebec_role_importer import search_role_units
 
 
 DEFAULTS = {
@@ -72,8 +73,13 @@ def show_property_analysis() -> None:
         if st.button("Rechercher les renseignements disponibles",key="address_lookup"):
             try:
                 result=lookup(normalize_address(address_street,address_city,address_postal),consent);st.session_state["address_lookup_result"]=result;st.info(result["message"])
+                if consent: st.session_state["role_01023_matches"]=search_role_units(DATABASE_PATH,"01023",address_street)
             except ValueError as error: st.error(str(error))
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
+    for match in st.session_state.get("role_01023_matches",[]):
+        st.info(f"Rôle officiel 01023 — {match['address_text'] or 'adresse partielle'} · valeur totale au rôle : {_money(match['total_value'] or 0)} · rôle {match['role_year']} · référence {match['market_reference_date'] or 'non publiée'}.")
+    if st.session_state.get("role_01023_matches"):
+        st.caption("Source : MAMH / Données Québec. Valeur au rôle, distincte d’ImmoValue; aucune donnée n’est appliquée automatiquement à vos hypothèses.")
     step = st.session_state.setdefault("analysis_step", 1)
     completed = st.session_state.setdefault("analysis_completed_steps", {1})
     st.progress(step / len(STEPS), text=f"Étape {step}/9 — {STEPS[step-1]}")
