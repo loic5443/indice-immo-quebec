@@ -51,7 +51,8 @@ def logout() -> None:
 
 def show_account() -> None:
     """Show account credentials forms or the signed-in account summary."""
-    st.markdown("<p class='eyebrow'>ESPACE PERSONNEL</p><h1>Mon compte</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='eyebrow'>ESPACE PERSONNEL</p>", unsafe_allow_html=True)
+    st.title("Mon compte")
     if is_authenticated():
         user = current_user()
         if not user.get("onboarding_completed"):

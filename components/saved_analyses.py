@@ -16,7 +16,9 @@ def _money(value: float) -> str:
 
 def show_saved_analyses() -> None:
     """Show the active user's saved analyses and management actions."""
-    st.markdown("<p class='eyebrow'>VOS DOSSIERS</p><h1>Mes propriétés</h1><p class='section-intro'>Retrouvez vos dossiers sauvegardés, leurs points de repère et le suivi disponible.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='eyebrow'>VOS DOSSIERS</p>", unsafe_allow_html=True)
+    st.title("Mes propriétés")
+    st.markdown("<p class='section-intro'>Retrouvez vos dossiers sauvegardés, leurs points de repère et le suivi disponible.</p>", unsafe_allow_html=True)
     if not is_authenticated():
         st.info("Connectez-vous pour consulter et sauvegarder vos analyses.")
         st.button("Ouvrir Mon compte", type="primary", on_click=go_to, args=("Mon compte",))

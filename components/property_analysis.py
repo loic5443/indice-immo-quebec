@@ -111,11 +111,32 @@ def _hydrate_address_widgets(state: AddressFormState) -> None:
 def _address_state_for_current_user() -> AddressFormState:
     """Load exactly one canonical state for the active user/session."""
     owner_id = _address_owner_id()
-    if st.session_state.get(ADDRESS_OWNER_KEY) != owner_id:
+    # Anonymous sessions use ``None`` as their owner id.  Test key presence,
+    # not only equality, or a fresh anonymous session would skip its first
+    # canonical hydration (including the Accueil → Analyser hand-off).
+    if ADDRESS_OWNER_KEY not in st.session_state or st.session_state.get(ADDRESS_OWNER_KEY) != owner_id:
         state = empty_address_form_state()
+        restored_draft = False
         if owner_id is not None:
             draft, _ = load_draft(owner_id, DATABASE_PATH)
+            restored_draft = bool(draft.get("address_form"))
             state = restore_address_form(draft.get("address_form"))
+        # Preserve values entered in the first browser event before the
+        # canonical state has been initialized.  This also prevents a rerun
+        # from turning an already selected manual mode or consent back off.
+        if not restored_draft:
+            values = dict(state.values)
+            for field, key in ADDRESS_WIDGET_KEYS.items():
+                if key in st.session_state:
+                    values[field] = st.session_state[key]
+            if ADDRESS_EDITOR_STREET_KEY in st.session_state:
+                values["street"] = st.session_state[ADDRESS_EDITOR_STREET_KEY]
+            state = AddressFormState(values=values, address=None, errors={})
+        home_address = useful_query(st.session_state.pop("home_address_pending", ""))
+        if home_address:
+            values = dict(state.values)
+            values["street"] = home_address
+            state = AddressFormState(values=values, address=None, errors={})
         st.session_state[ADDRESS_OWNER_KEY] = owner_id
         st.session_state[ADDRESS_STATE_KEY] = state
         st.session_state[ADDRESS_HYDRATE_KEY] = True
@@ -400,7 +421,9 @@ def _next_workflow_step() -> None:
 def show_property_analysis() -> None:
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value)
-    st.markdown("<p class='eyebrow'>DOSSIER IMMOBILIER 360</p><h1>Révéler la valeur et analyser votre projet</h1><p class='section-intro'>Adresse, renseignements publics autorisés, valeur disponible, finances et suivi : un seul dossier, sans transformer les données manquantes en conclusions.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='eyebrow'>DOSSIER IMMOBILIER 360</p>", unsafe_allow_html=True)
+    st.title("Révéler la valeur et analyser votre projet")
+    st.markdown("<p class='section-intro'>Adresse, renseignements publics autorisés, valeur disponible, finances et suivi : un seul dossier, sans transformer les données manquantes en conclusions.</p>", unsafe_allow_html=True)
     address_state = _address_state_for_current_user()
     with st.expander("Commencer par une adresse", expanded=True):
         st.checkbox(
@@ -466,6 +489,9 @@ def show_property_analysis() -> None:
         )
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
+    # Public results must be visible immediately after their explicit search.
+    # They are not contingent on calculating private financial assumptions.
+    _show_role_overview(address_lookup)
     step, completed = _ensure_workflow_state()
     st.progress(step / len(STEPS), text=f"Étape {step}/{len(STEPS)} — {STEPS[step-1]}")
     st.selectbox(
@@ -493,7 +519,7 @@ def show_property_analysis() -> None:
         st.write("ImmoRadar fonde ses résultats sur les renseignements et hypothèses fournis. La qualité de l'analyse dépend donc de leur exactitude et de leur exhaustivité.")
     st.button("Réinitialiser l'analyse", on_click=reset_analysis, type="secondary")
 
-    with st.expander("Acquisition et financement", expanded=True):
+    with st.expander("Acquisition et financement — étape 3", expanded=step == 3):
         acquisition, financing = st.columns(2)
         with acquisition:
             st.number_input("Prix de la propriété ($)", min_value=0.0, step=5_000.0, key="property_price")
@@ -506,7 +532,7 @@ def show_property_analysis() -> None:
             st.number_input("Revenu brut annuel du ménage ($, facultatif)", min_value=0.0, step=5_000.0, key="household_income")
             st.number_input("Autres dettes mensuelles ($, facultatif)", min_value=0.0, step=100.0, key="other_debts")
 
-    with st.expander("Revenus et dépenses d'exploitation", expanded=True):
+    with st.expander("Revenus et dépenses d'exploitation — étape 4", expanded=step == 4):
         revenue, monthly, annual = st.columns(3)
         with revenue:
             st.number_input("Revenus locatifs mensuels ($)", min_value=0.0, step=100.0, key="rental_income")
@@ -524,7 +550,7 @@ def show_property_analysis() -> None:
             st.number_input("Taxes municipales annuelles ($)", min_value=0.0, step=100.0, key="municipal_taxes")
             st.number_input("Taxes scolaires annuelles ($)", min_value=0.0, step=50.0, key="school_taxes")
 
-    with st.expander("Hypothèses de projection", expanded=False):
+    with st.expander("Hypothèses de projection — étape 8", expanded=step == 8):
         growth, horizon = st.columns(2)
         with growth:
             st.number_input("Croissance annuelle hypothétique des loyers (%)", min_value=-25.0, max_value=25.0, step=0.25, key="rent_growth")
@@ -566,11 +592,18 @@ def _show_role_overview(address_lookup: dict | None) -> None:
 
     if not address_lookup:
         return
+    st.markdown("<div class='official-result-heading'><p class='eyebrow'>RENSEIGNEMENTS PUBLICS DU DOSSIER</p><h2>Rôle municipal</h2></div>", unsafe_allow_html=True)
+    state = st.session_state.get(ADDRESS_STATE_KEY)
+    if state and state.address:
+        address = state.address
+        postal = f", {address.postal_code}" if address.postal_code else ""
+        unit = f", {address.unit}" if address.unit else ""
+        st.caption(f"Adresse normalisée : {address.street}{unit}, {address.city}{postal}")
     if not address_lookup.get("consent"):
-        st.info("Renseignements publics non recherchés : le dossier reste entièrement utilisable avec vos hypothèses.")
+        st.info("Recherche publique non autorisée : activez le consentement puis lancez la recherche, ou continuez manuellement.")
         return
     if address_lookup.get("coverage") is False:
-        st.info("Renseignements municipaux indisponibles automatiquement pour cette municipalité. Vous pouvez continuer manuellement.")
+        st.info("Aucun territoire municipal actif et synchronisé n’est disponible pour cette municipalité. Continuez manuellement ou demandez à un administrateur de synchroniser le territoire.")
         return
     matches = address_lookup.get("matches", [])
     if matches:
@@ -585,7 +618,7 @@ def _show_role_overview(address_lookup: dict | None) -> None:
         return
     variants = address_lookup.get("variants", [])
     detail = f" Variante publique disponible : {', '.join(variants)}." if variants else ""
-    st.info("Aucune unité officielle ne correspond exactement aux renseignements saisis. Vérifiez-les ou poursuivez manuellement." + detail)
+    st.info("Le territoire est synchronisé, mais aucune unité officielle ne correspond exactement aux renseignements saisis. Vérifiez le numéro ou la voie, ou poursuivez manuellement." + detail)
 
 
 def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, address_lookup: dict | None = None) -> None:
@@ -593,7 +626,6 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
     overview_tab, finances_tab, risks_tab, details_tab = st.tabs(["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"])
     engine_result = evaluate_immoengine(inputs, result, profile)
     with overview_tab:
-        _show_role_overview(address_lookup)
         immovalue = _show_immovalue()
         score, confidence, verdict = st.columns(3)
         score.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Indisponible")

@@ -22,7 +22,9 @@ def _hero() -> str:
 def _start_from_home() -> None:
     address = st.session_state.get("home_address", "").strip()
     if address:
-        st.session_state["address_form_editor_street"] = address
+        # The analyzer hydrates its canonical address form on the next rerun.
+        # A dedicated hand-off avoids that hydration clearing the Home field.
+        st.session_state["home_address_pending"] = address
     go_to("Analyser")
 
 
@@ -30,7 +32,7 @@ def show_home() -> None:
     st.markdown(
         f"<section class='hero-image-panel' style=\"{_hero()}\"><div class='hero-content'>"
         "<p class='hero-eyebrow notranslate'>IMMORADAR</p>"
-        "<h1>Découvrez ce qu’une propriété pourrait valoir.</h1>"
+        "<div class='hero-title' role='heading' aria-level='1'>Découvrez ce qu’une propriété pourrait valoir.</div>"
         "<p class='hero-copy'>Surveillez ensuite tout ce qui peut changer votre décision. ImmoRadar rassemble les renseignements disponibles, vos hypothèses et une lecture claire de votre dossier.</p>"
         "<p class='hero-proof'><span>Valeur expliquée</span><span>Hypothèses transparentes</span><span>Suivi utile</span></p>"
         "</div></section>",

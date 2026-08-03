@@ -8,7 +8,9 @@ def _reset_municipal_selection():
  st.session_state["municipal_selected"]=[]
 
 def show_markets():
- st.markdown("<p class='eyebrow'>MARCHÉ</p><h1>Comparer les municipalités</h1><p class='section-intro'>Des repères municipaux officiels, sans prix de vente, rendement ou risque inventés.</p>",unsafe_allow_html=True)
+ st.markdown("<p class='eyebrow'>MARCHÉ</p>",unsafe_allow_html=True)
+ st.title("Comparer les municipalités")
+ st.markdown("<p class='section-intro'>Des repères municipaux officiels, sans prix de vente, rendement ou risque inventés.</p>",unsafe_allow_html=True)
  st.info("Données officielles disponibles : les indicateurs affichés ci-dessous. Indicateurs indisponibles : prix de vente, rendement locatif et niveau de risque, faute de source autorisée dans ce dossier.")
  query=st.text_input("Rechercher une municipalité",key="municipal_search")
  current=st.session_state.get("municipal_selected",[])

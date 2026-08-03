@@ -31,3 +31,10 @@ class ProductStructureTests(unittest.TestCase):
         self.assertIn("APERÇU PREMIUM VERROUILLÉ", source)
         self.assertIn("Aucune alerte calculable", source)
         self.assertNotIn("send_email", source)
+
+    def test_dynamic_page_titles_do_not_reuse_the_home_heading_anchor(self):
+        for filename in ("home.py", "premium.py", "account.py", "saved_analyses.py", "markets.py"):
+            source = (Path("components") / filename).read_text(encoding="utf-8")
+            self.assertNotIn("#reveler-la-valeur-et-analyser-votre-projet", source)
+        self.assertIn("hero-title", (Path("components") / "home.py").read_text(encoding="utf-8"))
+        self.assertIn("st.title", (Path("components") / "account.py").read_text(encoding="utf-8"))

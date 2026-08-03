@@ -14,7 +14,7 @@ def _feature(title: str, free: str, premium: str) -> None:
 
 
 def show_premium() -> None:
-    st.markdown("<section class='hero-image-panel'><div class='hero-content'><p class='hero-eyebrow notranslate'>IMMORADAR PREMIUM</p><h1>Révélez davantage. Suivez ce qui évolue.</h1><p class='hero-copy'>Premium approfondira vos dossiers immobiliers avec des analyses sans limite, des comparaisons, des rapports et des alertes intelligentes.</p></div></section>", unsafe_allow_html=True)
+    st.markdown("<section class='hero-image-panel'><div class='hero-content'><p class='hero-eyebrow notranslate'>IMMORADAR PREMIUM</p><div class='hero-title' role='heading' aria-level='1'>Révélez davantage. Suivez ce qui évolue.</div><p class='hero-copy'>Premium approfondira vos dossiers immobiliers avec des analyses sans limite, des comparaisons, des rapports et des alertes intelligentes.</p></div></section>", unsafe_allow_html=True)
     st.info("Premium est actuellement en préparation. Aucun paiement n’est demandé pendant la bêta privée.")
     free, premium = st.columns(2)
     with free:

@@ -30,7 +30,7 @@ p, li, label { color: var(--ink); }
 
 .hero-image-panel { min-height: 430px; display: flex; align-items: center; padding: 3.8rem 3.6rem; border-radius: 24px; overflow: hidden; background-color: #10233f; background-size: cover; background-position: center; box-shadow: 0 18px 42px rgba(10, 27, 48, 0.17); }
 .hero-content { max-width: 650px; }
-.hero-image-panel h1 { color: #ffffff !important; max-width: 620px; }
+.hero-image-panel h1, .hero-title { color: #ffffff !important; max-width: 620px; font-size: clamp(2.25rem, 5vw, 4.1rem); font-weight: 800; line-height: 1.08; letter-spacing: -0.045em; }
 .hero-eyebrow { color: #b9d6ff !important; font-weight: 800; letter-spacing: 0.13em; font-size: 0.74rem; margin-bottom: 0.75rem; }
 .hero-copy { color: #e6eef9 !important; font-size: 1.13rem; line-height: 1.65; max-width: 590px; }
 .hero-proof { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 1.5rem; }

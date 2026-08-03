@@ -77,6 +77,36 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertTrue(app.checkbox(key="address_form_consent").value)
         self.assertEqual(list(app.error), [])
 
+    def test_public_role_is_visible_before_calculation_and_survives_reruns(self):
+        """A public role lookup must not depend on private financial calculation."""
+        app = self._app()
+        self._submit_exact(app)
+        labels = [metric.label for metric in app.metric]
+        self.assertIn("Terrain", labels)
+        self.assertIn("Bâtiment", labels)
+        self.assertIn("Total au rôle", labels)
+        self.assertTrue(any("Adresse normalisée" in item.value for item in app.caption))
+        self.assertTrue(any("valeur marchande" in item.value for item in app.markdown))
+        self.assertTrue(any("Aucune analyse personnelle" in item.value for item in app.info))
+        app.run(timeout=20)
+        app.run(timeout=20)
+        self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
+        self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+
+    def test_home_address_is_handed_to_the_canonical_analyzer_editor(self):
+        """The landing-page shortcut cannot be erased by address-form hydration."""
+        app = AppTest.from_string(self.app_source)
+        app.session_state["home_address_pending"] = "123 rue Exemple"
+        app.run(timeout=20)
+        self.assertEqual(app.session_state["address_form_editor_street"], "123 rue Exemple")
+        self.assertEqual(list(app.exception), [])
+        self._submit_exact(app)
+        self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
+        self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
+        self.assertTrue(app.checkbox(key="address_form_consent").value)
+        self.assertEqual(list(app.error), [])
+
     def test_street_only_submission_keeps_city_postal_and_consent_canonical(self):
         app = self._app()
         app.session_state["address_form_editor_street"] = "123 rue Exemple"
