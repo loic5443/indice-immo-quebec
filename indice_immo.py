@@ -8,7 +8,6 @@ from components.about import show_about
 from components.admin import show_admin
 from components.feedback import show_feedback
 from components.account import initialize_session, show_account
-from components.alerts import show_alert_signup
 from components.home import show_home
 from components.markets import show_markets
 from components.premium import show_premium
@@ -32,7 +31,6 @@ page = show_sidebar()
 
 if page == "Accueil":
     show_home()
-    show_alert_signup()
 elif page == "Analyse immobilière":
     show_property_analysis()
 elif page == "Marchés":

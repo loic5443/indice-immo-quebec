@@ -7,6 +7,18 @@ from services.beta_service import _admin
 SOURCE_ID="mamh_financial_profile"; SOURCE_URL="https://mamh.gouv.qc.ca/fichiersdonneesouvertes/PF-2024-2025.csv"
 INDICATORS={"population":("population","habitants"),"FIALX02009":("uniformized_residential_assessment_average","CAD"),"FIALX01959":("uniformized_property_wealth","CAD"),"FIALX02011":("uniformized_property_wealth_per_unit","CAD par unité")}
 def _now():return datetime.now(timezone.utc).isoformat()
+
+def normalize_selection(values, maximum=4):
+ """Keep the user's ordered selection, without duplicates or filter side effects."""
+ selected=[]
+ for value in values or []:
+  if isinstance(value,str) and value and value not in selected:
+   selected.append(value)
+ return selected[:maximum]
+
+def selection_options(selected, search_results):
+ """A search may narrow suggestions, never remove a municipality already chosen."""
+ return sorted(set(normalize_selection(selected))|set(search_results or []),key=str.casefold)
 def fetch_profile(url=SOURCE_URL):
  with urllib.request.urlopen(url,timeout=45) as r:return r.read()
 def import_profile(actor,database_path,content=None):
@@ -30,7 +42,7 @@ def import_profile(actor,database_path,content=None):
   c.executemany("INSERT INTO municipal_indicators VALUES(?,?,?,?,?,?,?,?,?,?)",inserted)
  return {"municipalities":len({r[0] for r in inserted}),"indicators":len(inserted),"year":max(r[2] for r in inserted),"invalid":invalid}
 def comparison(database_path,names,year=None):
- names=[n for n in names if n][:4]
+ names=normalize_selection(names)
  if len(names)<2:return {"year":None,"rows":[],"available":False}
  with closing(sqlite3.connect(database_path)) as c:
   c.row_factory=sqlite3.Row

@@ -11,6 +11,7 @@ from services.onboarding_service import STEPS, complete, progress
 from services.beta_service import registration_allowed, consume_invitation
 from repositories.sqlite_repository import SQLiteRepository
 from services.entitlements_service import quota_status
+from services.auth_service import validate_login_submission
 
 
 def is_authenticated() -> bool:
@@ -89,8 +90,11 @@ def show_account() -> None:
             password = st.text_input("Mot de passe", type="password", key="login_password")
             submitted = st.form_submit_button("Se connecter", type="primary", use_container_width=True)
         if submitted:
-            user = authenticate_user(email, password)
-            if user is None:
+            errors = validate_login_submission(email, password)
+            if errors:
+                for error in errors:
+                    st.error(error)
+            elif (user := authenticate_user(email, password)) is None:
                 st.error("Adresse courriel ou mot de passe incorrect.")
             else:
                 st.session_state["current_user"] = user

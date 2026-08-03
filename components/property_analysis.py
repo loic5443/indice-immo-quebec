@@ -15,7 +15,7 @@ from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 from services.market_data_service import market_context_snapshot
 from domain.immovalue import SubjectProperty, estimate_immovalue
 from services.comparable_csv import csv_template, validate_csv_rows
-from services.analysis_workflow import STEPS, load_draft, save_draft
+from services.analysis_workflow import STEPS, load_draft, save_draft, normalize_step, transition
 from services.entitlements_service import quota_status, consume_estimation
 from services.address_lookup_service import lookup
 from services.quebec_role_importer import search_role_units,role_street_variants
@@ -30,14 +30,14 @@ from services.address_form_service import (
 
 
 DEFAULTS = {
-    "property_price": 450_000.0, "down_payment": 90_000.0, "mortgage_rate": 4.75,
-    "amortization_years": 25, "municipal_taxes": 3_600.0, "school_taxes": 400.0,
-    "insurance": 125.0, "condo_fees": 0.0, "rental_income": 2_600.0,
-    "other_expenses": 250.0, "household_income": 0.0, "other_debts": 0.0,
-    "vacancy_rate": 3.0, "maintenance": 100.0, "management": 0.0,
-    "utilities": 0.0, "capital_reserve": 100.0, "initial_repairs": 0.0,
-    "acquisition_costs": 0.0, "other_income": 0.0, "rent_growth": 2.0,
-    "expense_growth": 2.0, "holding_period": 5,
+    "property_price": 0.0, "down_payment": 0.0, "mortgage_rate": 0.0,
+    "amortization_years": 25, "municipal_taxes": 0.0, "school_taxes": 0.0,
+    "insurance": 0.0, "condo_fees": 0.0, "rental_income": 0.0,
+    "other_expenses": 0.0, "household_income": 0.0, "other_debts": 0.0,
+    "vacancy_rate": 0.0, "maintenance": 0.0, "management": 0.0,
+    "utilities": 0.0, "capital_reserve": 0.0, "initial_repairs": 0.0,
+    "acquisition_costs": 0.0, "other_income": 0.0, "rent_growth": 0.0,
+    "expense_growth": 0.0, "holding_period": 5,
 }
 
 ADDRESS_STATE_KEY = "address_form_state"
@@ -55,6 +55,9 @@ ADDRESS_WIDGET_KEYS = {
 
 def reset_analysis() -> None:
     st.session_state.update(DEFAULTS)
+    st.session_state.pop("analysis_calculation_signature", None)
+    st.session_state.pop("analysis_calculation_requested", None)
+    st.session_state.pop("analysis_calculation_errors", None)
 
 
 def _money(value: float) -> str:
@@ -140,6 +143,77 @@ def _inputs_from_state() -> PropertyInputs:
     )
 
 
+def _analysis_signature(inputs: PropertyInputs) -> tuple:
+    """A result is displayed only for the exact values explicitly calculated."""
+    return tuple(asdict(inputs).items())
+
+
+def _workflow_values() -> dict:
+    return {
+        "profile": st.session_state.get("workflow_profile", ""),
+        "objective": st.session_state.get("workflow_objective", ""),
+        "property_name": st.session_state.get("workflow_property_name", ""),
+        "property_type": st.session_state.get("workflow_property_type", ""),
+        "price": st.session_state.get("property_price", 0),
+        "down_payment": st.session_state.get("down_payment", 0),
+    }
+
+
+def _persist_workflow(step: int, completed: set[int]) -> None:
+    if not is_authenticated():
+        return
+    owner_id = current_user()["id"]
+    draft, _ = load_draft(owner_id, DATABASE_PATH)
+    draft["workflow_completed"] = sorted(completed)
+    save_draft(owner_id, draft, step, DATABASE_PATH)
+
+
+def _ensure_workflow_state() -> tuple[int, set[int]]:
+    """Hydrate UI, progress and local draft from one canonical step number."""
+    owner_id = _address_owner_id()
+    if st.session_state.get("workflow_owner") != owner_id:
+        draft, saved_step = load_draft(owner_id, DATABASE_PATH) if owner_id is not None else ({}, 1)
+        st.session_state["workflow_owner"] = owner_id
+        st.session_state["analysis_step"] = normalize_step(saved_step)
+        st.session_state["analysis_completed_steps"] = set(draft.get("workflow_completed", [1])) or {1}
+        st.session_state["workflow_errors"] = []
+    step = normalize_step(st.session_state.get("analysis_step", 1))
+    completed = {normalize_step(item) for item in st.session_state.get("analysis_completed_steps", {1})} or {1}
+    st.session_state["analysis_step"] = step
+    st.session_state["analysis_completed_steps"] = completed
+    st.session_state["analysis_step_selector"] = step
+    default_profile = current_user()["user_type"] if is_authenticated() else "Investisseur locatif"
+    st.session_state.setdefault("workflow_profile", default_profile)
+    st.session_state.setdefault("workflow_objective", "")
+    st.session_state.setdefault("workflow_property_name", "")
+    st.session_state.setdefault("workflow_property_type", "")
+    return step, completed
+
+
+def _move_workflow(target: int) -> None:
+    state = transition(
+        st.session_state.get("analysis_step", 1), target,
+        st.session_state.get("analysis_completed_steps", {1}), _workflow_values(),
+    )
+    st.session_state["analysis_step"] = state["step"]
+    st.session_state["analysis_completed_steps"] = state["completed"]
+    st.session_state["analysis_step_selector"] = state["step"]
+    st.session_state["workflow_errors"] = state["errors"]
+    _persist_workflow(state["step"], state["completed"])
+
+
+def _choose_workflow_step() -> None:
+    _move_workflow(st.session_state.get("analysis_step_selector", 1))
+
+
+def _previous_workflow_step() -> None:
+    _move_workflow(st.session_state.get("analysis_step", 1) - 1)
+
+
+def _next_workflow_step() -> None:
+    _move_workflow(st.session_state.get("analysis_step", 1) + 1)
+
+
 def show_property_analysis() -> None:
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value)
@@ -209,11 +283,26 @@ def show_property_analysis() -> None:
         variants = address_lookup["variants"]
         detail = f" Variante publique de voie trouvée : {', '.join(variants)}." if variants else ""
         st.info("Aucune unité officielle ne correspond exactement au numéro civique et à la voie saisis. Vérifiez le numéro civique ou poursuivez manuellement."+detail)
-    step = st.session_state.setdefault("analysis_step", 1)
-    completed = st.session_state.setdefault("analysis_completed_steps", {1})
-    st.progress(step / len(STEPS), text=f"Étape {step}/9 — {STEPS[step-1]}")
-    selected = st.selectbox("Étape du parcours", list(range(1, len(STEPS)+1)), index=step-1, format_func=lambda value: f"{value}. {STEPS[value-1]}")
-    if selected <= max(completed): st.session_state["analysis_step"] = selected
+    step, completed = _ensure_workflow_state()
+    st.progress(step / len(STEPS), text=f"Étape {step}/{len(STEPS)} — {STEPS[step-1]}")
+    st.selectbox(
+        "Étape du parcours", list(range(1, len(STEPS) + 1)), key="analysis_step_selector",
+        format_func=lambda value: f"{value}. {STEPS[value-1]}", on_change=_choose_workflow_step,
+    )
+    if step == 1:
+        if is_authenticated():
+            st.session_state["workflow_profile"] = current_user()["user_type"]
+        else:
+            st.selectbox("Profil", list(PROFILE_WEIGHTS), key="workflow_profile")
+        st.text_input("Objectif principal", key="workflow_objective", placeholder="Ex. Vérifier la viabilité d'un projet")
+    elif step == 2:
+        st.text_input("Nom descriptif de la propriété", key="workflow_property_name", placeholder="Ex. Duplex à Beauharnois")
+        st.selectbox("Type de propriété", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type")
+    previous, next_step, _ = st.columns([1, 1, 3])
+    previous.button("Précédent", disabled=step == 1, on_click=_previous_workflow_step)
+    next_step.button("Suivant", disabled=step == len(STEPS), on_click=_next_workflow_step)
+    for workflow_error in st.session_state.get("workflow_errors", []):
+        st.error(workflow_error)
     st.caption("Les valeurs restent dans le brouillon de cette session; une analyse n'est sauvegardée dans l'historique qu'après votre confirmation.")
     st.write("Saisissez vos hypothèses pour obtenir une analyse financière claire et personnalisée. Les calculs sont reproductibles et présentés avant impôt.")
     with st.expander("Portée de l'analyse"):
@@ -261,16 +350,29 @@ def show_property_analysis() -> None:
         st.caption("Ces projections utilisent uniquement vos taux de croissance déclarés. Elles ne prévoient pas le marché ni la valeur future de la propriété.")
 
     inputs = _inputs_from_state()
-    errors = validate_inputs(inputs)
-    if errors:
-        for error in errors:
-            st.error(error)
+    signature = _analysis_signature(inputs)
+    if st.button("Calculer / mettre à jour mon analyse", type="primary", key="calculate_analysis"):
+        errors = validate_inputs(inputs)
+        if errors:
+            st.session_state["analysis_calculation_requested"] = True
+            st.session_state.pop("analysis_calculation_signature", None)
+            st.session_state["analysis_calculation_errors"] = errors
+        else:
+            st.session_state["analysis_calculation_requested"] = True
+            st.session_state["analysis_calculation_signature"] = signature
+            st.session_state["analysis_calculation_errors"] = []
+    if st.session_state.get("analysis_calculation_requested") and st.session_state.get("analysis_calculation_signature") != signature:
+        st.session_state.pop("analysis_calculation_signature", None)
+    for error in st.session_state.get("analysis_calculation_errors", []):
+        st.error(error)
+    if st.session_state.get("analysis_calculation_signature") != signature:
+        st.info("Aucune analyse personnelle n’est affichée avant votre calcul. Saisissez vos hypothèses puis choisissez « Calculer / mettre à jour mon analyse ».")
         return
     if is_authenticated():
-        profile = current_user()["user_type"]
+        profile = st.session_state["workflow_profile"]
         st.caption(f"Profil ImmoEngine appliqué : {profile} (depuis Mon compte).")
     else:
-        profile = st.selectbox("Profil ImmoEngine", list(PROFILE_WEIGHTS), key="analysis_engine_profile")
+        profile = st.session_state["workflow_profile"]
         st.caption("Créez un compte pour enregistrer votre profil et sauvegarder cette analyse.")
     _show_results(inputs, calculate_analysis(inputs), profile)
 

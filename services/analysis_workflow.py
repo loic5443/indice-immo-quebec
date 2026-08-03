@@ -4,6 +4,31 @@ from contextlib import closing
 from datetime import datetime, timezone
 from repositories.sqlite_repository import SQLiteRepository
 STEPS=("Profil et objectif","Propriété","Financement","Exploitation","Comparables","ImmoValue","ImmoScore et ImmoDNA","Scénarios et résistance","Sauvegarde et rapport")
+
+def normalize_step(step):
+ """Return the only valid step number used by UI, progress and drafts."""
+ try: step=int(step)
+ except (TypeError,ValueError): step=1
+ return max(1,min(len(STEPS),step))
+
+def transition(current_step,target_step,completed_steps,values):
+ """Move one workflow state forward/backward without stale UI state.
+
+ A completed step can always be revisited. Moving forward validates the step
+ being left and records it as complete; a selection cannot skip unfinished
+ steps.
+ """
+ current=normalize_step(current_step);target=normalize_step(target_step)
+ completed={normalize_step(step) for step in completed_steps or {1}}
+ if target==current:return {"step":current,"completed":completed,"errors":[]}
+ if target<current and target in completed:return {"step":target,"completed":completed,"errors":[]}
+ if target>current:
+  errors=validate_step(current,values)
+  if errors:return {"step":current,"completed":completed,"errors":errors}
+  completed.add(current)
+  # Direct selection is useful only for already completed steps or the next one.
+  if target<=max(completed)+1:return {"step":target,"completed":completed,"errors":[]}
+ return {"step":current,"completed":completed,"errors":["Complétez les étapes précédentes avant de poursuivre."]}
 def validate_step(step, values):
  if step==1 and (not values.get("profile") or not values.get("objective")): return ["Profil et objectif requis."]
  if step==2 and (not values.get("property_name") or not values.get("property_type")): return ["Nom/adresse descriptive et type requis."]

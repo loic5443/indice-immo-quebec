@@ -14,6 +14,16 @@ from repositories.sqlite_repository import SQLiteRepository
 PASSWORD_ITERATIONS = 260_000
 
 
+def validate_login_submission(email: str, password: str) -> list[str]:
+    """Validate only missing credentials; credential mismatches stay generic."""
+    errors: list[str] = []
+    if not email.strip():
+        errors.append("Le courriel est requis.")
+    if not password:
+        errors.append("Le mot de passe est requis.")
+    return errors
+
+
 def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
     actual_salt = salt or os.urandom(16)
     derived_key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), actual_salt, PASSWORD_ITERATIONS)

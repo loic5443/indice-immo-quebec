@@ -19,6 +19,7 @@ from data.database import (
 from domain.immoengine import evaluate_immoengine
 from calculations.real_estate import PropertyInputs, calculate_analysis
 from migrations.runner import applied_migrations, apply_migrations
+from services.auth_service import validate_login_submission
 
 
 class DatabaseTests(unittest.TestCase):
@@ -58,6 +59,10 @@ class DatabaseTests(unittest.TestCase):
     def test_login_rejects_wrong_password(self):
         self._create_and_login("Alice", "alice@example.com")
         self.assertIsNone(authenticate_user("alice@example.com", "mauvais-mot-de-passe", self.database_path))
+
+    def test_empty_login_has_precise_validation_but_invalid_credentials_stay_generic(self):
+        self.assertEqual(validate_login_submission("", ""), ["Le courriel est requis.", "Le mot de passe est requis."])
+        self.assertEqual(validate_login_submission("alice@example.com", "incorrect"), [])
 
     def test_registration_validation(self):
         errors = validate_registration("A", "invalide", "court", "different")

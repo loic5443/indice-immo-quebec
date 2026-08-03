@@ -1,12 +1,16 @@
 """Accessible local feedback panel available from every page through the sidebar."""
 import streamlit as st
 from components.account import current_user,is_authenticated
+from components.sidebar import go_to
 from data.database import DATABASE_PATH
 from services.feedback_service import submit_feedback,list_feedback
 
 def show_feedback():
  st.title("Donner mon avis")
- if not is_authenticated(): st.info("Connectez-vous pour envoyer un retour.");return
+ if not is_authenticated():
+  st.info("Connectez-vous pour envoyer un retour.")
+  st.button("Accéder à Mon compte",type="primary",on_click=go_to,args=("Mon compte",))
+  return
  with st.form("feedback"):
   page=st.selectbox("Page concernée",["Accueil","Analyse","Marchés","Premium","Compte"]);category=st.selectbox("Catégorie",["Incompréhension","Erreur technique","Donnée incorrecte","Résultat surprenant","Suggestion","Autre"]);usefulness=st.slider("Utilité",1,5,3);comment=st.text_area("Commentaire",max_chars=2000);contact=st.checkbox("Vous pouvez me contacter")
   sent=st.form_submit_button("Envoyer")
