@@ -67,20 +67,30 @@ def show_property_analysis() -> None:
     st.title("Analyse immobilière")
     with st.expander("Commencer par une adresse", expanded=True):
         street,city,postal,unit=st.columns(4)
-        with street: address_street=st.text_input("Adresse",key="address_street")
-        with city: address_city=st.text_input("Ville",key="address_city")
-        with postal: address_postal=st.text_input("Code postal",key="address_postal")
-        with unit: address_unit=st.text_input("Appartement / local (facultatif)",key="address_unit")
+        address_error=st.session_state.get("address_error",{})
+        with street:
+            address_street=st.text_input("Adresse",key="address_street")
+            if address_error.get("field")=="street": st.error(address_error["message"])
+        with city:
+            address_city=st.text_input("Ville",key="address_city")
+            if address_error.get("field")=="city": st.error(address_error["message"])
+        with postal:
+            address_postal=st.text_input("Code postal",key="address_postal")
+            if address_error.get("field")=="postal": st.error(address_error["message"])
+        with unit:
+            address_unit=st.text_input("Appartement / local (facultatif)",key="address_unit")
+            if address_error.get("field")=="unit": st.error(address_error["message"])
         consent=st.checkbox("J'accepte qu'ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",key="address_consent")
         if st.button("Rechercher les renseignements disponibles",key="address_lookup"):
             try:
+                st.session_state.pop("address_error",None)
                 result=lookup(normalize_address(address_street,address_city,address_postal,address_unit),consent);st.session_state["address_lookup_result"]=result;st.info(result["message"])
                 if consent:
                     territory=territory_for_municipality(DATABASE_PATH,address_city)
                     st.session_state["role_01023_matches"]=search_role_units(DATABASE_PATH,territory,address_street) if territory else []
                     st.session_state["role_coverage"] = bool(territory)
             except AddressValidationError as error:
-                st.error(str(error))
+                st.session_state["address_error"]={"field":error.field,"message":str(error)};st.rerun()
             except ValueError as error: st.error("Vérifiez les renseignements saisis.")
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     if st.session_state.get("role_coverage") is False:

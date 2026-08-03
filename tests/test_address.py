@@ -3,6 +3,19 @@ from domain.address import normalize_address,AddressValidationError
 from services.address_lookup_service import lookup
 
 class AddressTests(unittest.TestCase):
+ def test_exact_beauharnois_full_address_regression(self):
+  address=normalize_address("262 Rue Edgar-Hébert, Beauharnois, QC, Canada","Beauharnois","J6N0A4")
+  self.assertEqual(address.street,"262 Rue Edgar-Hébert")
+  self.assertEqual(address.city,"Beauharnois")
+  self.assertEqual(address.postal_code,"J6N 0A4")
+  self.assertIn("Beauharnois, QC, Canada",address.original_street)
+ def test_map_style_address_variants(self):
+  self.assertEqual(normalize_address("262 Rue Edgar-Hébert, Beauharnois, Québec, Canada","Beauharnois","J6N0A4").street,"262 Rue Edgar-Hébert")
+  self.assertEqual(normalize_address("262 Rue Edgar-Hébert, Beauharnois, QC, J6N 0A4, Canada","Beauharnois","").postal_code,"J6N 0A4")
+  self.assertEqual(normalize_address("262 Rue Edgar-Hébert, Beauharnois, Quebec, Canada","Beauharnois","J6N0A4").city,"Beauharnois")
+ def test_map_city_conflict_is_precise(self):
+  with self.assertRaises(AddressValidationError) as caught:normalize_address("262 Rue Edgar-Hébert, Beauharnois, QC, Canada","Montréal","J6N0A4")
+  self.assertEqual(caught.exception.field,"city")
  def test_founder_reported_format_is_accepted(self):
   address=normalize_address(" 123, chemin de l’Église–Nord ","Sainte-Marthe-sur-le-Lac","j6n0a4")
   self.assertEqual(address.postal_code,"J6N 0A4");self.assertEqual(address.city,"Sainte-Marthe-sur-le-Lac");self.assertIn("Église",address.street)
