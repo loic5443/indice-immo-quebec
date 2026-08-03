@@ -1,26 +1,90 @@
-"""Modern product landing page using an offline-safe local real-estate visual."""
+"""Focused landing page: reveal a property, then monitor what can change."""
+
 import base64
 from pathlib import Path
+
 import streamlit as st
+
 from components.sidebar import go_to
 
-IMAGE=Path(__file__).resolve().parents[1]/"assets"/"images"/"immoradar-hero.png"
+
+IMAGE = Path(__file__).resolve().parents[1] / "assets" / "images" / "immoradar-hero.png"
+
+
 @st.cache_data(show_spinner=False)
-def _hero():
- if not IMAGE.exists(): return ""
- return "background-image:linear-gradient(95deg,rgba(7,23,45,.96),rgba(7,23,45,.62)),url('data:image/png;base64,"+base64.b64encode(IMAGE.read_bytes()).decode()+"');"
-def show_home():
- st.markdown(f"<section class='hero-image-panel' style=\"{_hero()}\"><div class='hero-content'><p class='hero-eyebrow notranslate'>IMMORADAR</p><h1>Comprenez votre projet immobilier avant de vous engager.</h1><p class='hero-copy'>Vos hypothèses, des calculs clairs et des résultats expliqués au même endroit.</p><p class='hero-proof'><span>Transparent</span><span>Adapté à votre projet</span><span>Facile à relire</span></p></div></section>",unsafe_allow_html=True)
- a,b,_=st.columns([1,1,2]);a.button("Commencer une analyse",type="primary",on_click=go_to,args=("Analyse immobilière",),use_container_width=True);b.button("Découvrir Premium",on_click=go_to,args=("Premium",),use_container_width=True)
- st.markdown("<div class='section-space'></div><p class='eyebrow'>APERÇU</p><h2>Un résultat qui explique ce qui compte.</h2>",unsafe_allow_html=True)
- c1,c2=st.columns([1.1,1])
- with c1: st.markdown("<article class='benefit-card'><span class='data-pill simulated'>Exemple d'interface</span><h3>Score ImmoRadar · 74 / 100</h3><p><b>Confiance :</b> 68 / 100 · Qualité et complétude des informations.</p><p><b>Flux mensuel :</b> aperçu de résultat, non une donnée réelle.</p></article>",unsafe_allow_html=True)
- with c2: st.markdown("<article class='benefit-card'><h3>Lecture rapide</h3><p>✓ Point fort : revenus et dépenses visibles.</p><p>↗ À vérifier : informations manquantes à confirmer.</p></article>",unsafe_allow_html=True)
- st.markdown("<div class='section-space'></div><p class='eyebrow'>COMMENT ÇA FONCTIONNE</p><h2>Trois étapes, sans jargon inutile.</h2>",unsafe_allow_html=True)
- for col,(n,t,p) in zip(st.columns(3),[("01","Décrivez la propriété","Ajoutez les informations que vous avez."),("02","Ajoutez vos informations","Financement, revenus et dépenses."),("03","Comprenez le résultat","Voyez les forces, risques et prochaines vérifications.")]):
-  with col: st.markdown(f"<article class='step-card'><span class='step-number'>{n}</span><h3>{t}</h3><p>{p}</p></article>",unsafe_allow_html=True)
- st.markdown("<div class='section-space'></div><h2>Pourquoi ImmoRadar</h2>",unsafe_allow_html=True)
- for col,(t,p) in zip(st.columns(4),[("Analyse expliquée","Une conclusion claire avant les ratios."),("Hypothèses transparentes","Vous voyez ce qui alimente chaque résultat."),("Scénarios","Testez vos hypothèses sans prédire l'avenir."),("Sauvegarde et rapport","Gardez une trace utile de votre réflexion.")]):
-  with col: st.markdown(f"<article class='benefit-card'><h3>{t}</h3><p>{p}</p></article>",unsafe_allow_html=True)
- st.markdown("<div class='section-space'></div><section class='premium-notice'><p class='eyebrow notranslate'>ALERTES PREMIUM</p><h2>Gardez une longueur d’avance</h2><p>Suivez les changements qui peuvent influencer vos décisions grâce aux alertes personnalisées ImmoRadar.</p><p>🔔 Aperçus : changement de taux · propriété suivie · marché à surveiller. Aucun envoi actif pendant la bêta.</p></section>",unsafe_allow_html=True);st.button("Découvrir Premium",on_click=go_to,args=("Premium",),key="home_premium")
- st.markdown("<div class='section-space'></div><h2>Sources et transparence</h2><p>Vos hypothèses restent distinctes des calculs et des données externes. Chaque indicateur officiel affiche sa source, sa date et sa fraîcheur; une donnée absente n'est pas inventée.</p><div class='final-cta'><h2>Prêt à examiner votre prochain projet?</h2><p>Commencez avec les informations que vous avez déjà grâce au bouton principal ci-dessus.</p></div>",unsafe_allow_html=True)
+def _hero() -> str:
+    if not IMAGE.exists():
+        return ""
+    encoded = base64.b64encode(IMAGE.read_bytes()).decode()
+    return f"background-image:linear-gradient(95deg,rgba(7,23,45,.96),rgba(7,23,45,.60)),url('data:image/png;base64,{encoded}');"
+
+
+def _start_from_home() -> None:
+    address = st.session_state.get("home_address", "").strip()
+    if address:
+        st.session_state["address_form_editor_street"] = address
+    go_to("Analyser")
+
+
+def show_home() -> None:
+    st.markdown(
+        f"<section class='hero-image-panel' style=\"{_hero()}\"><div class='hero-content'>"
+        "<p class='hero-eyebrow notranslate'>IMMORADAR</p>"
+        "<h1>Découvrez ce qu’une propriété pourrait valoir.</h1>"
+        "<p class='hero-copy'>Surveillez ensuite tout ce qui peut changer votre décision. ImmoRadar rassemble les renseignements disponibles, vos hypothèses et une lecture claire de votre dossier.</p>"
+        "<p class='hero-proof'><span>Valeur expliquée</span><span>Hypothèses transparentes</span><span>Suivi utile</span></p>"
+        "</div></section>",
+        unsafe_allow_html=True,
+    )
+    with st.container(border=True):
+        left, action, premium = st.columns([3, 1.35, 1.2])
+        with left:
+            st.text_input("Commencez avec une adresse ou un nom de projet", key="home_address", placeholder="Ex. 123 rue Exemple")
+            st.caption("Facultatif · aucune recherche publique ne démarre sans votre consentement dans le dossier.")
+        with action:
+            st.write("")
+            st.button("Révéler la valeur", type="primary", on_click=_start_from_home, use_container_width=True)
+        with premium:
+            st.write("")
+            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), use_container_width=True)
+
+    st.markdown("<div class='section-space'></div><p class='eyebrow'>UN SEUL DOSSIER</p><h2>De l’adresse à une décision plus lisible.</h2>", unsafe_allow_html=True)
+    for column, number, title, copy in zip(
+        st.columns(3),
+        ("01", "02", "03"),
+        ("Ajoutez l’adresse", "Révélez la valeur et analysez", "Suivez ce qui évolue"),
+        (
+            "Choisissez la recherche publique avec consentement, ou saisissez vos informations manuellement.",
+            "Consultez le rôle municipal, ImmoValue seulement lorsque calculable, puis vos finances et votre score.",
+            "Sauvegardez le dossier et activez les alertes disponibles ou les aperçus Premium verrouillés.",
+        ),
+    ):
+        with column:
+            st.markdown(f"<article class='step-card'><span class='step-number'>{number}</span><h3>{title}</h3><p>{copy}</p></article>", unsafe_allow_html=True)
+
+    st.markdown("<div class='section-space'></div><p class='eyebrow'>APERÇU</p><h2>Une lecture qui va droit au point.</h2>", unsafe_allow_html=True)
+    overview, notes = st.columns([1.2, 1])
+    with overview:
+        st.markdown(
+            "<article class='dossier-preview'><span class='data-pill simulated'>Exemple d’interface</span>"
+            "<h3>Dossier immobilier 360</h3><div class='preview-grid'><div><small>Valeur ImmoValue</small><strong>Calculable selon les comparables</strong></div>"
+            "<div><small>Score ImmoRadar</small><strong>Lecture adaptée au projet</strong></div>"
+            "<div><small>Confiance</small><strong>Qualité des données saisies</strong></div></div></article>",
+            unsafe_allow_html=True,
+        )
+    with notes:
+        st.markdown("<article class='benefit-card'><h3>Ce que vous voyez</h3><p>• La valeur municipale reste distincte d’une valeur marchande.</p><p>• Les points forts et les vérifications viennent des données réellement disponibles.</p><p>• Aucun résultat d’exemple n’est présenté comme le vôtre.</p></article>", unsafe_allow_html=True)
+
+    st.markdown("<div class='section-space'></div><section class='premium-notice'><p class='eyebrow notranslate'>ALERTES PREMIUM</p><h2>Gardez une longueur d’avance</h2><p>Suivez les changements qui peuvent influencer vos décisions grâce aux alertes personnalisées ImmoRadar.</p><p><b>Aperçus verrouillés :</b> variation de valeur quand deux estimations fiables existent · impact d’un taux directeur sur un scénario · mise à jour du rôle municipal.</p><p>Les alertes non calculables restent indiquées « bientôt disponible ». Aucun courriel n’est envoyé pendant la bêta.</p></section>", unsafe_allow_html=True)
+    st.button("Voir les alertes Premium", on_click=go_to, args=("Premium",), key="home_premium")
+
+    st.markdown("<div class='section-space'></div><h2>Pourquoi ImmoRadar</h2>", unsafe_allow_html=True)
+    for column, title, copy in zip(
+        st.columns(4),
+        ("Valeur", "Analyse", "Transparence", "Suivi"),
+        ("Une estimation seulement lorsqu’elle est calculable.", "Des chiffres financiers et un score expliqués.", "Source, année et limites restent visibles.", "Vos dossiers et alertes utiles au même endroit."),
+    ):
+        with column:
+            st.markdown(f"<article class='benefit-card'><h3>{title}</h3><p>{copy}</p></article>", unsafe_allow_html=True)
+    st.markdown("<div class='final-cta'><h2>Prêt à ouvrir votre dossier immobilier?</h2><p>Commencez avec une adresse ou les hypothèses que vous avez déjà.</p></div>", unsafe_allow_html=True)
+    st.button("Analyser une propriété", type="primary", on_click=_start_from_home, key="home_final_analysis")

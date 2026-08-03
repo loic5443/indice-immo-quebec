@@ -11,6 +11,7 @@ from components.account import initialize_session, show_account
 from components.home import show_home
 from components.markets import show_markets
 from components.premium import show_premium
+from components.privacy import show_privacy
 from components.property_analysis import show_property_analysis
 from components.saved_analyses import show_saved_analyses
 from components.sidebar import show_sidebar
@@ -31,13 +32,13 @@ page = show_sidebar()
 
 if page == "Accueil":
     show_home()
-elif page == "Analyse immobilière":
+elif page == "Analyser":
     show_property_analysis()
-elif page == "Marchés":
+elif page == "Marché":
     show_markets()
 elif page == "Premium":
     show_premium()
-elif page == "Mes analyses":
+elif page == "Mes propriétés":
     show_saved_analyses()
 elif page == "Mon compte":
     show_account()
@@ -45,5 +46,7 @@ elif page == "Administration":
     show_admin()
 elif page == "Donner mon avis":
     show_feedback()
+elif page == "Confidentialité":
+    show_privacy()
 else:
     show_about()

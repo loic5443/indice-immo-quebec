@@ -5,6 +5,7 @@ import streamlit as st
 
 from components.account import current_user, is_authenticated
 from components.sidebar import go_to
+from components.alerts import show_alert_center
 from data.database import delete_analysis, list_analyses, toggle_favorite
 from services.report_service import generate_report_pdf
 
@@ -15,7 +16,7 @@ def _money(value: float) -> str:
 
 def show_saved_analyses() -> None:
     """Show the active user's saved analyses and management actions."""
-    st.markdown("<p class='eyebrow'>VOTRE HISTORIQUE</p><h1>Mes analyses</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='eyebrow'>VOS DOSSIERS</p><h1>Mes propriétés</h1><p class='section-intro'>Retrouvez vos dossiers sauvegardés, leurs points de repère et le suivi disponible.</p>", unsafe_allow_html=True)
     if not is_authenticated():
         st.info("Connectez-vous pour consulter et sauvegarder vos analyses.")
         st.button("Ouvrir Mon compte", type="primary", on_click=go_to, args=("Mon compte",))
@@ -25,18 +26,19 @@ def show_saved_analyses() -> None:
     analyses = list_analyses(user["id"])
     if not analyses:
         st.info("Aucune analyse sauvegardée pour le moment.")
-        st.button("Créer une analyse", type="primary", on_click=go_to, args=("Analyse immobilière",))
+        st.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",))
+        show_alert_center(user, analyses)
         return
 
     st.caption(f"{len(analyses)} analyse(s) sauvegardée(s) · Les favoris apparaissent en premier.")
     for analysis in analyses:
         favorite = "★ Favori" if analysis["is_favorite"] else "☆"
-        label = f"{favorite}  {analysis['property_name']} · {_money(analysis['price'])}"
+        label = f"{favorite}  {analysis['property_name']} · dernière mise à jour {analysis['created_at'][:10]}"
         with st.expander(label):
             first, second, third = st.columns(3)
-            first.metric("Flux mensuel", _money(analysis["cash_flow"]))
-            second.metric("Rendement annuel", f"{analysis['cash_on_cash_return']:.2f} %")
-            third.metric("Capitalisation", f"{analysis['capitalization_rate']:.2f} %")
+            first.metric("Prix analysé", _money(analysis["price"]))
+            second.metric("Flux mensuel", _money(analysis["cash_flow"]))
+            third.metric("Score ImmoRadar", f"{analysis['immo_score']:.0f} / 100" if analysis["immo_score"] is not None else "Indisponible")
             st.markdown(
                 f"**Date :** {analysis['created_at']}  \n"
                 f"**Mise de fonds :** {_money(analysis['down_payment'])}  \n"
@@ -92,3 +94,4 @@ def show_saved_analyses() -> None:
             if delete_column.button("Supprimer", key=f"delete_{analysis['id']}", use_container_width=True):
                 delete_analysis(user["id"], analysis["id"])
                 st.rerun()
+    show_alert_center(user, analyses)

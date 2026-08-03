@@ -8,8 +8,8 @@ def _reset_municipal_selection():
  st.session_state["municipal_selected"]=[]
 
 def show_markets():
- st.markdown("<p class='eyebrow'>REPÈRES OFFICIELS</p><h1>Comparer les municipalités</h1>",unsafe_allow_html=True)
- st.info("Ces repères proviennent de données municipales et foncières officielles. Ils ne représentent pas les prix de vente actuels ni les rendements locatifs.")
+ st.markdown("<p class='eyebrow'>MARCHÉ</p><h1>Comparer les municipalités</h1><p class='section-intro'>Des repères municipaux officiels, sans prix de vente, rendement ou risque inventés.</p>",unsafe_allow_html=True)
+ st.info("Données officielles disponibles : les indicateurs affichés ci-dessous. Indicateurs indisponibles : prix de vente, rendement locatif et niveau de risque, faute de source autorisée dans ce dossier.")
  query=st.text_input("Rechercher une municipalité",key="municipal_search")
  current=st.session_state.get("municipal_selected",[])
  choices=selection_options(current,municipalities(DATABASE_PATH,query))
@@ -17,9 +17,9 @@ def show_markets():
  st.button("Réinitialiser la comparaison",on_click=_reset_municipal_selection)
  result=comparison(DATABASE_PATH,selected)
  if not result["available"]:
-  st.info("Sélectionnez au moins deux municipalités couvertes par la même année. Les données manquantes ne sont jamais remplacées par zéro.")
+  st.info("Sélectionnez au moins deux municipalités couvertes par la même année. Les données manquantes restent indisponibles et ne sont jamais remplacées par zéro.")
   return
- st.caption(f"Année commune : {result['year']} · Source : MAMH, Profil financier des municipalités locales, CC-BY 4.0 · données récupérées localement.")
+ st.caption(f"Données officielles disponibles · année commune : {result['year']} · Source : MAMH, Profil financier des municipalités locales, CC-BY 4.0 · données récupérées localement.")
  by_code={}
  for row in result['rows']:by_code.setdefault(row['indicator_code'],[]).append(row)
  for code,rows in by_code.items():

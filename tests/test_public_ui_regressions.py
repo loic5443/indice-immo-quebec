@@ -60,7 +60,7 @@ class PublicUiRegressionTests(unittest.TestCase):
         app.run(timeout=20)
         self.assertEqual(list(app.metric), [])
         self.assertTrue(any("Aucune analyse personnelle" in item.value for item in app.info))
-        app.text_input(key="workflow_objective").set_value("Comprendre le projet")
+        app.selectbox(key="workflow_objective_choice").set_value("Investir et louer")
         self._button(app, "Suivant").click().run(timeout=20)
         self.assertEqual(app.selectbox(key="analysis_step_selector").value, 2)
         app.text_input(key="workflow_property_name").set_value("Duplex")

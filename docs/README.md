@@ -26,3 +26,7 @@ Les suggestions consenties du géocodeur officiel sont décrites dans [SOURCE_AD
 ## Clôture de la refonte bêta
 
 Le statut fonctionnel, les sources intégrées, les limites et les contrôles de confidentialité de la version 0.7.0 sont consignés dans le [rapport de clôture](REFONTE_BETA_CLOSURE.md).
+
+## Structure produit actuelle
+
+La navigation principale regroupe **Accueil**, **Analyser**, **Mes propriétés**, **Marché** et **Premium**. Les éléments secondaires (compte, confidentialité, à propos et retours) restent accessibles hors de ce parcours principal. Le Dossier immobilier 360 rassemble les renseignements publics consentis, la valeur municipale distincte d’une valeur marchande, ImmoValue lorsqu’il est calculable, l’analyse financière, ImmoScore et le suivi. Les alertes n’apparaissent comme actives que lorsqu’un changement vérifiable peut réellement être calculé; les autres sont des aperçus Premium verrouillés.

@@ -55,6 +55,17 @@ p, li, label { color: var(--ink); }
 .data-card > div { padding: 1rem 0; }
 .data-card > div + div { border-top: 1px solid var(--line); }
 .data-card h3 { margin: 0.55rem 0 0.2rem !important; }
+.dossier-preview, .official-role-card { background: linear-gradient(145deg, #10233f, #1f4f92); color: #fff; padding: 1.55rem; border-radius: 18px; box-shadow: var(--shadow); }
+.dossier-preview h3, .official-role-card h3 { color: #fff !important; margin: 1rem 0 !important; }
+.preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; }
+.preview-grid div { padding: .8rem; border-radius: 12px; background: rgba(255,255,255,.12); }
+.preview-grid small { display: block; color: #dbeafe; margin-bottom: .35rem; }
+.preview-grid strong { display: block; color: #fff; font-size: .92rem; }
+.official-role-card { margin: .75rem 0 1rem; background: linear-gradient(145deg, #174b3a, #207a59); }
+.comparison-row { min-height: 76px; padding: 1rem 1.1rem; margin: .35rem 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.comparison-row b, .comparison-row span { display: block; }
+.comparison-row span { margin-top: .35rem; color: var(--muted); font-size: .9rem; }
+.premium-row { border-color: #b9d6ff; background: #f8fbff; }
 .data-pill { display: inline-block; border-radius: 99px; padding: 0.3rem 0.6rem; font-size: 0.72rem; font-weight: 800; }
 .data-pill.real { background: #e6f7ee; color: #137a43; }
 .data-pill.simulated { background: #fff3dc; color: #955d05; }
@@ -113,6 +124,7 @@ div.stButton > button[kind="secondary"] { background: white; color: var(--blue);
     .plan-card, .market-card { min-height: auto; margin-bottom: 0.9rem; }
     .final-cta { margin-top: 2.8rem; padding: 1.65rem; }
     [data-testid="stMetric"] { padding: 0.8rem; }
+    .preview-grid { grid-template-columns: 1fr; }
 }
 /* Prevent browser translation and long labels from breaking the main navigation. */
 .notranslate, .sidebar-brand, .brand-mark { white-space: nowrap; }

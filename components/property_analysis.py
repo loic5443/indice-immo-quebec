@@ -52,6 +52,13 @@ DEFAULTS = {
     "expense_growth": 0.0, "holding_period": 5,
 }
 
+ANALYSIS_OBJECTIVES = {
+    "Acheter pour y habiter": "Premier acheteur",
+    "Investir et louer": "Investisseur locatif",
+    "Connaître la valeur de ma propriété": "Propriétaire",
+    "Préparer une vente": "Propriétaire",
+}
+
 ADDRESS_STATE_KEY = "address_form_state"
 ADDRESS_LOOKUP_KEY = "address_form_lookup"
 ADDRESS_OWNER_KEY = "address_form_owner"
@@ -393,7 +400,7 @@ def _next_workflow_step() -> None:
 def show_property_analysis() -> None:
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value)
-    st.title("Analyse immobilière")
+    st.markdown("<p class='eyebrow'>DOSSIER IMMOBILIER 360</p><h1>Révéler la valeur et analyser votre projet</h1><p class='section-intro'>Adresse, renseignements publics autorisés, valeur disponible, finances et suivi : un seul dossier, sans transformer les données manquantes en conclusions.</p>", unsafe_allow_html=True)
     address_state = _address_state_for_current_user()
     with st.expander("Commencer par une adresse", expanded=True):
         st.checkbox(
@@ -459,21 +466,6 @@ def show_property_analysis() -> None:
         )
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
-    if address_lookup and address_lookup["coverage"] is False:
-        st.info("Les données officielles de cette municipalité ne sont pas encore synchronisées. Vous pouvez continuer manuellement.")
-    if address_lookup and address_lookup["consent"] is False:
-        st.info(address_lookup["message"])
-    matches = address_lookup["matches"] if address_lookup else []
-    if matches:
-        chosen = st.selectbox("Unité officielle trouvée", range(len(matches)), format_func=lambda index: matches[index]["address_text"] or matches[index]["matricule"] or "Unité officielle")
-        match = matches[chosen]
-        st.success(f"Rôle officiel synchronisé pour {address_state.address.city} (territoire {address_lookup['territory']}).")
-        st.info(f"Rôle officiel {address_lookup['territory']} — valeur terrain : {_money(match['land_value'] or 0)} · bâtiment : {_money(match['building_value'] or 0)} · totale : {_money(match['total_value'] or 0)} · rôle {match['role_year']} · référence {match['market_reference_date'] or 'non publiée'}.")
-        st.caption("Source : MAMH / Données Québec · licence CC BY 4.0. Valeur au rôle, distincte d’ImmoValue; aucune donnée n’est appliquée automatiquement à vos hypothèses.")
-    elif address_lookup and address_lookup["coverage"]:
-        variants = address_lookup["variants"]
-        detail = f" Variante publique de voie trouvée : {', '.join(variants)}." if variants else ""
-        st.info("Aucune unité officielle ne correspond exactement au numéro civique et à la voie saisis. Vérifiez le numéro civique ou poursuivez manuellement."+detail)
     step, completed = _ensure_workflow_state()
     st.progress(step / len(STEPS), text=f"Étape {step}/{len(STEPS)} — {STEPS[step-1]}")
     st.selectbox(
@@ -481,11 +473,12 @@ def show_property_analysis() -> None:
         format_func=lambda value: f"{value}. {STEPS[value-1]}", on_change=_choose_workflow_step,
     )
     if step == 1:
-        if is_authenticated():
-            st.session_state["workflow_profile"] = current_user()["user_type"]
-        else:
-            st.selectbox("Profil", list(PROFILE_WEIGHTS), key="workflow_profile")
-        st.text_input("Objectif principal", key="workflow_objective", placeholder="Ex. Vérifier la viabilité d'un projet")
+        st.selectbox("Que souhaitez-vous faire?", list(ANALYSIS_OBJECTIVES), key="workflow_objective_choice")
+        chosen_objective = st.session_state.get("workflow_objective_choice", "")
+        if chosen_objective:
+            st.session_state["workflow_objective"] = chosen_objective
+            st.session_state["workflow_profile"] = ANALYSIS_OBJECTIVES[chosen_objective]
+        st.caption("Le dossier adapte sa lecture à cet objectif. Vous pourrez toujours ajuster votre profil dans Mon compte; les dossiers existants ne sont pas modifiés.")
     elif step == 2:
         st.text_input("Nom descriptif de la propriété", key="workflow_property_name", placeholder="Ex. Duplex à Beauharnois")
         st.selectbox("Type de propriété", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type")
@@ -561,42 +554,92 @@ def show_property_analysis() -> None:
         return
     if is_authenticated():
         profile = st.session_state["workflow_profile"]
-        st.caption(f"Profil ImmoEngine appliqué : {profile} (depuis Mon compte).")
+        st.caption(f"Profil ImmoEngine appliqué : {profile}. Les nouvelles analyses utilisent l’objectif choisi; les dossiers existants restent inchangés.")
     else:
         profile = st.session_state["workflow_profile"]
         st.caption("Créez un compte pour enregistrer votre profil et sauvegarder cette analyse.")
-    _show_results(inputs, calculate_analysis(inputs), profile)
+    _show_results(inputs, calculate_analysis(inputs), profile, address_lookup)
 
 
-def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str) -> None:
-    st.subheader("Résultats de votre analyse")
-    first, second, third = st.columns(3)
-    first.metric("Paiement hypothécaire", _money(result.monthly_payment))
-    second.metric("Revenus effectifs mensuels", _money(result.effective_rental_income_monthly))
-    third.metric("Flux de trésorerie mensuel", _money(result.cash_flow_monthly))
-    a, b, c = st.columns(3)
-    a.metric("RNE annuel", _money(result.net_operating_income_annual))
-    b.metric("Capital réellement investi", _money(result.actual_capital_invested))
-    c.metric("Rendement sur capital", f"{result.cash_on_cash_return:.2f} %")
-    d, e, f = st.columns(3)
-    d.metric("Taux de capitalisation", f"{result.capitalization_rate:.2f} %")
-    e.metric("DSCR", f"{result.debt_service_coverage_ratio:.2f}x")
-    f.metric("Marge mensuelle de sécurité", _money(result.monthly_safety_margin))
-    if result.housing_cost_ratio is not None:
-        st.info(f"Ratio déclaré des coûts de logement et autres dettes : {result.housing_cost_ratio:.1f} %. Méthode : (paiement hypothécaire + dépenses d'exploitation + autres dettes) / revenu brut mensuel. Ce n'est pas un critère officiel de prêteur.")
-    else:
-        st.caption("Abordabilité indisponible : ajoutez le revenu brut annuel du ménage pour calculer le ratio déclaré des coûts de logement.")
-    st.caption(f"Projection à {inputs.holding_period_years} ans : flux mensuel hypothétique {_money(result.projected_cash_flow_monthly)}, fondé seulement sur les croissances de loyers et dépenses saisies.")
+def _show_role_overview(address_lookup: dict | None) -> None:
+    """Show official assessment data only as a clearly labelled fiscal reference."""
 
+    if not address_lookup:
+        return
+    if not address_lookup.get("consent"):
+        st.info("Renseignements publics non recherchés : le dossier reste entièrement utilisable avec vos hypothèses.")
+        return
+    if address_lookup.get("coverage") is False:
+        st.info("Renseignements municipaux indisponibles automatiquement pour cette municipalité. Vous pouvez continuer manuellement.")
+        return
+    matches = address_lookup.get("matches", [])
+    if matches:
+        chosen = st.selectbox("Unité officielle trouvée", range(len(matches)), key="official_role_unit", format_func=lambda index: matches[index]["address_text"] or matches[index]["matricule"] or "Unité officielle")
+        match = matches[chosen]
+        st.markdown("<article class='official-role-card'><span class='data-pill real'>Valeur municipale officielle</span><h3>Valeur au rôle — ce n’est pas une valeur marchande</h3></article>", unsafe_allow_html=True)
+        land, building, total = st.columns(3)
+        land.metric("Terrain", _money(match["land_value"] or 0))
+        building.metric("Bâtiment", _money(match["building_value"] or 0))
+        total.metric("Total au rôle", _money(match["total_value"] or 0))
+        st.caption(f"Rôle {match['role_year']} · date de référence {match['market_reference_date'] or 'non publiée'} · source MAMH / Données Québec · licence CC BY 4.0. Cette valeur n’est jamais appliquée automatiquement à ImmoValue ou à vos finances.")
+        return
+    variants = address_lookup.get("variants", [])
+    detail = f" Variante publique disponible : {', '.join(variants)}." if variants else ""
+    st.info("Aucune unité officielle ne correspond exactement aux renseignements saisis. Vérifiez-les ou poursuivez manuellement." + detail)
+
+
+def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, address_lookup: dict | None = None) -> None:
+    st.markdown("<div class='section-space compact-space'></div><h2>Votre dossier immobilier 360</h2><p class='section-intro'>Commencez par la vue d’ensemble, puis consultez les chiffres, les vérifications et la provenance.</p>", unsafe_allow_html=True)
+    overview_tab, finances_tab, risks_tab, details_tab = st.tabs(["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"])
     engine_result = evaluate_immoengine(inputs, result, profile)
-    immovalue = _show_immovalue()
-    show_immoengine_result(engine_result)
-    scenarios, resilience = show_scenarios(inputs, engine_result.profile)
+    with overview_tab:
+        _show_role_overview(address_lookup)
+        immovalue = _show_immovalue()
+        score, confidence, verdict = st.columns(3)
+        score.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Indisponible")
+        confidence.metric("Confiance", f"{engine_result.confidence_index} / 100")
+        verdict.metric("Lecture", engine_result.verdict.capitalize())
+        st.caption("La confiance décrit la qualité et la complétude des renseignements saisis; elle ne garantit pas une décision.")
+        strengths, checks = st.columns(2)
+        with strengths:
+            st.subheader("Points forts")
+            for item in engine_result.positive_factors[:3] or ["Indisponible tant que les hypothèses requises ne sont pas fournies."]:
+                st.success(item)
+        with checks:
+            st.subheader("À vérifier")
+            for item in (engine_result.negative_factors + engine_result.missing_data)[:3] or ["Ajoutez des renseignements pour obtenir des vérifications ciblées."]:
+                st.warning(item)
+    with finances_tab:
+        st.subheader("Les chiffres de votre projet")
+        first, second, third = st.columns(3)
+        first.metric("Paiement hypothécaire", _money(result.monthly_payment))
+        second.metric("Revenus effectifs mensuels", _money(result.effective_rental_income_monthly))
+        third.metric("Flux de trésorerie mensuel", _money(result.cash_flow_monthly))
+        a, b, c = st.columns(3)
+        a.metric("RNE annuel", _money(result.net_operating_income_annual))
+        b.metric("Capital réellement investi", _money(result.actual_capital_invested))
+        c.metric("Rendement sur capital", f"{result.cash_on_cash_return:.2f} %")
+        d, e, f = st.columns(3)
+        d.metric("Taux de capitalisation", f"{result.capitalization_rate:.2f} %")
+        e.metric("DSCR", f"{result.debt_service_coverage_ratio:.2f}x")
+        f.metric("Marge mensuelle de sécurité", _money(result.monthly_safety_margin))
+        if result.housing_cost_ratio is not None:
+            st.info(f"Ratio déclaré des coûts de logement et autres dettes : {result.housing_cost_ratio:.1f} %. Méthode : (paiement hypothécaire + dépenses d'exploitation + autres dettes) / revenu brut mensuel. Ce n'est pas un critère officiel de prêteur.")
+        else:
+            st.caption("Abordabilité indisponible : ajoutez le revenu brut annuel du ménage pour calculer le ratio déclaré des coûts de logement.")
+        st.caption(f"Projection à {inputs.holding_period_years} ans : flux mensuel hypothétique {_money(result.projected_cash_flow_monthly)}, fondé seulement sur les croissances de loyers et dépenses saisies.")
+    with risks_tab:
+        show_immoengine_result(engine_result)
+        scenarios, resilience = show_scenarios(inputs, engine_result.profile)
+    with details_tab:
+        st.subheader("Méthode et limites")
+        st.write("ImmoValue est une fourchette expérimentale issue des comparables que vous fournissez. Le rôle municipal est une valeur fiscale officielle, distincte d’une valeur marchande. ImmoScore mesure l’adéquation de vos hypothèses à votre profil; il ne constitue pas une recommandation.")
+        st.caption("Chaque renseignement officiel affiché indique sa provenance, son année et sa fraîcheur. Une donnée absente reste indisponible.")
 
-    st.markdown("<div class='save-analysis-panel'><h3>Sauvegarder cette analyse</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='save-analysis-panel'><h3>Sauvegarder et activer le suivi</h3><p>La sauvegarde crée votre dossier. Les alertes restent limitées aux changements réellement calculables et à votre forfait.</p>", unsafe_allow_html=True)
     if is_authenticated():
         property_name = st.text_input("Nom ou adresse de la propriété", key="saved_property_name", placeholder="Ex. Duplex - Montréal")
-        if st.button("Sauvegarder dans Mes analyses", type="primary", key="save_analysis"):
+        if st.button("Sauvegarder dans Mes propriétés", type="primary", key="save_analysis"):
             if not property_name.strip():
                 st.error("Veuillez donner un nom ou une adresse à cette analyse.")
             else:
@@ -610,7 +653,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str) 
                     "market_context": market_context_snapshot(str(DATABASE_PATH)),
                     "immovalue": immovalue,
                 }, profile=engine_result.profile, engine_result=engine_result)
-                st.success("Analyse, scénarios et tests de résistance sauvegardés dans Mes analyses.")
+                st.success("Dossier, scénarios et tests de résistance sauvegardés dans Mes propriétés.")
     else:
         st.write("Connectez-vous pour conserver cette analyse, ses scénarios et ses tests de résistance.")
         st.button("Créer un compte ou se connecter", on_click=go_to, args=("Mon compte",), key="save_analysis_login")
