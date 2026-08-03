@@ -1,5 +1,5 @@
 """Streaming importer for the documented public fields of Quebec assessment rolls."""
-import hashlib, json, sqlite3, xml.etree.ElementTree as ET
+import hashlib, json, re, sqlite3, unicodedata, xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,12 +26,12 @@ def _num(element, tag, integer=False):
   if n<0: raise ValueError
   return n
  except ValueError: raise ValueError(f"Valeur impossible pour {tag}.")
-def _unit(element, sequence, territory, year, checksum):
+def _unit(element, sequence, territory, year, checksum, source_version):
  parts=[_text(element,t) for t in ("RL0104A","RL0104B","RL0104C","RL0104D","RL0104E","RL0104F","RL0104G","RL0104H")]
  matricule=''.join(x for x in parts if x) or None
  civic,street,local=_text(element,"RL0101Ax"),_text(element,"RL0101Gx"),_text(element,"RL0101Ix")
  address=' '.join(x for x in (civic,street,local) if x) or None
- provenance={key:{"source":"MAMH rôle 01023 XML 2.9","xml":key} for key in PUBLIC_FIELDS if _text(element,key) is not None}
+ provenance={key:{"source":f"MAMH rôle {territory} XML {source_version}","xml":key} for key in PUBLIC_FIELDS if _text(element,key) is not None}
  return (territory,checksum,matricule or f"unit-{sequence}",matricule,civic,street,local,address,_text(element,"RL0105A"),_num(element,"RL0302A"),_num(element,"RL0306A"),_num(element,"RL0307A",True),_num(element,"RL0402A"),_num(element,"RL0403A"),_num(element,"RL0404A"),year,_text(element,"RL0401A"),json.dumps(provenance,ensure_ascii=False))
 
 def import_role_xml(path, database_path, territory="01023"):
@@ -46,7 +46,7 @@ def import_role_xml(path, database_path, territory="01023"):
   elif element.tag=="RLM02A": year=int((element.text or '').strip())
   elif element.tag=="RLUEx":
    sequence+=1
-   try: rows.append(_unit(element,sequence,territory,year or 0,checksum))
+   try: rows.append(_unit(element,sequence,territory,year or 0,checksum,version or "inconnue"))
    except ValueError: rejected+=1
    element.clear()
  if version!="2.9" or not year: raise ValueError("Version ou année XML invalide.")
@@ -63,15 +63,54 @@ def import_role_xml(path, database_path, territory="01023"):
   c.close()
  return {"territory_code":territory,"version":version,"year":year,"imported_units":len(rows),"rejected_units":rejected,"checksum":checksum}
 
+def _role_key(value):
+ """Compare public street labels without stripping meaningful civic information."""
+ value=unicodedata.normalize("NFD",value.casefold())
+ value="".join(character for character in value if not unicodedata.combining(character))
+ value=value.translate(str.maketrans("’‘‐‑–—", "''----"))
+ value=re.sub(r"\b(rue|avenue|av\.?|boulevard|boul\.?|chemin|route|rang|place|montee|montee)\b", " ", value)
+ return "".join(character for character in value if character.isalnum())
+
+
+def _structured_query(query):
+ match=re.match(r"^\s*(\d+(?:\s*[-–—]\s*\d+)?[A-Za-zÀ-ÖØ-öø-ÿ]?)\s*,?\s*(.+?)\s*$",query)
+ return (match.group(1),_role_key(match.group(2))) if match else (None,None)
+
+
 def search_role_units(database_path, territory, query, limit=20):
+ """Find an official unit by matricule or an exact normalized civic/street pair.
+
+ The municipal XML commonly stores a road label without its French road type
+ (for example ``EDGAR-HÉBERT`` rather than ``Rue Edgar-Hébert``).  This narrow
+ normalization handles that public formatting difference; it never selects a
+ neighbouring civic number or an approximate street name.
+ """
  query=' '.join(query.split())
- if not query:return []
+ if not query or not territory:return []
+ civic,street_key=_structured_query(query)
  c=sqlite3.connect(database_path)
  try:
   c.row_factory=sqlite3.Row
-  cursor=c.execute("SELECT matricule,address_text,use_code,land_value,building_value,total_value,role_year,market_reference_date,field_provenance FROM role_assessment_units WHERE territory_code=? AND (matricule=? OR address_text LIKE ?) ORDER BY address_text LIMIT ?",(territory,query,f"%{query}%",limit))
-  rows=[dict(r) for r in cursor.fetchall()]
+  fields="matricule,civic_number,street_name,address_unit,address_text,use_code,land_value,building_value,total_value,role_year,market_reference_date,field_provenance"
+  if civic and street_key:
+   cursor=c.execute(f"SELECT {fields} FROM role_assessment_units WHERE territory_code=? AND civic_number=? ORDER BY address_text LIMIT ?",(territory,civic,100))
+   rows=[dict(row) for row in cursor.fetchall() if _role_key(row["street_name"] or "")==street_key][:limit]
+  else:
+   cursor=c.execute(f"SELECT {fields} FROM role_assessment_units WHERE territory_code=? AND (matricule=? OR address_text LIKE ?) ORDER BY address_text LIMIT ?",(territory,query,f"%{query}%",limit))
+   rows=[dict(r) for r in cursor.fetchall()]
   cursor.close()
   return rows
+ finally:
+  c.close()
+
+
+def role_street_variants(database_path, territory, query, limit=5):
+ """Return only public road labels matching the normalized requested road."""
+ _,street_key=_structured_query(query)
+ if not street_key or not territory:return []
+ c=sqlite3.connect(database_path)
+ try:
+  rows=c.execute("SELECT DISTINCT street_name FROM role_assessment_units WHERE territory_code=? AND street_name IS NOT NULL ORDER BY street_name",(territory,)).fetchall()
+  return [row[0] for row in rows if _role_key(row[0])==street_key][:limit]
  finally:
   c.close()

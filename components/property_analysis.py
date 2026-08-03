@@ -19,7 +19,7 @@ from services.analysis_workflow import STEPS
 from services.entitlements_service import quota_status, consume_estimation
 from domain.address import normalize_address,AddressValidationError
 from services.address_lookup_service import lookup
-from services.quebec_role_importer import search_role_units
+from services.quebec_role_importer import search_role_units,role_street_variants
 from services.quebec_role_admin_service import territory_for_municipality
 
 
@@ -41,6 +41,27 @@ def reset_analysis() -> None:
 
 def _money(value: float) -> str:
     return f"{value:,.0f} $".replace(",", " ")
+
+
+def prepare_address_submission(street: str, city: str, postal: str, unit: str = ""):
+    """Single UI gateway: validation and postal formatting occur before a Streamlit rerun."""
+    address = normalize_address(street, city, postal, unit)
+    return address, {"address_postal": address.postal_code}
+
+
+def _validate_address_form() -> None:
+    try:
+        address, normalized = prepare_address_submission(
+            st.session_state.get("address_street", ""), st.session_state.get("address_city", ""),
+            st.session_state.get("address_postal", ""), st.session_state.get("address_unit", ""),
+        )
+        st.session_state.update(normalized)
+        st.session_state["address_submission"] = address
+        st.session_state["address_lookup_pending"] = True
+        st.session_state.pop("address_error", None)
+    except AddressValidationError as error:
+        st.session_state["address_error"] = {"field": error.field, "message": str(error)}
+        st.session_state.pop("address_lookup_pending", None)
 
 
 def _inputs_from_state() -> PropertyInputs:
@@ -81,24 +102,38 @@ def show_property_analysis() -> None:
             address_unit=st.text_input("Appartement / local (facultatif)",key="address_unit")
             if address_error.get("field")=="unit": st.error(address_error["message"])
         consent=st.checkbox("J'accepte qu'ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",key="address_consent")
-        if st.button("Rechercher les renseignements disponibles",key="address_lookup"):
+        st.button("Rechercher les renseignements disponibles",key="address_lookup",on_click=_validate_address_form)
+        if st.session_state.pop("address_lookup_pending",False):
             try:
-                st.session_state.pop("address_error",None)
-                result=lookup(normalize_address(address_street,address_city,address_postal,address_unit),consent);st.session_state["address_lookup_result"]=result;st.info(result["message"])
+                address=st.session_state["address_submission"]
+                result=lookup(address,consent);st.session_state["address_lookup_result"]=result
                 if consent:
-                    territory=territory_for_municipality(DATABASE_PATH,address_city)
-                    st.session_state["role_01023_matches"]=search_role_units(DATABASE_PATH,territory,address_street) if territory else []
+                    territory=territory_for_municipality(DATABASE_PATH,address.city)
+                    matches=search_role_units(DATABASE_PATH,territory,address.street) if territory else []
+                    st.session_state["role_matches"]=matches
+                    st.session_state["role_territory"]=territory
+                    st.session_state["role_street_variants"]=role_street_variants(DATABASE_PATH,territory,address.street) if territory and not matches else []
                     st.session_state["role_coverage"] = bool(territory)
-            except AddressValidationError as error:
-                st.session_state["address_error"]={"field":error.field,"message":str(error)};st.rerun()
+                    if territory:
+                        st.success(f"Rôle officiel synchronisé pour {address.city} (territoire {territory}).")
+                    else:
+                        st.info(result["message"])
+                else:
+                    st.info(result["message"])
             except ValueError as error: st.error("Vérifiez les renseignements saisis.")
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     if st.session_state.get("role_coverage") is False:
         st.info("Les données officielles de cette municipalité ne sont pas encore synchronisées. Vous pouvez continuer manuellement.")
-    for match in st.session_state.get("role_01023_matches",[]):
-        st.info(f"Rôle officiel 01023 — {match['address_text'] or 'adresse partielle'} · valeur totale au rôle : {_money(match['total_value'] or 0)} · rôle {match['role_year']} · référence {match['market_reference_date'] or 'non publiée'}.")
-    if st.session_state.get("role_01023_matches"):
-        st.caption("Source : MAMH / Données Québec. Valeur au rôle, distincte d’ImmoValue; aucune donnée n’est appliquée automatiquement à vos hypothèses.")
+    matches=st.session_state.get("role_matches",[])
+    if matches:
+        chosen=st.selectbox("Unité officielle trouvée",range(len(matches)),format_func=lambda index: matches[index]["address_text"] or matches[index]["matricule"] or "Unité officielle")
+        match=matches[chosen]
+        st.info(f"Rôle officiel {st.session_state.get('role_territory')} — valeur terrain : {_money(match['land_value'] or 0)} · bâtiment : {_money(match['building_value'] or 0)} · totale : {_money(match['total_value'] or 0)} · rôle {match['role_year']} · référence {match['market_reference_date'] or 'non publiée'}.")
+        st.caption("Source : MAMH / Données Québec · licence CC BY 4.0. Valeur au rôle, distincte d’ImmoValue; aucune donnée n’est appliquée automatiquement à vos hypothèses.")
+    elif st.session_state.get("role_coverage") and st.session_state.get("address_submission"):
+        variants=st.session_state.get("role_street_variants",[])
+        detail=f" Variante publique de voie trouvée : {', '.join(variants)}." if variants else ""
+        st.info("Aucune unité officielle ne correspond exactement au numéro civique et à la voie saisis. Vérifiez le numéro civique ou poursuivez manuellement."+detail)
     step = st.session_state.setdefault("analysis_step", 1)
     completed = st.session_state.setdefault("analysis_completed_steps", {1})
     st.progress(step / len(STEPS), text=f"Étape {step}/9 — {STEPS[step-1]}")

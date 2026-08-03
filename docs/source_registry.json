@@ -33,6 +33,22 @@
       "retention": "not_applicable",
       "quality_rules": "À définir après validation de la source",
       "user_display": "Non disponible"
+    },
+    {
+      "source_id": "quebec_address_repository",
+      "name": "Référentiel québécois des adresses (RQA)",
+      "owner": "Gouvernement du Québec",
+      "status": "deferred",
+      "classification": "observed",
+      "geography": "Québec",
+      "metrics": ["municipal_number", "unit", "street", "municipality", "postal_code", "latitude", "longitude"],
+      "official_url": "https://www.donneesquebec.ca/recherche/dataset/referentiel-quebecois-des-adresses",
+      "human_url": "https://www.donneesquebec.ca/recherche/dataset/referentiel-quebecois-des-adresses",
+      "license_summary": "CC BY 4.0 annoncée par la fiche officielle. Source candidate pour une validation provinciale d’adresse; aucun téléchargement n’est effectué dans cette version.",
+      "refresh_frequency": "monthly",
+      "retention": "not_applicable",
+      "quality_rules": "À définir avant intégration; ne pas télécharger le jeu complet (environ 596 Mo) sans décision dédiée.",
+      "user_display": "Prévu — validation provinciale d’adresse"
     }
   ]
 }
