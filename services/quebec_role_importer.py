@@ -81,7 +81,7 @@ def search_role_units(database_path, territory, query, limit=20):
  """Find an official unit by matricule or an exact normalized civic/street pair.
 
  The municipal XML commonly stores a road label without its French road type
- (for example ``EDGAR-HÉBERT`` rather than ``Rue Edgar-Hébert``).  This narrow
+ (for example ``RUE-EXEMPLE`` rather than ``Rue Exemple``).  This narrow
  normalization handles that public formatting difference; it never selects a
  neighbouring civic number or an approximate street name.
  """

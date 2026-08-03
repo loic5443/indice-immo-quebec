@@ -21,9 +21,13 @@ GEOCODER_URL = (
     "https://servicescarto.mrnf.gouv.qc.ca/pes/rest/services/"
     "Territoire/Adresse_Geocodage/GeocodeServer/findAddressCandidates"
 )
+SUGGEST_URL = (
+    "https://servicescarto.mrnf.gouv.qc.ca/pes/rest/services/"
+    "Territoire/Adresse_Geocodage/GeocodeServer/suggest"
+)
 SOURCE_ID = "mrnf_adresses_quebec_geocoder"
 SOURCE_LABEL = "MRNF — Adresses Québec"
-MIN_QUERY_CHARS = 4
+MIN_QUERY_CHARS = 3
 MAX_QUERY_CHARS = 160
 MAX_SUGGESTIONS = 8
 REQUEST_TIMEOUT_SECONDS = 3.0
@@ -40,8 +44,22 @@ class AddressSuggestion:
     postal_code: str
     unit: str
     label: str
+    lookup_key: str = ""
 
     def to_dict(self) -> dict[str, str]:
+        """Return display fields only; safe for UI assertions and exports."""
+
+        return {
+            "street": self.street,
+            "city": self.city,
+            "postal_code": self.postal_code,
+            "unit": self.unit,
+            "label": self.label,
+        }
+
+    def to_option(self) -> dict[str, str]:
+        """Return the transient selection payload consumed by the searchbox."""
+
         return asdict(self)
 
 
@@ -89,6 +107,13 @@ def _official_url(query: str) -> str:
     return f"{GEOCODER_URL}?{params}"
 
 
+def _suggest_url(query: str) -> str:
+    """Build the MRNF endpoint designed for suggestions during typing."""
+
+    params = urlencode({"text": query, "f": "json", "maxSuggestions": str(MAX_SUGGESTIONS)})
+    return f"{SUGGEST_URL}?{params}"
+
+
 def _fetch_json(url: str) -> dict[str, Any]:
     """Fetch HTTPS JSON without weakening certificate verification."""
 
@@ -128,6 +153,23 @@ def _candidate_to_suggestion(candidate: Any) -> AddressSuggestion | None:
     return AddressSuggestion(street=street, city=city, postal_code=postal_code, unit=unit, label=label)
 
 
+def _suggestion_to_display(item: Any) -> AddressSuggestion | None:
+    """Keep only MRNF's display text and opaque lookup key in memory.
+
+    The suggestion endpoint intentionally returns no coordinates.  Its opaque
+    key is used only when the person clicks an option; it is never persisted
+    in a draft, telemetry, diagnostics or logs.
+    """
+
+    if not isinstance(item, dict):
+        return None
+    label = _clean_text(item.get("text"))
+    lookup_key = _clean_text(item.get("magicKey"), 512)
+    if not label or not lookup_key or item.get("isCollection") is True:
+        return None
+    return AddressSuggestion(street="", city="", postal_code="", unit="", label=label, lookup_key=lookup_key)
+
+
 def _parse_response(payload: dict[str, Any]) -> tuple[AddressSuggestion, ...]:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list):
@@ -141,6 +183,20 @@ def _parse_response(payload: dict[str, Any]) -> tuple[AddressSuggestion, ...]:
         signature = (suggestion.street.casefold(), suggestion.city.casefold(), suggestion.postal_code, suggestion.unit.casefold())
         if signature not in seen:
             seen.add(signature)
+            suggestions.append(suggestion)
+    return tuple(suggestions)
+
+
+def _parse_suggest_response(payload: dict[str, Any]) -> tuple[AddressSuggestion, ...]:
+    items = payload.get("suggestions")
+    if not isinstance(items, list):
+        raise ValueError("invalid_schema")
+    suggestions: list[AddressSuggestion] = []
+    seen: set[str] = set()
+    for item in items[:MAX_SUGGESTIONS]:
+        suggestion = _suggestion_to_display(item)
+        if suggestion is not None and suggestion.label.casefold() not in seen:
+            seen.add(suggestion.label.casefold())
             suggestions.append(suggestion)
     return tuple(suggestions)
 
@@ -171,7 +227,7 @@ def suggest_addresses(
         return SuggestionResponse("consent_required", message="Activez la recherche publique pour obtenir des suggestions.")
     normalized_query = useful_query(query)
     if not is_eligible_query(normalized_query):
-        return SuggestionResponse("too_short", message="Saisissez au moins quatre caractères utiles pour obtenir des suggestions.")
+        return SuggestionResponse("too_short", message="Saisissez au moins trois caractères utiles pour obtenir des suggestions.")
     cache_key = normalized_query.casefold()
     current_time = now()
     cached = _CACHE.get(cache_key)
@@ -181,9 +237,44 @@ def suggest_addresses(
         return SuggestionResponse("rate_limited", message="Suggestions en cours d’actualisation; poursuivez manuellement ou réessayez dans un instant.")
     _last_network_request = current_time
     try:
-        payload = (fetch_json or _fetch_json)(_official_url(normalized_query))
-        response = SuggestionResponse("ok", _parse_response(payload))
+        # ``suggest`` is the official GeocodeServer operation specifically
+        # intended for type-ahead.  ``findAddressCandidates`` is used only
+        # after a person explicitly selects one suggestion below.
+        payload = (fetch_json or _fetch_json)(_suggest_url(normalized_query))
+        response = SuggestionResponse("ok", _parse_suggest_response(payload))
     except Exception:  # Network/schema detail is deliberately never retained.
         response = SuggestionResponse("unavailable", message="Le service d’adresses est momentanément indisponible. Vous pouvez poursuivre manuellement.")
     _CACHE[cache_key] = (current_time, response)
     return response
+
+
+def resolve_suggestion(
+    suggestion: AddressSuggestion,
+    consent: bool,
+    *,
+    fetch_json: Callable[[str], dict[str, Any]] | None = None,
+) -> AddressSuggestion | None:
+    """Resolve an explicitly selected MRNF suggestion into form fields.
+
+    This second, consented request is triggered only by a click.  The opaque
+    key is not written anywhere and no raw response data reaches application
+    logs or telemetry.
+    """
+
+    if not consent or not suggestion.lookup_key or not suggestion.label:
+        return None
+    params = urlencode(
+        {
+            "SingleLine": suggestion.label,
+            "magicKey": suggestion.lookup_key,
+            "f": "json",
+            "maxLocations": "1",
+            "outFields": "Num,Odonyme,Dir,Unite,SufNum,City,ZIP",
+        }
+    )
+    try:
+        payload = (fetch_json or _fetch_json)(f"{GEOCODER_URL}?{params}")
+        candidates = _parse_response(payload)
+        return candidates[0] if candidates else None
+    except Exception:
+        return None

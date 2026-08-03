@@ -4,21 +4,21 @@ from services.address_lookup_service import lookup
 from components.property_analysis import prepare_address_submission
 
 class AddressTests(unittest.TestCase):
- def test_exact_beauharnois_full_address_regression(self):
-  address=normalize_address("262 Rue Edgar-Hébert, Beauharnois, QC, Canada","Beauharnois","J6N0A4")
-  self.assertEqual(address.street,"262 Rue Edgar-Hébert")
-  self.assertEqual(address.city,"Beauharnois")
-  self.assertEqual(address.postal_code,"J6N 0A4")
-  self.assertIn("Beauharnois, QC, Canada",address.original_street)
+ def test_full_map_style_address_regression(self):
+  address=normalize_address("123 rue Exemple, Ville-exemple, QC, Canada","Ville-exemple","H2X1Y4")
+  self.assertEqual(address.street,"123 rue Exemple")
+  self.assertEqual(address.city,"Ville-exemple")
+  self.assertEqual(address.postal_code,"H2X 1Y4")
+  self.assertIn("Ville-exemple, QC, Canada",address.original_street)
  def test_interface_submission_normalizes_before_rerun(self):
-  state=prepare_address_submission("262 Rue Edgar-Hébert, Beauharnois, QC, Canada","Beauharnois","J6N0A4",consent=True)
-  self.assertTrue(state.valid);self.assertEqual(state.values["postal"],"J6N 0A4");self.assertEqual(state.address.street,"262 Rue Edgar-Hébert")
+  state=prepare_address_submission("123 rue Exemple, Ville-exemple, QC, Canada","Ville-exemple","H2X1Y4",consent=True)
+  self.assertTrue(state.valid);self.assertEqual(state.values["postal"],"H2X 1Y4");self.assertEqual(state.address.street,"123 rue Exemple")
  def test_map_style_address_variants(self):
-  self.assertEqual(normalize_address("262 Rue Edgar-Hébert, Beauharnois, Québec, Canada","Beauharnois","J6N0A4").street,"262 Rue Edgar-Hébert")
-  self.assertEqual(normalize_address("262 Rue Edgar-Hébert, Beauharnois, QC, J6N 0A4, Canada","Beauharnois","").postal_code,"J6N 0A4")
-  self.assertEqual(normalize_address("262 Rue Edgar-Hébert, Beauharnois, Quebec, Canada","Beauharnois","J6N0A4").city,"Beauharnois")
+  self.assertEqual(normalize_address("123 rue Exemple, Ville-exemple, Québec, Canada","Ville-exemple","H2X1Y4").street,"123 rue Exemple")
+  self.assertEqual(normalize_address("123 rue Exemple, Ville-exemple, QC, H2X 1Y4, Canada","Ville-exemple","").postal_code,"H2X 1Y4")
+  self.assertEqual(normalize_address("123 rue Exemple, Ville-exemple, Quebec, Canada","Ville-exemple","H2X1Y4").city,"Ville-exemple")
  def test_map_city_conflict_is_precise(self):
-  with self.assertRaises(AddressValidationError) as caught:normalize_address("262 Rue Edgar-Hébert, Beauharnois, QC, Canada","Montréal","J6N0A4")
+  with self.assertRaises(AddressValidationError) as caught:normalize_address("123 rue Exemple, Ville-exemple, QC, Canada","Montréal","H2X1Y4")
   self.assertEqual(caught.exception.field,"city")
  def test_founder_reported_format_is_accepted(self):
   address=normalize_address(" 123, chemin de l’Église–Nord ","Sainte-Marthe-sur-le-Lac","j6n0a4")

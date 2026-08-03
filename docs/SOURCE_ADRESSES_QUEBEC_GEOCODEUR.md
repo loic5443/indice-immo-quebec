@@ -8,14 +8,14 @@ L’appel est possible seulement après le consentement explicite de recherche p
 
 ## Contrat technique observé
 
-Le point d’accès officiel `findAddressCandidates` annonce les champs candidats `Num`, `Odonyme`, `Dir`, `Unite`, `SufNum`, `City` et `ZIP`. ImmoRadar utilise uniquement ces champs pour remplir les éditeurs d’adresse.
+Le service annonce la capacité officielle `Suggest`. ImmoRadar appelle `suggest` pendant la frappe pour obtenir au plus huit libellés, puis appelle `findAddressCandidates` seulement lorsqu’une personne choisit une suggestion. Ce second point d’accès annonce les champs candidats `Num`, `Odonyme`, `Dir`, `Unite`, `SufNum`, `City` et `ZIP`, seuls champs utilisés pour remplir les éditeurs d’adresse.
 
 Les coordonnées, le score, `Match_addr`, la requête et le contenu brut de la réponse sont écartés. Ils ne sont ni envoyés à la télémétrie, ni inscrits dans les diagnostics, ni conservés dans un brouillon. Les suggestions restent en mémoire au plus 30 secondes et sont remplacées à chaque saisie.
 
 ## Garde-fous et mode dégradé
 
 - HTTPS et hôte MRNF exact obligatoires ; aucun contournement de certificat n’est autorisé.
-- Quatre caractères utiles au minimum, huit suggestions au maximum, délai maximal de trois secondes et cache mémoire court.
+- Trois caractères utiles au minimum, un délai de 400 ms avant la recherche, huit suggestions au maximum, un délai réseau maximal de trois secondes et un cache mémoire court.
 - Si le service est lent, indisponible ou répond avec un schéma incompatible, ImmoRadar affiche un message neutre et laisse le parcours manuel fonctionner.
 - Une suggestion remplit les champs; la recherche de renseignements officiels et la sauvegarde ne surviennent qu’après la confirmation normale de l’utilisateur.
 

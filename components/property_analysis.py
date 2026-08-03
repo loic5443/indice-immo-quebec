@@ -3,6 +3,7 @@
 from dataclasses import asdict
 
 import streamlit as st
+from streamlit_searchbox import st_searchbox
 
 from calculations.real_estate import AnalysisResult, PropertyInputs, calculate_analysis, validate_inputs
 from components.account import current_user, is_authenticated
@@ -31,6 +32,8 @@ from services.quebec_address_geocoder import (
     SOURCE_ID,
     SOURCE_LABEL,
     SuggestionResponse,
+    AddressSuggestion,
+    resolve_suggestion,
     suggest_addresses,
     useful_query,
 )
@@ -55,6 +58,9 @@ ADDRESS_OWNER_KEY = "address_form_owner"
 ADDRESS_HYDRATE_KEY = "address_form_hydrate"
 ADDRESS_SUGGESTIONS_KEY = "address_form_suggestions"
 ADDRESS_SUGGESTION_QUERY_KEY = "address_form_suggestion_query"
+ADDRESS_AUTOCOMPLETE_KEY = "address_form_autocomplete"
+ADDRESS_EDITOR_STREET_KEY = "address_form_editor_street"
+ADDRESS_MANUAL_MODE_KEY = "address_form_manual_mode"
 ADDRESS_WIDGET_KEYS = {
     "street": "address_form_street",
     "city": "address_form_city",
@@ -87,7 +93,12 @@ def _address_owner_id() -> int | None:
 def _hydrate_address_widgets(state: AddressFormState) -> None:
     """Synchronize widget editors before they are instantiated in this rerun."""
     for field, key in ADDRESS_WIDGET_KEYS.items():
-        st.session_state[key] = state.values[field]
+        if field != "street":
+            st.session_state[key] = state.values[field]
+    st.session_state[ADDRESS_EDITOR_STREET_KEY] = state.values["street"]
+    # The search component owns its own frontend state. Reset it only before
+    # rendering, so a selected address and the visible editor never diverge.
+    st.session_state.pop(ADDRESS_AUTOCOMPLETE_KEY, None)
 
 
 def _address_state_for_current_user() -> AddressFormState:
@@ -143,8 +154,27 @@ def _edit_address_field(field: str) -> None:
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
 
 
-def _request_address_suggestions() -> None:
-    """Call the official service only after consent and a meaningful edit."""
+def _set_address_editor_street(value: str) -> None:
+    """Keep the transient editor in sync without saving a draft prematurely."""
+
+    state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+    values = dict(state.values)
+    values["street"] = value
+    errors = {name: message for name, message in state.errors.items() if name != "street"}
+    st.session_state[ADDRESS_EDITOR_STREET_KEY] = value
+    st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors=errors)
+    st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+
+
+def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
+    """Return live MRNF options after debounce; never transmit without consent."""
+
+    query = useful_query(query)
+    _set_address_editor_street(query)
+    consent = bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False))
+    if not consent or st.session_state.get(ADDRESS_MANUAL_MODE_KEY, False):
+        _clear_address_suggestions()
+        return []
 
     try:
         enabled = source_enabled(SOURCE_ID, DATABASE_PATH)
@@ -155,19 +185,12 @@ def _request_address_suggestions() -> None:
     if not enabled:
         response = SuggestionResponse("unavailable", message="Les suggestions d’adresse sont temporairement indisponibles. Vous pouvez poursuivre manuellement.")
     else:
-        response = suggest_addresses(
-            st.session_state.get(ADDRESS_WIDGET_KEYS["street"], ""),
-            bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
-        )
+        response = suggest_addresses(query, True)
     st.session_state[ADDRESS_SUGGESTIONS_KEY] = response
-    st.session_state[ADDRESS_SUGGESTION_QUERY_KEY] = useful_query(
-        st.session_state.get(ADDRESS_WIDGET_KEYS["street"], "")
-    )
-
-
-def _on_address_street_change() -> None:
-    _edit_address_field("street")
-    _request_address_suggestions()
+    st.session_state[ADDRESS_SUGGESTION_QUERY_KEY] = query
+    if response.status != "ok":
+        return []
+    return [(suggestion.label, suggestion.to_option()) for suggestion in response.suggestions]
 
 
 def _on_address_city_change() -> None:
@@ -185,27 +208,56 @@ def _on_address_unit_change() -> None:
 
 def _on_address_consent_change() -> None:
     _edit_address_field("consent")
-    if st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False):
-        _request_address_suggestions()
-    else:
+    if not st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False):
         _clear_address_suggestions()
+
+
+def _on_manual_mode_change() -> None:
+    """Changing mode is local-only and clears ephemeral external suggestions."""
+
+    _clear_address_suggestions()
 
 
 def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     """Fill visible editors together; final saving still needs the normal confirmation."""
 
+    selected = AddressSuggestion(
+        street=suggestion.get("street", ""),
+        city=suggestion.get("city", ""),
+        postal_code=suggestion.get("postal_code", ""),
+        unit=suggestion.get("unit", ""),
+        label=suggestion.get("label", ""),
+        lookup_key=suggestion.get("lookup_key", ""),
+    )
+    # The official endpoint resolves the opaque selection key to structured
+    # fields only after a person clicks it.  The key stays session-only.
+    resolved = resolve_suggestion(selected, bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)))
+    if resolved is None:
+        _clear_address_suggestions()
+        st.session_state[ADDRESS_SUGGESTIONS_KEY] = SuggestionResponse(
+            "unavailable",
+            message="La suggestion ne peut pas être complétée pour le moment. Vous pouvez saisir l’adresse manuellement.",
+        )
+        return
+
     state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
     values = dict(state.values)
     values.update(
         {
-            "street": suggestion["street"],
-            "city": suggestion["city"] or values.get("city", ""),
-            "postal": suggestion["postal_code"] or values.get("postal", ""),
-            "unit": suggestion["unit"] or values.get("unit", ""),
+            "street": resolved.street,
+            "city": resolved.city or values.get("city", ""),
+            "postal": resolved.postal_code or values.get("postal", ""),
+            "unit": resolved.unit or values.get("unit", ""),
             "consent": bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
         }
     )
     st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors={})
+    st.session_state[ADDRESS_EDITOR_STREET_KEY] = resolved.street
+    # This callback runs before the adjacent editors are instantiated in the
+    # same rerun, so they can safely receive the selected canonical values.
+    st.session_state[ADDRESS_WIDGET_KEYS["city"]] = values["city"]
+    st.session_state[ADDRESS_WIDGET_KEYS["postal"]] = values["postal"]
+    st.session_state[ADDRESS_WIDGET_KEYS["unit"]] = values["unit"]
     st.session_state[ADDRESS_HYDRATE_KEY] = True
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     _clear_address_suggestions()
@@ -215,7 +267,7 @@ def _submit_address_lookup() -> None:
     """Validate and persist the exact same widget values in one explicit action."""
 
     state = prepare_address_submission(
-        st.session_state.get(ADDRESS_WIDGET_KEYS["street"], ""),
+        st.session_state.get(ADDRESS_EDITOR_STREET_KEY, st.session_state.get(ADDRESS_WIDGET_KEYS["street"], "")),
         st.session_state.get(ADDRESS_WIDGET_KEYS["city"], ""),
         st.session_state.get(ADDRESS_WIDGET_KEYS["postal"], ""),
         st.session_state.get(ADDRESS_WIDGET_KEYS["unit"], ""),
@@ -344,13 +396,29 @@ def show_property_analysis() -> None:
     st.title("Analyse immobilière")
     address_state = _address_state_for_current_user()
     with st.expander("Commencer par une adresse", expanded=True):
+        st.checkbox(
+            "J’accepte qu’ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",
+            key=ADDRESS_WIDGET_KEYS["consent"],
+            on_change=_on_address_consent_change,
+        )
+        st.checkbox(
+            "Saisir manuellement (ne pas rechercher d’adresse)",
+            key=ADDRESS_MANUAL_MODE_KEY,
+            on_change=_on_manual_mode_change,
+        )
         street, city, postal, unit = st.columns(4)
         with street:
-            st.text_input(
-                "Adresse",
-                key=ADDRESS_WIDGET_KEYS["street"],
-                placeholder="Ex. 262 Rue Edgar-Hébert",
-                on_change=_on_address_street_change,
+            st_searchbox(
+                _autocomplete_options,
+                label="Adresse",
+                placeholder="Ex. 123 rue Exemple",
+                default_searchterm=address_state.values["street"],
+                default_use_searchterm=True,
+                clear_on_submit=False,
+                edit_after_submit="option",
+                debounce=400,
+                key=ADDRESS_AUTOCOMPLETE_KEY,
+                submit_function=_select_address_suggestion,
             )
             if "street" in address_state.errors:
                 st.error(address_state.errors["street"])
@@ -366,39 +434,23 @@ def show_property_analysis() -> None:
             st.text_input("Appartement / local (facultatif)", key=ADDRESS_WIDGET_KEYS["unit"], on_change=_on_address_unit_change)
             if "unit" in address_state.errors:
                 st.error(address_state.errors["unit"])
-        st.checkbox(
-            "J’accepte qu’ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",
-            key=ADDRESS_WIDGET_KEYS["consent"],
-            on_change=_on_address_consent_change,
-        )
-        if st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False):
-            st.caption("Saisissez au moins quatre caractères utiles : des suggestions apparaissent après une modification confirmée du champ.")
-            st.button(
-                "Voir les suggestions d’adresse",
-                key="address_suggestions_request",
-                on_click=_request_address_suggestions,
-                type="secondary",
-            )
-        else:
+        if not st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False):
             st.caption("Activez le consentement de recherche publique pour obtenir des suggestions d’adresse. La saisie manuelle reste disponible.")
-
+        elif st.session_state.get(ADDRESS_MANUAL_MODE_KEY, False):
+            st.caption("Mode manuel actif : aucune recherche externe n’est effectuée.")
+        else:
+            st.caption("Les suggestions apparaissent automatiquement pendant la saisie.")
         suggestion_response = st.session_state.get(ADDRESS_SUGGESTIONS_KEY)
-        current_query = useful_query(st.session_state.get(ADDRESS_WIDGET_KEYS["street"], ""))
+        current_query = useful_query(st.session_state.get(ADDRESS_EDITOR_STREET_KEY, ""))
         if suggestion_response and st.session_state.get(ADDRESS_SUGGESTION_QUERY_KEY) == current_query:
-            if suggestion_response.status == "ok" and suggestion_response.suggestions:
-                st.caption(f"Source : {SOURCE_LABEL} · résultats publics, non enregistrés automatiquement.")
-                for index, suggestion in enumerate(suggestion_response.suggestions):
-                    st.button(
-                        suggestion.label,
-                        key=f"address_suggestion_{index}",
-                        on_click=_select_address_suggestion,
-                        args=(suggestion.to_dict(),),
-                        width="stretch",
-                    )
+            if suggestion_response.status == "ok" and not suggestion_response.suggestions and len(current_query) >= 3:
+                st.info("Aucune suggestion trouvée. Vous pouvez poursuivre avec la saisie manuelle.")
             elif suggestion_response.status in {"unavailable", "rate_limited"}:
                 st.info(suggestion_response.message)
-            elif suggestion_response.status == "ok":
-                st.info("Aucune suggestion trouvée. Vous pouvez poursuivre avec la saisie manuelle.")
+            elif suggestion_response.status == "too_short":
+                st.caption("Saisissez au moins trois caractères utiles.")
+            elif suggestion_response.status == "ok" and suggestion_response.suggestions:
+                st.caption(f"Source : {SOURCE_LABEL} · résultats publics, non enregistrés automatiquement.")
         st.button(
             "Rechercher les renseignements disponibles",
             key="address_lookup_submit",
