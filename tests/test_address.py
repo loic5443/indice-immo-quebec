@@ -1,8 +1,22 @@
 import unittest
-from domain.address import normalize_address
+from domain.address import normalize_address,AddressValidationError
 from services.address_lookup_service import lookup
+
 class AddressTests(unittest.TestCase):
- def test_normalization_consent_and_manual_mode(self):
-  a=normalize_address(" 123 rue Test ","montréal","h2x 1y4");self.assertEqual(a.postal_code,"H2X1Y4");self.assertEqual(lookup(a,False)["status"],"manual")
- def test_invalid_postal(self):
-  with self.assertRaises(ValueError):normalize_address("123 rue","Montréal","x")
+ def test_founder_reported_format_is_accepted(self):
+  address=normalize_address(" 123, chemin de l’Église–Nord ","Sainte-Marthe-sur-le-Lac","j6n0a4")
+  self.assertEqual(address.postal_code,"J6N 0A4");self.assertEqual(address.city,"Sainte-Marthe-sur-le-Lac");self.assertIn("Église",address.street)
+ def test_postal_with_or_without_space(self):
+  self.assertEqual(normalize_address("12 rue du Port","L'Île-Cadieux","H2X 1Y4").postal_code,"H2X 1Y4")
+  self.assertEqual(normalize_address("12 rue du Port","L'Île-Cadieux","h2x1y4").postal_code,"H2X 1Y4")
+ def test_unicode_apostrophes_hyphens_unit_and_spaces(self):
+  a=normalize_address("  12–14  rue  d’Argenson  ","  Saint-Jean-sur-Richelieu ","J6N 0A4","  Apt.  3-B  ")
+  self.assertEqual(a.unit,"Apt. 3-B");self.assertEqual(a.original_city,"Saint-Jean-sur-Richelieu");self.assertNotEqual(a.normalized_city,a.city)
+ def test_precise_errors_and_boundaries(self):
+  for values,field in [(("rue Sans Numéro","Montréal","H2X1Y4"),"street"),(("12 rue Test","@@@","H2X1Y4"),"city"),(("12 rue Test","Montréal","D2X1Y4"),"postal")]:
+   with self.assertRaises(AddressValidationError) as caught: normalize_address(*values)
+   self.assertEqual(caught.exception.field,field)
+  with self.assertRaises(AddressValidationError):normalize_address("1 "+"rue"*60,"Montréal","H2X1Y4")
+ def test_consent_and_manual_mode_do_not_transmit_address(self):
+  address=normalize_address("123 rue Test","Montréal","H2X1Y4")
+  self.assertEqual(lookup(address,False)["status"],"manual")
