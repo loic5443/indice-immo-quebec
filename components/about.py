@@ -9,4 +9,4 @@ def show_about() -> None:
         with column: st.markdown(f"<article class='benefit-card'><h3>{title}</h3><p>{copy}</p></article>",unsafe_allow_html=True)
     st.markdown("<div class='section-space'></div><h2>Un outil conçu pour mieux préparer vos décisions</h2><p>ImmoRadar vous aide à comprendre les chiffres, à repérer les forces et les risques et à préparer vos échanges avec les professionnels concernés par votre transaction.</p><h2>Des données transparentes</h2><p>Chaque donnée externe affiche sa source, sa date et sa fraîcheur. Les données non disponibles ne sont jamais remplacées par des chiffres inventés.</p>",unsafe_allow_html=True)
     a,b,_=st.columns([1,1,2]);a.button("Commencer une analyse",type="primary",on_click=go_to,args=("Analyse immobilière",));b.button("Découvrir Premium",on_click=go_to,args=("Premium",))
-    st.caption("ImmoRadar est un outil d'aide à la décision : vérifiez les renseignements importants avant une transaction immobilière.")
+    st.caption("ImmoRadar 0.7.0 — bêta privée. Outil d'aide à la décision : vérifiez les renseignements importants avant une transaction immobilière.")

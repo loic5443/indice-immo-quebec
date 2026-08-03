@@ -20,3 +20,7 @@ La fondation de données officielles est décrite dans [ADR-008](ADR-008_Sprint4
 - [Rapport de clôture](SPRINT6_COMPLETION_REPORT.md)
 - [Guide du parcours d'analyse](GUIDE_PARCOURS_ANALYSE.md)
 - [Checklist bêta privée](CHECKLIST_LANCEMENT_BETA.md)
+
+## Clôture de la refonte bêta
+
+Le statut fonctionnel, les sources intégrées, les limites et les contrôles de confidentialité de la version 0.7.0 sont consignés dans le [rapport de clôture](REFONTE_BETA_CLOSURE.md).

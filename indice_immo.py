@@ -18,7 +18,7 @@ from components.sidebar import show_sidebar
 from data.database import initialize_database
 
 
-st.set_page_config(page_title="ImmoRadar", page_icon="🏠", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="ImmoRadar", page_icon="🏠", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("<script>document.documentElement.lang='fr-CA';document.documentElement.setAttribute('translate','no');</script><meta http-equiv='content-language' content='fr-CA'>", unsafe_allow_html=True)
 
 initialize_database()

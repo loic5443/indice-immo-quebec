@@ -9,7 +9,7 @@ def show_markets():
  st.info("Ces repères proviennent de données municipales et foncières officielles. Ils ne représentent pas les prix de vente actuels ni les rendements locatifs.")
  query=st.text_input("Rechercher une municipalité",key="municipal_search")
  choices=municipalities(DATABASE_PATH,query)
- selected=st.multiselect("Sélectionnez de deux à quatre municipalités",choices,max_selections=4,key="municipal_selected")
+ selected=st.multiselect("Sélectionnez de deux à quatre municipalités",choices,max_selections=4,key="municipal_selected",placeholder="Choisir des municipalités")
  if st.button("Réinitialiser la comparaison"):st.session_state["municipal_selected"]=[];st.rerun()
  result=comparison(DATABASE_PATH,selected)
  if not result["available"]:
