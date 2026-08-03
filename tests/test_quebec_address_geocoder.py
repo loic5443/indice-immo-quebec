@@ -3,7 +3,7 @@
 from pathlib import Path
 import unittest
 
-from services.quebec_address_geocoder import AddressSuggestion, clear_suggestion_cache, resolve_suggestion, suggest_addresses
+from services.quebec_address_geocoder import AddressSuggestion, clear_suggestion_cache, resolve_freeform_address, resolve_suggestion, suggest_addresses
 
 
 MRNF_SUGGEST_PAYLOAD = {
@@ -108,6 +108,15 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
     def test_selected_option_is_not_resolved_without_consent(self):
         selected = AddressSuggestion("", "", "", "", "123 rue Exemple, Ville-exemple H2X1Y4", "opaque-key")
         self.assertIsNone(resolve_suggestion(selected, False, fetch_json=lambda _: self.fail("network must not run")))
+
+    def test_explicit_freeform_resolution_needs_consent_and_returns_structured_candidates(self):
+        calls = []
+        without_consent = resolve_freeform_address("122 rue Publique", False, fetch_json=lambda _: self.fail("network must not run"))
+        self.assertEqual(without_consent.status, "consent_required")
+        resolved = resolve_freeform_address("122 rue Publique", True, fetch_json=lambda url: calls.append(url) or MRNF_CANDIDATE_PAYLOAD, now=lambda: 10)
+        self.assertEqual(resolved.status, "ok")
+        self.assertEqual((resolved.suggestions[0].street, resolved.suggestions[0].city, resolved.suggestions[0].postal_code), ("123 rue Exemple", "Ville-exemple", "H2X 1Y4"))
+        self.assertIn("findAddressCandidates", calls[0])
 
     def test_provider_does_not_write_to_telemetry_or_diagnostics(self):
         source = Path("services/quebec_address_geocoder.py").read_text(encoding="utf-8")

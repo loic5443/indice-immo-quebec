@@ -34,6 +34,7 @@ from services.quebec_address_geocoder import (
     SuggestionResponse,
     AddressSuggestion,
     resolve_suggestion,
+    resolve_freeform_address,
     suggest_addresses,
     useful_query,
 )
@@ -68,6 +69,8 @@ ADDRESS_SUGGESTION_QUERY_KEY = "address_form_suggestion_query"
 ADDRESS_AUTOCOMPLETE_KEY = "address_form_autocomplete"
 ADDRESS_EDITOR_STREET_KEY = "address_form_editor_street"
 ADDRESS_MANUAL_MODE_KEY = "address_form_manual_mode"
+ADDRESS_RESOLUTION_KEY = "address_form_resolution"
+ADDRESS_RESOLUTION_SELECTION_KEY = "address_form_resolution_selection"
 ADDRESS_WIDGET_KEYS = {
     "street": "address_form_street",
     "city": "address_form_city",
@@ -132,17 +135,24 @@ def _address_state_for_current_user() -> AddressFormState:
             if ADDRESS_EDITOR_STREET_KEY in st.session_state:
                 values["street"] = st.session_state[ADDRESS_EDITOR_STREET_KEY]
             state = AddressFormState(values=values, address=None, errors={})
-        home_address = useful_query(st.session_state.pop("home_address_pending", ""))
-        if home_address:
-            values = dict(state.values)
-            values["street"] = home_address
-            state = AddressFormState(values=values, address=None, errors={})
         st.session_state[ADDRESS_OWNER_KEY] = owner_id
         st.session_state[ADDRESS_STATE_KEY] = state
         st.session_state[ADDRESS_HYDRATE_KEY] = True
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
         _clear_address_suggestions()
     state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+    # The Accueil hand-off must work even when this anonymous session already
+    # visited Analyser.  It is therefore applied independently of owner/draft
+    # initialization and forces a fresh searchbox iframe value on this rerun.
+    home_address = useful_query(st.session_state.pop("home_address_pending", ""))
+    if home_address:
+        values = dict(state.values)
+        values["street"] = home_address
+        state = AddressFormState(values=values, address=None, errors={})
+        st.session_state[ADDRESS_STATE_KEY] = state
+        st.session_state[ADDRESS_HYDRATE_KEY] = True
+        st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+        _clear_address_suggestions()
     if st.session_state.pop(ADDRESS_HYDRATE_KEY, False):
         _hydrate_address_widgets(state)
     return state
@@ -291,15 +301,65 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     _clear_address_suggestions()
 
 
+def _select_resolved_address() -> None:
+    """Apply an explicitly selected candidate from the consented resolution."""
+
+    response = st.session_state.get(ADDRESS_RESOLUTION_KEY)
+    index = st.session_state.get(ADDRESS_RESOLUTION_SELECTION_KEY)
+    if not isinstance(response, SuggestionResponse) or not isinstance(index, int):
+        return
+    if index < 0 or index >= len(response.suggestions):
+        return
+    candidate = response.suggestions[index]
+    state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+    values = dict(state.values)
+    values.update({
+        "street": candidate.street or values["street"],
+        "city": candidate.city or values["city"],
+        "postal": candidate.postal_code or values["postal"],
+    })
+    st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors={})
+    st.session_state[ADDRESS_HYDRATE_KEY] = True
+    st.session_state[ADDRESS_EDITOR_STREET_KEY] = values["street"]
+    st.session_state[ADDRESS_WIDGET_KEYS["city"]] = values["city"]
+    st.session_state[ADDRESS_WIDGET_KEYS["postal"]] = values["postal"]
+
+
 def _submit_address_lookup() -> None:
     """Validate and persist the exact same widget values in one explicit action."""
-
+    street = st.session_state.get(ADDRESS_EDITOR_STREET_KEY, st.session_state.get(ADDRESS_WIDGET_KEYS["street"], ""))
+    city = st.session_state.get(ADDRESS_WIDGET_KEYS["city"], "")
+    postal = st.session_state.get(ADDRESS_WIDGET_KEYS["postal"], "")
+    consent = bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False))
+    st.session_state.pop(ADDRESS_RESOLUTION_KEY, None)
+    # A copied address from Accueil often has no separate city/postal fields.
+    # Resolve it only here, after an explicit consented action; ambiguity is
+    # left to the person instead of guessing a municipality or unit.
+    if consent and street and (not city or not postal):
+        try:
+            geocoder_enabled = source_enabled(SOURCE_ID, DATABASE_PATH)
+        except Exception:
+            geocoder_enabled = False
+        resolution = (
+            resolve_freeform_address(street, True)
+            if geocoder_enabled
+            else SuggestionResponse("unavailable", message="La source publique d’adresses est désactivée. Vous pouvez poursuivre en mode manuel.")
+        )
+        st.session_state[ADDRESS_RESOLUTION_KEY] = resolution
+        if resolution.status == "ok" and len(resolution.suggestions) == 1:
+            candidate = resolution.suggestions[0]
+            street = candidate.street or street
+            city = candidate.city or city
+            postal = candidate.postal_code or postal
+            st.session_state[ADDRESS_EDITOR_STREET_KEY] = street
+            st.session_state[ADDRESS_WIDGET_KEYS["city"]] = city
+            st.session_state[ADDRESS_WIDGET_KEYS["postal"]] = postal
     state = prepare_address_submission(
-        st.session_state.get(ADDRESS_EDITOR_STREET_KEY, st.session_state.get(ADDRESS_WIDGET_KEYS["street"], "")),
-        st.session_state.get(ADDRESS_WIDGET_KEYS["city"], ""),
-        st.session_state.get(ADDRESS_WIDGET_KEYS["postal"], ""),
+        street,
+        city,
+        postal,
         st.session_state.get(ADDRESS_WIDGET_KEYS["unit"], ""),
-        bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
+        consent,
     )
     st.session_state[ADDRESS_STATE_KEY] = state
     _persist_address_draft(state)
@@ -442,6 +502,7 @@ def show_property_analysis() -> None:
                 _autocomplete_options,
                 label="Adresse",
                 placeholder="Ex. 123 rue Exemple",
+                default=address_state.values["street"] or None,
                 default_searchterm=address_state.values["street"],
                 default_use_searchterm=True,
                 clear_on_submit=False,
@@ -470,6 +531,20 @@ def show_property_analysis() -> None:
             st.caption("Mode manuel actif : aucune recherche externe n’est effectuée.")
         else:
             st.caption("Les suggestions apparaissent automatiquement pendant la saisie.")
+        resolution = st.session_state.get(ADDRESS_RESOLUTION_KEY)
+        if isinstance(resolution, SuggestionResponse):
+            if resolution.status == "ok" and len(resolution.suggestions) > 1:
+                st.selectbox(
+                    "Plusieurs adresses publiques correspondent : choisissez celle à utiliser",
+                    range(len(resolution.suggestions)),
+                    key=ADDRESS_RESOLUTION_SELECTION_KEY,
+                    format_func=lambda index: resolution.suggestions[index].label,
+                    on_change=_select_resolved_address,
+                )
+            elif resolution.status == "ok" and not resolution.suggestions:
+                st.info("Aucune adresse publique correspondante n’a été trouvée. Vérifiez l’adresse ou poursuivez en mode manuel.")
+            elif resolution.status in {"unavailable", "rate_limited", "too_short"}:
+                st.info(resolution.message)
         suggestion_response = st.session_state.get(ADDRESS_SUGGESTIONS_KEY)
         current_query = useful_query(st.session_state.get(ADDRESS_EDITOR_STREET_KEY, ""))
         if suggestion_response and st.session_state.get(ADDRESS_SUGGESTION_QUERY_KEY) == current_query:
@@ -481,8 +556,9 @@ def show_property_analysis() -> None:
                 st.caption("Saisissez au moins trois caractères utiles.")
             elif suggestion_response.status == "ok" and suggestion_response.suggestions:
                 st.caption(f"Source : {SOURCE_LABEL} · résultats publics, non enregistrés automatiquement.")
+        st.caption("Après votre consentement, cette action peut d’abord révéler la valeur au rôle municipal; ImmoValue reste une estimation marchande distincte, calculable avec au moins trois comparables autorisés.")
         st.button(
-            "Rechercher les renseignements disponibles",
+            "Rechercher et révéler les renseignements disponibles",
             key="address_lookup_submit",
             type="primary",
             on_click=_submit_address_lookup,

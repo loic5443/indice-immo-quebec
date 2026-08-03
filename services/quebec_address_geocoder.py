@@ -248,6 +248,39 @@ def suggest_addresses(
     return response
 
 
+def resolve_freeform_address(
+    query: str,
+    consent: bool,
+    *,
+    fetch_json: Callable[[str], dict[str, Any]] | None = None,
+    now: Callable[[], float] = time.monotonic,
+) -> SuggestionResponse:
+    """Resolve a consented, copied address after an explicit user action.
+
+    This is intentionally separate from type-ahead.  It lets the Analyse page
+    fill city and postal code from a landing-page hand-off, but never sends an
+    address before the person has acknowledged public search.
+    """
+
+    if not consent:
+        return SuggestionResponse("consent_required", message="Activez la recherche publique avant de révéler les renseignements disponibles.")
+    normalized_query = useful_query(query)
+    if not is_eligible_query(normalized_query):
+        return SuggestionResponse("too_short", message="Saisissez une adresse plus complète, ou poursuivez en mode manuel.")
+    cache_key = f"resolve:{normalized_query.casefold()}"
+    current_time = now()
+    cached = _CACHE.get(cache_key)
+    if cached and current_time - cached[0] < CACHE_TTL_SECONDS:
+        return SuggestionResponse(cached[1].status, cached[1].suggestions, cached[1].message, cached=True)
+    try:
+        payload = (fetch_json or _fetch_json)(_official_url(normalized_query))
+        response = SuggestionResponse("ok", _parse_response(payload))
+    except Exception:
+        response = SuggestionResponse("unavailable", message="Le service d’adresses est momentanément indisponible. Vous pouvez poursuivre manuellement.")
+    _CACHE[cache_key] = (current_time, response)
+    return response
+
+
 def resolve_suggestion(
     suggestion: AddressSuggestion,
     consent: bool,
