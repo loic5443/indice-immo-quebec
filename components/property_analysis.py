@@ -15,12 +15,18 @@ from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 from services.market_data_service import market_context_snapshot
 from domain.immovalue import SubjectProperty, estimate_immovalue
 from services.comparable_csv import csv_template, validate_csv_rows
-from services.analysis_workflow import STEPS
+from services.analysis_workflow import STEPS, load_draft, save_draft
 from services.entitlements_service import quota_status, consume_estimation
-from domain.address import normalize_address,AddressValidationError
 from services.address_lookup_service import lookup
 from services.quebec_role_importer import search_role_units,role_street_variants
 from services.quebec_role_admin_service import territory_for_municipality
+from services.address_form_service import (
+    AddressFormState,
+    empty_address_form_state,
+    restore_address_form,
+    serialize_address_form,
+    submit_address_form,
+)
 
 
 DEFAULTS = {
@@ -34,6 +40,18 @@ DEFAULTS = {
     "expense_growth": 2.0, "holding_period": 5,
 }
 
+ADDRESS_STATE_KEY = "address_form_state"
+ADDRESS_LOOKUP_KEY = "address_form_lookup"
+ADDRESS_OWNER_KEY = "address_form_owner"
+ADDRESS_HYDRATE_KEY = "address_form_hydrate"
+ADDRESS_WIDGET_KEYS = {
+    "street": "address_form_street",
+    "city": "address_form_city",
+    "postal": "address_form_postal",
+    "unit": "address_form_unit",
+    "consent": "address_form_consent",
+}
+
 
 def reset_analysis() -> None:
     st.session_state.update(DEFAULTS)
@@ -43,25 +61,65 @@ def _money(value: float) -> str:
     return f"{value:,.0f} $".replace(",", " ")
 
 
-def prepare_address_submission(street: str, city: str, postal: str, unit: str = ""):
-    """Single UI gateway: validation and postal formatting occur before a Streamlit rerun."""
-    address = normalize_address(street, city, postal, unit)
-    return address, {"address_postal": address.postal_code}
+def prepare_address_submission(street: str, city: str, postal: str, unit: str = "", consent: bool = False) -> AddressFormState:
+    """Compatibility entry point used by UI tests and the submitted form."""
+    return submit_address_form(street, city, postal, unit, consent)
 
 
-def _validate_address_form() -> None:
-    try:
-        address, normalized = prepare_address_submission(
-            st.session_state.get("address_street", ""), st.session_state.get("address_city", ""),
-            st.session_state.get("address_postal", ""), st.session_state.get("address_unit", ""),
-        )
-        st.session_state.update(normalized)
-        st.session_state["address_submission"] = address
-        st.session_state["address_lookup_pending"] = True
-        st.session_state.pop("address_error", None)
-    except AddressValidationError as error:
-        st.session_state["address_error"] = {"field": error.field, "message": str(error)}
-        st.session_state.pop("address_lookup_pending", None)
+def _address_owner_id() -> int | None:
+    return current_user()["id"] if is_authenticated() else None
+
+
+def _hydrate_address_widgets(state: AddressFormState) -> None:
+    """Synchronize widget editors before they are instantiated in this rerun."""
+    for field, key in ADDRESS_WIDGET_KEYS.items():
+        st.session_state[key] = state.values[field]
+
+
+def _address_state_for_current_user() -> AddressFormState:
+    """Load exactly one canonical state for the active user/session."""
+    owner_id = _address_owner_id()
+    if st.session_state.get(ADDRESS_OWNER_KEY) != owner_id:
+        state = empty_address_form_state()
+        if owner_id is not None:
+            draft, _ = load_draft(owner_id, DATABASE_PATH)
+            state = restore_address_form(draft.get("address_form"))
+        st.session_state[ADDRESS_OWNER_KEY] = owner_id
+        st.session_state[ADDRESS_STATE_KEY] = state
+        st.session_state[ADDRESS_HYDRATE_KEY] = True
+        st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+    state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+    if st.session_state.pop(ADDRESS_HYDRATE_KEY, False):
+        _hydrate_address_widgets(state)
+    return state
+
+
+def _persist_address_draft(state: AddressFormState) -> None:
+    """Save the JSON-safe canonical submission only in the signed-in user's draft."""
+    owner_id = _address_owner_id()
+    if owner_id is None:
+        return
+    draft, step = load_draft(owner_id, DATABASE_PATH)
+    draft["address_form"] = serialize_address_form(state)
+    save_draft(owner_id, draft, step, DATABASE_PATH)
+
+
+def _official_lookup(state: AddressFormState) -> dict:
+    """Use the same canonical address for consent and the local official lookup."""
+    assert state.address is not None
+    result = lookup(state.address, state.values["consent"])
+    response = {"message": result["message"], "consent": state.values["consent"], "coverage": None, "territory": None, "matches": [], "variants": []}
+    if not state.values["consent"]:
+        return response
+    territory = territory_for_municipality(DATABASE_PATH, state.address.city)
+    matches = search_role_units(DATABASE_PATH, territory, state.address.street) if territory else []
+    response.update({
+        "coverage": bool(territory),
+        "territory": territory,
+        "matches": matches,
+        "variants": role_street_variants(DATABASE_PATH, territory, state.address.street) if territory and not matches else [],
+    })
+    return response
 
 
 def _inputs_from_state() -> PropertyInputs:
@@ -86,53 +144,70 @@ def show_property_analysis() -> None:
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value)
     st.title("Analyse immobilière")
+    address_state = _address_state_for_current_user()
     with st.expander("Commencer par une adresse", expanded=True):
-        street,city,postal,unit=st.columns(4)
-        address_error=st.session_state.get("address_error",{})
-        with street:
-            address_street=st.text_input("Adresse",key="address_street")
-            if address_error.get("field")=="street": st.error(address_error["message"])
-        with city:
-            address_city=st.text_input("Ville",key="address_city")
-            if address_error.get("field")=="city": st.error(address_error["message"])
-        with postal:
-            address_postal=st.text_input("Code postal",key="address_postal")
-            if address_error.get("field")=="postal": st.error(address_error["message"])
-        with unit:
-            address_unit=st.text_input("Appartement / local (facultatif)",key="address_unit")
-            if address_error.get("field")=="unit": st.error(address_error["message"])
-        consent=st.checkbox("J'accepte qu'ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",key="address_consent")
-        st.button("Rechercher les renseignements disponibles",key="address_lookup",on_click=_validate_address_form)
-        if st.session_state.pop("address_lookup_pending",False):
-            try:
-                address=st.session_state["address_submission"]
-                result=lookup(address,consent);st.session_state["address_lookup_result"]=result
-                if consent:
-                    territory=territory_for_municipality(DATABASE_PATH,address.city)
-                    matches=search_role_units(DATABASE_PATH,territory,address.street) if territory else []
-                    st.session_state["role_matches"]=matches
-                    st.session_state["role_territory"]=territory
-                    st.session_state["role_street_variants"]=role_street_variants(DATABASE_PATH,territory,address.street) if territory and not matches else []
-                    st.session_state["role_coverage"] = bool(territory)
-                    if territory:
-                        st.success(f"Rôle officiel synchronisé pour {address.city} (territoire {territory}).")
-                    else:
-                        st.info(result["message"])
-                else:
-                    st.info(result["message"])
-            except ValueError as error: st.error("Vérifiez les renseignements saisis.")
+        with st.form("official_address_lookup_form", clear_on_submit=False):
+            street, city, postal, unit = st.columns(4)
+            error_slots = {}
+            with street:
+                submitted_street = st.text_input("Adresse", key=ADDRESS_WIDGET_KEYS["street"])
+                error_slots["street"] = st.empty()
+                if "street" in address_state.errors:
+                    error_slots["street"].error(address_state.errors["street"])
+            with city:
+                submitted_city = st.text_input("Ville", key=ADDRESS_WIDGET_KEYS["city"])
+                error_slots["city"] = st.empty()
+                if "city" in address_state.errors:
+                    error_slots["city"].error(address_state.errors["city"])
+            with postal:
+                submitted_postal = st.text_input("Code postal", key=ADDRESS_WIDGET_KEYS["postal"])
+                error_slots["postal"] = st.empty()
+                if "postal" in address_state.errors:
+                    error_slots["postal"].error(address_state.errors["postal"])
+            with unit:
+                submitted_unit = st.text_input("Appartement / local (facultatif)", key=ADDRESS_WIDGET_KEYS["unit"])
+                error_slots["unit"] = st.empty()
+                if "unit" in address_state.errors:
+                    error_slots["unit"].error(address_state.errors["unit"])
+            submitted_consent = st.checkbox(
+                "J'accepte qu'ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",
+                key=ADDRESS_WIDGET_KEYS["consent"],
+            )
+            submitted = st.form_submit_button("Rechercher les renseignements disponibles", type="primary")
+        if submitted:
+            address_state = prepare_address_submission(
+                submitted_street, submitted_city, submitted_postal, submitted_unit, submitted_consent
+            )
+            for error_slot in error_slots.values():
+                error_slot.empty()
+            for field, message in address_state.errors.items():
+                error_slots[field].error(message)
+            st.session_state[ADDRESS_STATE_KEY] = address_state
+            _persist_address_draft(address_state)
+            if address_state.valid:
+                st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(address_state)
+            else:
+                st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+            # Widget state is only changed before rendering widgets, on the next
+            # rerun.  No stale value is validated during that rerun.
+            st.session_state[ADDRESS_HYDRATE_KEY] = True
+            st.rerun()
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
-    if st.session_state.get("role_coverage") is False:
+    address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
+    if address_lookup and address_lookup["coverage"] is False:
         st.info("Les données officielles de cette municipalité ne sont pas encore synchronisées. Vous pouvez continuer manuellement.")
-    matches=st.session_state.get("role_matches",[])
+    if address_lookup and address_lookup["consent"] is False:
+        st.info(address_lookup["message"])
+    matches = address_lookup["matches"] if address_lookup else []
     if matches:
-        chosen=st.selectbox("Unité officielle trouvée",range(len(matches)),format_func=lambda index: matches[index]["address_text"] or matches[index]["matricule"] or "Unité officielle")
-        match=matches[chosen]
-        st.info(f"Rôle officiel {st.session_state.get('role_territory')} — valeur terrain : {_money(match['land_value'] or 0)} · bâtiment : {_money(match['building_value'] or 0)} · totale : {_money(match['total_value'] or 0)} · rôle {match['role_year']} · référence {match['market_reference_date'] or 'non publiée'}.")
+        chosen = st.selectbox("Unité officielle trouvée", range(len(matches)), format_func=lambda index: matches[index]["address_text"] or matches[index]["matricule"] or "Unité officielle")
+        match = matches[chosen]
+        st.success(f"Rôle officiel synchronisé pour {address_state.address.city} (territoire {address_lookup['territory']}).")
+        st.info(f"Rôle officiel {address_lookup['territory']} — valeur terrain : {_money(match['land_value'] or 0)} · bâtiment : {_money(match['building_value'] or 0)} · totale : {_money(match['total_value'] or 0)} · rôle {match['role_year']} · référence {match['market_reference_date'] or 'non publiée'}.")
         st.caption("Source : MAMH / Données Québec · licence CC BY 4.0. Valeur au rôle, distincte d’ImmoValue; aucune donnée n’est appliquée automatiquement à vos hypothèses.")
-    elif st.session_state.get("role_coverage") and st.session_state.get("address_submission"):
-        variants=st.session_state.get("role_street_variants",[])
-        detail=f" Variante publique de voie trouvée : {', '.join(variants)}." if variants else ""
+    elif address_lookup and address_lookup["coverage"]:
+        variants = address_lookup["variants"]
+        detail = f" Variante publique de voie trouvée : {', '.join(variants)}." if variants else ""
         st.info("Aucune unité officielle ne correspond exactement au numéro civique et à la voie saisis. Vérifiez le numéro civique ou poursuivez manuellement."+detail)
     step = st.session_state.setdefault("analysis_step", 1)
     completed = st.session_state.setdefault("analysis_completed_steps", {1})
@@ -299,7 +374,10 @@ def _show_immovalue() -> dict:
             comparables.append({"address": address, "sale_date": "2026-01-01", "sale_price": sale_price, "living_area": area, "property_type": ctype, "units": c_units, "distance_km": distance, "source_declared": source, "declared_closed_sale": closed, "usage_right_confirmed": rights})
     subject=SubjectProperty(name=name, property_type=property_type, units=units or None, living_area=living_area or None, land_area=land_area or None, year_built=year or None, asking_price=asking or None, notes=st.session_state.get("iv_notes", ""))
     draft_key = f"immovalue:{hash((subject.name, subject.living_area, tuple(str(item) for item in comparables)))}"
-    estimate = st.session_state.get("immovalue_generated_result")
+    # A connected user may open or resume an analysis before requesting an
+    # estimate.  Always render the deterministic availability state first;
+    # quota consumption remains limited to the explicit generation action.
+    estimate = st.session_state.get("immovalue_generated_result") or estimate_immovalue(subject, comparables)
     if is_authenticated():
         user=current_user(); quota=quota_status(user["id"],user,DATABASE_PATH)
         st.caption(quota["label"] + (" · Le quota est désactivé pendant la bêta." if not _quota_enforced() else ""))

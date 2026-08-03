@@ -11,8 +11,8 @@ class AddressTests(unittest.TestCase):
   self.assertEqual(address.postal_code,"J6N 0A4")
   self.assertIn("Beauharnois, QC, Canada",address.original_street)
  def test_interface_submission_normalizes_before_rerun(self):
-  address,state=prepare_address_submission("262 Rue Edgar-Hébert, Beauharnois, QC, Canada","Beauharnois","J6N0A4")
-  self.assertEqual(state["address_postal"],"J6N 0A4");self.assertEqual(address.street,"262 Rue Edgar-Hébert")
+  state=prepare_address_submission("262 Rue Edgar-Hébert, Beauharnois, QC, Canada","Beauharnois","J6N0A4",consent=True)
+  self.assertTrue(state.valid);self.assertEqual(state.values["postal"],"J6N 0A4");self.assertEqual(state.address.street,"262 Rue Edgar-Hébert")
  def test_map_style_address_variants(self):
   self.assertEqual(normalize_address("262 Rue Edgar-Hébert, Beauharnois, Québec, Canada","Beauharnois","J6N0A4").street,"262 Rue Edgar-Hébert")
   self.assertEqual(normalize_address("262 Rue Edgar-Hébert, Beauharnois, QC, J6N 0A4, Canada","Beauharnois","").postal_code,"J6N 0A4")

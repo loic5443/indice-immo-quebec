@@ -1,0 +1,98 @@
+"""Single-source-of-truth state for the consented public-address lookup form.
+
+The UI deliberately keeps this state separate from Streamlit widget keys.  A
+widget is only a temporary editor; a submitted ``AddressFormState`` is the
+canonical record used for validation, local drafts and the official lookup.
+"""
+
+from dataclasses import asdict, dataclass
+from typing import Any
+
+from domain.address import AddressValidationError, QuebecAddress, normalize_address
+
+
+ADDRESS_FIELDS = ("street", "city", "postal", "unit", "consent")
+
+
+@dataclass(frozen=True)
+class AddressFormState:
+    """Canonical submission plus the exact values that should be shown again."""
+
+    values: dict[str, Any]
+    address: QuebecAddress | None
+    errors: dict[str, str]
+
+    @property
+    def valid(self) -> bool:
+        return self.address is not None and not self.errors
+
+
+def empty_address_form_state() -> AddressFormState:
+    return AddressFormState(
+        values={"street": "", "city": "", "postal": "", "unit": "", "consent": False},
+        address=None,
+        errors={},
+    )
+
+
+def submit_address_form(
+    street: str, city: str, postal: str, unit: str = "", consent: bool = False
+) -> AddressFormState:
+    """Validate the values submitted in one event and return their canonical form.
+
+    The address text remains the original submitted text.  The postal code is
+    formatted only after successful validation, so the next render displays the
+    same canonical state that will be used for the lookup.
+    """
+
+    values = {
+        "street": street if isinstance(street, str) else "",
+        "city": city if isinstance(city, str) else "",
+        "postal": postal if isinstance(postal, str) else "",
+        "unit": unit if isinstance(unit, str) else "",
+        "consent": bool(consent),
+    }
+    try:
+        address = normalize_address(values["street"], values["city"], values["postal"], values["unit"])
+    except AddressValidationError as error:
+        return AddressFormState(values=values, address=None, errors={error.field: str(error)})
+
+    # Keep the copied map address intact while preserving the structured street
+    # separately in ``address``.  This prevents a visual/validated mismatch.
+    display_values = {
+        **values,
+        "street": address.original_street,
+        "city": address.city,
+        "postal": address.postal_code,
+        "unit": address.unit,
+    }
+    return AddressFormState(values=display_values, address=address, errors={})
+
+
+def serialize_address_form(state: AddressFormState) -> dict[str, Any]:
+    """Return JSON-safe local-draft content; never use it for telemetry."""
+
+    return {
+        "values": state.values,
+        "address": asdict(state.address) if state.address else None,
+        "errors": state.errors,
+    }
+
+
+def restore_address_form(payload: Any) -> AddressFormState:
+    """Restore a valid local draft without trusting a stale validation error."""
+
+    if not isinstance(payload, dict):
+        return empty_address_form_state()
+    values = payload.get("values")
+    if not isinstance(values, dict):
+        return empty_address_form_state()
+    restored = submit_address_form(
+        values.get("street", ""),
+        values.get("city", ""),
+        values.get("postal", ""),
+        values.get("unit", ""),
+        values.get("consent", False),
+    )
+    # A malformed or obsolete draft is shown for correction, never accepted.
+    return restored
