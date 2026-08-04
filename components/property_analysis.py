@@ -620,7 +620,13 @@ def show_property_analysis() -> None:
             elif suggestion_response.status == "too_short":
                 st.caption("Saisissez au moins trois caractères utiles.")
             elif suggestion_response.status == "ok" and suggestion_response.suggestions:
-                st.caption(f"Source : {SOURCE_LABEL} · résultats publics, non enregistrés automatiquement.")
+                sources = {suggestion.source for suggestion in suggestion_response.suggestions}
+                if sources == {"role"}:
+                    st.caption("Source : rôles municipaux officiels synchronisés · résultats publics, non enregistrés automatiquement.")
+                elif "role" in sources:
+                    st.caption(f"Sources : {SOURCE_LABEL} et rôles municipaux officiels synchronisés · résultats publics, non enregistrés automatiquement.")
+                else:
+                    st.caption(f"Source : {SOURCE_LABEL} · résultats publics, non enregistrés automatiquement.")
         st.caption("Après votre consentement, cette action peut d’abord révéler la valeur au rôle municipal; ImmoValue reste une estimation marchande distincte, calculable avec au moins trois comparables autorisés.")
         st.button(
             "Rechercher et révéler les renseignements disponibles",
