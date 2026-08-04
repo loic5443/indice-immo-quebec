@@ -45,6 +45,7 @@ class AddressSuggestion:
     unit: str
     label: str
     lookup_key: str = ""
+    source: str = "external"
 
     def to_dict(self) -> dict[str, str]:
         """Return display fields only; safe for UI assertions and exports."""

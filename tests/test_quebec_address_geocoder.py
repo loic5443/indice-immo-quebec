@@ -123,6 +123,14 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
         self.assertNotIn("record_event", source)
         self.assertNotIn("record_error", source)
 
+    def test_external_and_local_options_are_deduplicated_and_limited(self):
+        from components.property_analysis import _merge_address_suggestions
+
+        external = (AddressSuggestion("", "", "", "", "123 rue Exemple · Ville-exemple · H2X 1Y4", "opaque"),)
+        local = [AddressSuggestion("123 rue Exemple", "Ville-exemple", "", "", "123 rue Exemple · Ville-exemple", source="role") for _ in range(10)]
+        merged = _merge_address_suggestions(external, local)
+        self.assertEqual(len(merged), 1)
+
 
 class QuebecAddressGeocoderUiTests(unittest.TestCase):
     def test_searchbox_is_debounced_and_selection_populates_fields(self):
@@ -131,6 +139,8 @@ class QuebecAddressGeocoderUiTests(unittest.TestCase):
         source = '''
 import streamlit as st
 import components.property_analysis as page
+original_searchbox = page.st_searchbox
+original_resolver = page.resolve_suggestion
 def fake_searchbox(search_function, **kwargs):
     st.session_state["observed_debounce"] = kwargs["debounce"]
     if not st.session_state.get("selected_once"):
@@ -139,6 +149,8 @@ def fake_searchbox(search_function, **kwargs):
 page.st_searchbox = fake_searchbox
 page.resolve_suggestion = lambda *_: page.AddressSuggestion("123 rue Exemple", "Ville-exemple", "H2X 1Y4", "", "123 rue Exemple · Ville-exemple · H2X 1Y4")
 page.show_property_analysis()
+page.st_searchbox = original_searchbox
+page.resolve_suggestion = original_resolver
 '''
         app = AppTest.from_string(source).run(timeout=20)
         self.assertEqual(app.session_state["observed_debounce"], 400)

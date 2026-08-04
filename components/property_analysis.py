@@ -1,6 +1,8 @@
 """Complete property analysis UI with enriched assumptions and deterministic scenarios."""
 
 from dataclasses import asdict
+import re
+import unicodedata
 
 import streamlit as st
 from streamlit_searchbox import st_searchbox
@@ -19,7 +21,7 @@ from services.comparable_csv import csv_template, validate_csv_rows
 from services.analysis_workflow import STEPS, load_draft, save_draft, normalize_step, transition
 from services.entitlements_service import quota_status, consume_estimation
 from services.address_lookup_service import lookup
-from services.quebec_role_importer import search_role_units,role_street_variants
+from services.quebec_role_importer import search_role_units,role_street_variants,suggest_role_units
 from services.quebec_role_admin_service import territory_for_municipality
 from services.address_form_service import (
     AddressFormState,
@@ -71,6 +73,7 @@ ADDRESS_EDITOR_STREET_KEY = "address_form_editor_street"
 ADDRESS_MANUAL_MODE_KEY = "address_form_manual_mode"
 ADDRESS_RESOLUTION_KEY = "address_form_resolution"
 ADDRESS_RESOLUTION_SELECTION_KEY = "address_form_resolution_selection"
+ADDRESS_LOCAL_SELECTED_KEY = "address_form_local_selected"
 ADDRESS_WIDGET_KEYS = {
     "street": "address_form_street",
     "city": "address_form_city",
@@ -220,15 +223,52 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
         # A local diagnostic-store problem must never prevent manual analysis
         # and must not generate an address-bearing diagnostic.
         enabled = False
-    if not enabled:
-        response = SuggestionResponse("unavailable", message="Les suggestions d’adresse sont temporairement indisponibles. Vous pouvez poursuivre manuellement.")
+    external = (
+        suggest_addresses(query, True)
+        if enabled else SuggestionResponse("unavailable", message="La source publique d’adresses est désactivée.")
+    )
+    local = [
+        AddressSuggestion(
+            street=row["street"], city=row["city"], postal_code=row["postal_code"],
+            unit=row["unit"], label=" · ".join(part for part in (row["street"], row["city"]) if part), source="role",
+        )
+        for row in suggest_role_units(DATABASE_PATH, query, limit=8)
+    ]
+    combined = _merge_address_suggestions(external.suggestions, local)
+    if combined:
+        response = SuggestionResponse("ok", tuple(combined))
+    elif external.status == "ok":
+        response = SuggestionResponse("ok", message="Aucune adresse publique ne correspond. Vous pouvez poursuivre en mode manuel.")
     else:
-        response = suggest_addresses(query, True)
+        response = external
     st.session_state[ADDRESS_SUGGESTIONS_KEY] = response
     st.session_state[ADDRESS_SUGGESTION_QUERY_KEY] = query
-    if response.status != "ok":
-        return []
+    if response.status != "ok" or not response.suggestions:
+        # streamlit-searchbox has no translation hook for “No options”.  A
+        # non-selectable status item keeps its listbox clear and French.
+        return [(response.message or "Aucune adresse publique ne correspond. Vous pouvez poursuivre en mode manuel.", {"source": "empty", "label": response.message})]
     return [(suggestion.label, suggestion.to_option()) for suggestion in response.suggestions]
+
+
+def _suggestion_key(suggestion: AddressSuggestion) -> str:
+    value = re.sub(r"\b[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d\b", "", suggestion.label, flags=re.I)
+    value = "".join(char for char in unicodedata.normalize("NFD", value.casefold()) if not unicodedata.combining(char))
+    return "".join(char for char in value if char.isalnum())
+
+
+def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: list[AddressSuggestion]) -> list[AddressSuggestion]:
+    """Keep external results first while deduplicating a bounded local fallback."""
+
+    merged: list[AddressSuggestion] = []
+    seen: set[str] = set()
+    for suggestion in (*external, *local):
+        key = _suggestion_key(suggestion)
+        if key and key not in seen:
+            seen.add(key)
+            merged.append(suggestion)
+        if len(merged) >= 8:
+            break
+    return merged
 
 
 def _on_address_city_change() -> None:
@@ -266,10 +306,13 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         unit=suggestion.get("unit", ""),
         label=suggestion.get("label", ""),
         lookup_key=suggestion.get("lookup_key", ""),
+        source=suggestion.get("source", "external"),
     )
+    if selected.source == "empty":
+        return
     # The official endpoint resolves the opaque selection key to structured
     # fields only after a person clicks it.  The key stays session-only.
-    resolved = resolve_suggestion(selected, bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)))
+    resolved = selected if selected.source == "role" else resolve_suggestion(selected, bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)))
     if resolved is None:
         _clear_address_suggestions()
         st.session_state[ADDRESS_SUGGESTIONS_KEY] = SuggestionResponse(
@@ -298,6 +341,11 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     st.session_state[ADDRESS_WIDGET_KEYS["unit"]] = values["unit"]
     st.session_state[ADDRESS_HYDRATE_KEY] = True
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+    if selected.source == "role":
+        st.session_state[ADDRESS_LOCAL_SELECTED_KEY] = True
+        st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup_fields(values["street"], values["city"], True, postal_available=False)
+    else:
+        st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     _clear_address_suggestions()
 
 
@@ -375,16 +423,33 @@ def _official_lookup(state: AddressFormState) -> dict:
     """Use the same canonical address for consent and the local official lookup."""
     assert state.address is not None
     result = lookup(state.address, state.values["consent"])
-    response = {"message": result["message"], "consent": state.values["consent"], "coverage": None, "territory": None, "matches": [], "variants": []}
-    if not state.values["consent"]:
+    response = _official_lookup_fields(state.address.street, state.address.city, state.values["consent"])
+    response["message"] = result["message"]
+    response["normalized_address"] = {
+        "street": state.address.street, "city": state.address.city,
+        "postal": state.address.postal_code, "unit": state.address.unit,
+    }
+    return response
+
+
+def _official_lookup_fields(street: str, city: str, consent: bool, *, postal_available: bool = True) -> dict:
+    """Match public role fields without treating municipal data as an estimate."""
+
+    response = {
+        "message": "Renseignements publics recherchés.", "consent": consent,
+        "coverage": None, "territory": None, "matches": [], "variants": [],
+        "normalized_address": {"street": street, "city": city, "postal": "", "unit": ""},
+        "postal_available": postal_available,
+    }
+    if not consent:
         return response
-    territory = territory_for_municipality(DATABASE_PATH, state.address.city)
-    matches = search_role_units(DATABASE_PATH, territory, state.address.street) if territory else []
+    territory = territory_for_municipality(DATABASE_PATH, city)
+    matches = search_role_units(DATABASE_PATH, territory, street) if territory else []
     response.update({
         "coverage": bool(territory),
         "territory": territory,
         "matches": matches,
-        "variants": role_street_variants(DATABASE_PATH, territory, state.address.street) if territory and not matches else [],
+        "variants": role_street_variants(DATABASE_PATH, territory, street) if territory and not matches else [],
     })
     return response
 
@@ -675,6 +740,11 @@ def _show_role_overview(address_lookup: dict | None) -> None:
         postal = f", {address.postal_code}" if address.postal_code else ""
         unit = f", {address.unit}" if address.unit else ""
         st.caption(f"Adresse normalisée : {address.street}{unit}, {address.city}{postal}")
+    elif address_lookup.get("normalized_address"):
+        address = address_lookup["normalized_address"]
+        st.caption(f"Adresse publique : {address['street']}, {address['city']}")
+        if not address_lookup.get("postal_available", True):
+            st.info("Le code postal n’est pas publié dans ce rôle municipal. Vous pouvez le saisir manuellement; cela ne bloque pas l’affichage de cette valeur officielle.")
     if not address_lookup.get("consent"):
         st.info("Recherche publique non autorisée : activez le consentement puis lancez la recherche, ou continuez manuellement.")
         return

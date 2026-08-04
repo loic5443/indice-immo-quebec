@@ -153,6 +153,31 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertNotIn("address_form_resolution", app.session_state)
         self.assertEqual(list(app.exception), [])
 
+    def test_external_failure_uses_clickable_local_role_suggestion(self):
+        source = (
+            "from pathlib import Path\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
+            "original_suggest = page.suggest_addresses\n"
+            "page.suggest_addresses = lambda *_: page.SuggestionResponse('unavailable', message='source externe indisponible')\n"
+            "original_searchbox = page.st_searchbox\n"
+            "def fake_searchbox(search_function, **kwargs):\n"
+            "    options = search_function('123 rue Ex')\n"
+            "    st.session_state['local_options'] = options\n"
+            "    kwargs['submit_function'](options[0][1])\n"
+            "page.st_searchbox = fake_searchbox\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "page.show_property_analysis()\n"
+            "page.st_searchbox = original_searchbox\n"
+            "page.suggest_addresses = original_suggest\n"
+        )
+        app = AppTest.from_string(source).run(timeout=20)
+        self.assertTrue(app.session_state["local_options"])
+        self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        self.assertFalse(any("source externe indisponible" in item.value for item in app.info))
+
     def test_street_only_submission_keeps_city_postal_and_consent_canonical(self):
         app = self._app()
         app.session_state["address_form_editor_street"] = "123 rue Exemple"

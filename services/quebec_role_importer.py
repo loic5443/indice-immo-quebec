@@ -32,7 +32,7 @@ def _unit(element, sequence, territory, year, checksum, source_version):
  civic,street,local=_text(element,"RL0101Ax"),_text(element,"RL0101Gx"),_text(element,"RL0101Ix")
  address=' '.join(x for x in (civic,street,local) if x) or None
  provenance={key:{"source":f"MAMH rôle {territory} XML {source_version}","xml":key} for key in PUBLIC_FIELDS if _text(element,key) is not None}
- return (territory,checksum,matricule or f"unit-{sequence}",matricule,civic,street,local,address,_text(element,"RL0105A"),_num(element,"RL0302A"),_num(element,"RL0306A"),_num(element,"RL0307A",True),_num(element,"RL0402A"),_num(element,"RL0403A"),_num(element,"RL0404A"),year,_text(element,"RL0401A"),json.dumps(provenance,ensure_ascii=False))
+ return (territory,checksum,matricule or f"unit-{sequence}",matricule,civic,street,local,address,_text(element,"RL0105A"),_num(element,"RL0302A"),_num(element,"RL0306A"),_num(element,"RL0307A",True),_num(element,"RL0402A"),_num(element,"RL0403A"),_num(element,"RL0404A"),year,_text(element,"RL0401A"),json.dumps(provenance,ensure_ascii=False),_role_key(' '.join(x for x in (civic,street) if x)),_role_key(street or ''))
 
 def import_role_xml(path, database_path, territory="01023"):
  """Atomically replace one territory after a complete, streaming validation."""
@@ -54,7 +54,7 @@ def import_role_xml(path, database_path, territory="01023"):
  try:
   c.execute("BEGIN IMMEDIATE")
   c.execute("DELETE FROM role_assessment_units WHERE territory_code=?",(territory,))
-  c.executemany("INSERT INTO role_assessment_units (territory_code,import_checksum,unit_key,matricule,civic_number,street_name,address_unit,address_text,use_code,land_area_m2,building_floors,construction_year,land_value,building_value,total_value,role_year,market_reference_date,field_provenance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",rows)
+  c.executemany("INSERT INTO role_assessment_units (territory_code,import_checksum,unit_key,matricule,civic_number,street_name,address_unit,address_text,use_code,land_area_m2,building_floors,construction_year,land_value,building_value,total_value,role_year,market_reference_date,field_provenance,address_search_key,street_search_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",rows)
   c.execute("INSERT OR REPLACE INTO role_territory_imports (territory_code,source_version,role_year,checksum,imported_units,rejected_units,synced_at) VALUES (?,?,?,?,?,?,?)",(territory,version,year,checksum,len(rows),rejected,datetime.now(timezone.utc).isoformat()))
   c.commit()
  except Exception:
@@ -100,6 +100,45 @@ def search_role_units(database_path, territory, query, limit=20):
    rows=[dict(r) for r in cursor.fetchall()]
   cursor.close()
   return rows
+ finally:
+  c.close()
+
+
+def suggest_role_units(database_path, query, limit=8):
+ """Return a bounded, SQL-filtered list of public addresses from active roles.
+
+ Only imported territories that remain enabled are searched.  The normalized
+ keys are populated at import time and indexed, so the fallback never loads an
+ entire municipal role into memory.
+ """
+ query=' '.join(query.split())
+ if not query:return []
+ civic,street_key=_structured_query(query)
+ if not street_key:return []
+ c=sqlite3.connect(database_path)
+ try:
+  c.row_factory=sqlite3.Row
+  where="r.street_search_key LIKE ?"
+  params=[f"{street_key}%"]
+  if civic:
+   where+=" AND r.civic_number LIKE ?";params.append(f"{civic}%")
+  sql=("SELECT r.civic_number,r.street_name,r.address_unit,i.municipality "
+       "FROM role_assessment_units r "
+       "JOIN role_territory_imports imported ON imported.territory_code=r.territory_code "
+       "JOIN role_index_entries i ON i.territory_code=r.territory_code "
+       "LEFT JOIN role_territory_settings settings ON settings.territory_code=r.territory_code "
+       f"WHERE COALESCE(settings.enabled,1)=1 AND {where} "
+       "ORDER BY i.municipality,r.street_name,r.civic_number LIMIT ?")
+  rows=c.execute(sql,params+[max(1,min(limit*4,32))]).fetchall()
+  suggestions=[];seen=set()
+  for row in rows:
+   street=' '.join(part for part in (row['civic_number'],row['street_name']) if part)
+   if row['address_unit']: street=f"{street}, {row['address_unit']}"
+   signature=(_role_key(street),_role_key(row['municipality'] or ''))
+   if street and signature not in seen:
+    seen.add(signature);suggestions.append({'street':street,'city':row['municipality'] or '', 'postal_code':'','unit':'','source':'role'})
+   if len(suggestions)>=limit:break
+  return suggestions
  finally:
   c.close()
 
