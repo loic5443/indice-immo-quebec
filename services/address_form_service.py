@@ -5,7 +5,7 @@ widget is only a temporary editor; a submitted ``AddressFormState`` is the
 canonical record used for validation, local drafts and the official lookup.
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from domain.address import AddressValidationError, QuebecAddress, normalize_address
@@ -21,6 +21,10 @@ class AddressFormState:
     values: dict[str, Any]
     address: QuebecAddress | None
     errors: dict[str, str]
+    # Only non-sensitive, local provenance is kept here.  It allows an
+    # official role record that does not publish a postal code to be resumed
+    # without turning an absence in the source into a validation error.
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def valid(self) -> bool:
@@ -36,7 +40,8 @@ def empty_address_form_state() -> AddressFormState:
 
 
 def submit_address_form(
-    street: str, city: str, postal: str, unit: str = "", consent: bool = False
+    street: str, city: str, postal: str, unit: str = "", consent: bool = False,
+    *, allow_missing_postal: bool = False, metadata: dict[str, Any] | None = None,
 ) -> AddressFormState:
     """Validate the values submitted in one event and return their canonical form.
 
@@ -53,9 +58,12 @@ def submit_address_form(
         "consent": bool(consent),
     }
     try:
-        address = normalize_address(values["street"], values["city"], values["postal"], values["unit"])
+        address = normalize_address(
+            values["street"], values["city"], values["postal"], values["unit"],
+            allow_missing_postal=allow_missing_postal,
+        )
     except AddressValidationError as error:
-        return AddressFormState(values=values, address=None, errors={error.field: str(error)})
+        return AddressFormState(values=values, address=None, errors={error.field: str(error)}, metadata=dict(metadata or {}))
 
     # Keep the copied map address intact while preserving the structured street
     # separately in ``address``.  This prevents a visual/validated mismatch.
@@ -66,7 +74,7 @@ def submit_address_form(
         "postal": address.postal_code,
         "unit": address.unit,
     }
-    return AddressFormState(values=display_values, address=address, errors={})
+    return AddressFormState(values=display_values, address=address, errors={}, metadata=dict(metadata or {}))
 
 
 def serialize_address_form(state: AddressFormState) -> dict[str, Any]:
@@ -76,6 +84,7 @@ def serialize_address_form(state: AddressFormState) -> dict[str, Any]:
         "values": state.values,
         "address": asdict(state.address) if state.address else None,
         "errors": state.errors,
+        "metadata": state.metadata,
     }
 
 
@@ -93,6 +102,8 @@ def restore_address_form(payload: Any) -> AddressFormState:
         values.get("postal", ""),
         values.get("unit", ""),
         values.get("consent", False),
+        allow_missing_postal=bool((payload.get("metadata") or {}).get("postal_optional", False)),
+        metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else None,
     )
     # A malformed or obsolete draft is shown for correction, never accepted.
     return restored

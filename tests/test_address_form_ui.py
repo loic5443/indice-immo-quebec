@@ -178,6 +178,45 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
         self.assertFalse(any("source externe indisponible" in item.value for item in app.info))
 
+    def test_local_selection_without_postal_survives_confirmation_and_reruns(self):
+        """A public role can be confirmed even when its XML has no postal code."""
+        source = (
+            "from pathlib import Path\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
+            "original_searchbox = page.st_searchbox\n"
+            "original_suggest = page.suggest_addresses\n"
+            "page.suggest_addresses = lambda *_: page.SuggestionResponse('unavailable', message='source externe indisponible')\n"
+            "page.resolve_freeform_address = lambda *_: (_ for _ in ()).throw(AssertionError('la sélection locale ne doit pas appeler le fournisseur'))\n"
+            "def fake_searchbox(search_function, **kwargs):\n"
+            "    if not st.session_state.get('selected_once'):\n"
+            "        options = search_function('123 rue Ex')\n"
+            "        kwargs['submit_function'](options[0][1])\n"
+            "        st.session_state['selected_once'] = True\n"
+            "page.st_searchbox = fake_searchbox\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "if st.session_state.get('change_public_address'):\n"
+            "    page._set_address_editor_street('124 rue Nouvelle')\n"
+            "page.show_property_analysis()\n"
+            "page.st_searchbox = original_searchbox\n"
+            "page.suggest_addresses = original_suggest\n"
+        )
+        app = AppTest.from_string(source).run(timeout=20)
+        self.assertEqual(app.text_input(key="address_form_postal").value, "")
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        app.button(key="address_lookup_submit").click().run(timeout=20)
+        self.assertEqual(list(app.error), [])
+        self.assertFalse(any("source externe indisponible" in item.value for item in app.info))
+        self.assertTrue(any("code postal n’est pas publié" in item.value for item in app.info))
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        app.button(key="address_lookup_submit").click().run(timeout=20)
+        self.assertEqual(list(app.error), [])
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        app.session_state["change_public_address"] = True
+        app.run(timeout=20)
+        self.assertNotIn("Total au rôle", [metric.label for metric in app.metric])
+
     def test_street_only_submission_keeps_city_postal_and_consent_canonical(self):
         app = self._app()
         app.session_state["address_form_editor_street"] = "123 rue Exemple"

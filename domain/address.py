@@ -42,7 +42,7 @@ def normalize_canadian_postal_code(value: str) -> str | None:
   return None
  compact = _postal(value)
  return f"{compact[:3]} {compact[3:]}" if compact else None
-def _parse_street_input(value, field_city, field_postal):
+def _parse_street_input(value, field_city, field_postal, *, allow_missing_postal=False):
  """Accept a street alone or a map-style address without guessing conflicting cities."""
  original=_compact(value,"street",160); postal_in_address=None
  match=re.search(r"\b([ABCEGHJKLMNPRSTVXY]\s*\d\s*[ABCEGHJKLMNPRSTVWXYZ]\s*\d\s*[ABCEGHJKLMNPRSTVWXYZ]\s*\d)\b",original,re.I)
@@ -67,17 +67,18 @@ def _parse_street_input(value, field_city, field_postal):
  field_normalized=_postal(field_postal) if field_postal else None
  if field_postal and not field_normalized: raise AddressValidationError("postal","Le code postal doit ressembler à A1A 1A1.")
  if field_normalized and postal_in_address and field_normalized!=postal_in_address: raise AddressValidationError("postal","Le code postal de l’adresse contredit le champ Code postal.")
- if not field_normalized and not postal_in_address: raise AddressValidationError("postal","Le code postal doit ressembler à A1A 1A1.")
+ if not field_normalized and not postal_in_address and not allow_missing_postal: raise AddressValidationError("postal","Le code postal doit ressembler à A1A 1A1.")
  city=field_city
  if extracted and _search(extracted)!=_search(field_city): raise AddressValidationError("city","La ville extraite contredit le champ Ville; vérifiez laquelle est correcte.")
  return street,city,field_normalized or postal_in_address,original
-def normalize_address(street,city,postal,unit=""):
+def normalize_address(street,city,postal,unit="",*,allow_missing_postal=False):
  city=_compact(city,"city",100)
- street,city,raw_postal,original_street=_parse_street_input(street,city,postal)
+ street,city,raw_postal,original_street=_parse_street_input(street,city,postal,allow_missing_postal=allow_missing_postal)
  if not STREET_RE.fullmatch(street): raise AddressValidationError("street","Vérifiez le numéro et le nom de rue.")
  if not CITY_RE.fullmatch(city): raise AddressValidationError("city","Vérifiez le nom de la ville.")
  if unit:
   unit=_compact(unit,"unit",30)
   if not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9]",unit): raise AddressValidationError("unit","Vérifiez l’appartement ou le local.")
- formatted=normalize_canadian_postal_code(raw_postal)
- return QuebecAddress(f"{street}, {city}, QC {formatted}",street,city,formatted,unit,_search(street),_search(city),city,original_street)
+ formatted=normalize_canadian_postal_code(raw_postal) or ""
+ original=f"{street}, {city}, QC" + (f" {formatted}" if formatted else "")
+ return QuebecAddress(original,street,city,formatted,unit,_search(street),_search(city),city,original_street)

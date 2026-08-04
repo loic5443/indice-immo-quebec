@@ -158,6 +158,16 @@ def _address_state_for_current_user() -> AddressFormState:
         _clear_address_suggestions()
     if st.session_state.pop(ADDRESS_HYDRATE_KEY, False):
         _hydrate_address_widgets(state)
+    # Restoring a role-backed draft uses only the local, already-imported
+    # public record. It never calls the external geocoder again.
+    if (
+        state.valid
+        and state.metadata.get("official_source") == "role"
+        and ADDRESS_LOOKUP_KEY not in st.session_state
+    ):
+        st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup_fields(
+            state.address.street, state.address.city, bool(state.values.get("consent")), postal_available=False,
+        )
     return state
 
 
@@ -192,6 +202,7 @@ def _edit_address_field(field: str) -> None:
     values[field] = value
     errors = {name: message for name, message in state.errors.items() if name != field}
     st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors=errors)
+    st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
 
 
@@ -204,6 +215,7 @@ def _set_address_editor_street(value: str) -> None:
     errors = {name: message for name, message in state.errors.items() if name != "street"}
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = value
     st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors=errors)
+    st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
 
 
@@ -332,7 +344,8 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
             "consent": bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
         }
     )
-    st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors={})
+    metadata = {"official_source": "role", "postal_optional": True} if selected.source == "role" else {}
+    st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors={}, metadata=metadata)
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = resolved.street
     # This callback runs before the adjacent editors are instantiated in the
     # same rerun, so they can safely receive the selected canonical values.
@@ -346,6 +359,7 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup_fields(values["street"], values["city"], True, postal_available=False)
     else:
         st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
+    _persist_address_draft(st.session_state[ADDRESS_STATE_KEY])
     _clear_address_suggestions()
 
 
@@ -379,11 +393,13 @@ def _submit_address_lookup() -> None:
     city = st.session_state.get(ADDRESS_WIDGET_KEYS["city"], "")
     postal = st.session_state.get(ADDRESS_WIDGET_KEYS["postal"], "")
     consent = bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False))
+    current_state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+    local_selection = bool(current_state.metadata.get("official_source") == "role")
     st.session_state.pop(ADDRESS_RESOLUTION_KEY, None)
     # A copied address from Accueil often has no separate city/postal fields.
     # Resolve it only here, after an explicit consented action; ambiguity is
     # left to the person instead of guessing a municipality or unit.
-    if consent and street and (not city or not postal):
+    if consent and street and (not city or not postal) and not local_selection:
         try:
             geocoder_enabled = source_enabled(SOURCE_ID, DATABASE_PATH)
         except Exception:
@@ -402,12 +418,14 @@ def _submit_address_lookup() -> None:
             st.session_state[ADDRESS_EDITOR_STREET_KEY] = street
             st.session_state[ADDRESS_WIDGET_KEYS["city"]] = city
             st.session_state[ADDRESS_WIDGET_KEYS["postal"]] = postal
-    state = prepare_address_submission(
+    state = submit_address_form(
         street,
         city,
         postal,
         st.session_state.get(ADDRESS_WIDGET_KEYS["unit"], ""),
         consent,
+        allow_missing_postal=local_selection,
+        metadata=current_state.metadata if local_selection else None,
     )
     st.session_state[ADDRESS_STATE_KEY] = state
     _persist_address_draft(state)
@@ -422,9 +440,16 @@ def _submit_address_lookup() -> None:
 def _official_lookup(state: AddressFormState) -> dict:
     """Use the same canonical address for consent and the local official lookup."""
     assert state.address is not None
-    result = lookup(state.address, state.values["consent"])
-    response = _official_lookup_fields(state.address.street, state.address.city, state.values["consent"])
-    response["message"] = result["message"]
+    local_role = state.metadata.get("official_source") == "role"
+    result = None if local_role else lookup(state.address, state.values["consent"])
+    response = _official_lookup_fields(
+        state.address.street,
+        state.address.city,
+        state.values["consent"],
+        postal_available=not bool(state.metadata.get("postal_optional", False)),
+    )
+    if result is not None:
+        response["message"] = result["message"]
     response["normalized_address"] = {
         "street": state.address.street, "city": state.address.city,
         "postal": state.address.postal_code, "unit": state.address.unit,
@@ -749,8 +774,8 @@ def _show_role_overview(address_lookup: dict | None) -> None:
     elif address_lookup.get("normalized_address"):
         address = address_lookup["normalized_address"]
         st.caption(f"Adresse publique : {address['street']}, {address['city']}")
-        if not address_lookup.get("postal_available", True):
-            st.info("Le code postal n’est pas publié dans ce rôle municipal. Vous pouvez le saisir manuellement; cela ne bloque pas l’affichage de cette valeur officielle.")
+    if not address_lookup.get("postal_available", True):
+        st.info("Le code postal n’est pas publié dans ce rôle municipal. Vous pouvez le saisir manuellement; cela ne bloque pas l’affichage de cette valeur officielle.")
     if not address_lookup.get("consent"):
         st.info("Recherche publique non autorisée : activez le consentement puis lancez la recherche, ou continuez manuellement.")
         return
