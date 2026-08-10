@@ -2,7 +2,7 @@ import tempfile,unittest
 from pathlib import Path
 from data.database import initialize_database,create_user
 from services.quebec_role_admin_service import refresh_index,territories,import_territory,set_territory_enabled,territory_for_municipality
-from services.quebec_role_importer import search_role_units,role_street_variants,suggest_role_units
+from services.quebec_role_importer import display_role_address,search_role_units,role_street_variants,suggest_role_units
 
 INDEX='code géographique,nom du territoire,lien,date de modification\n01023,Les Iles,https://mamh.gouv.qc.ca/role/RM01023.xml,2026-01-01\n'.encode()
 XML=b'\xef\xbb\xbf<?xml version="1.0"?><RL><VERSION>2.9</VERSION><RLM01A>01023</RLM01A><RLM02A>2026</RLM02A><RLUEx><RL0104><RL0104A>1</RL0104A></RL0104><RL0404A>1</RL0404A></RLUEx></RL>'
@@ -33,8 +33,13 @@ class RoleAdminTests(unittest.TestCase):
   self.assertEqual(len(suggestions),1)
   self.assertEqual(suggestions[0]['city'],'Les Iles')
   self.assertEqual(suggestions[0]['postal_code'],'')
+  self.assertEqual(suggestions[0]['street'],'123 Rue Exemple')
   set_territory_enabled(1,self.db,'01023',False)
   self.assertEqual(suggest_role_units(self.db,'123 rue Ex'),[])
+
+ def test_role_address_presentation_keeps_raw_data_untouched(self):
+  self.assertEqual(display_role_address('123 RUE EXEMPLE-DU-NORD'),'123 Rue Exemple-du-Nord')
+  self.assertEqual(display_role_address('12 RUE DE LA PAIX'),'12 Rue de la Paix')
  def test_beauharnois_70022_import_keeps_observed_xml_version(self):
   index='code géographique,nom du territoire,lien,date de modification\n70022,Beauharnois,https://mamh.gouv.qc.ca/role/RM70022.xml,2025-12-19\n'.encode()
   refresh_index(1,self.db,lambda _:index)

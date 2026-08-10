@@ -148,9 +148,11 @@ def fake_searchbox(search_function, **kwargs):
         kwargs["submit_function"]({"street":"123 rue Exemple", "city":"Ville-exemple", "postal_code":"H2X 1Y4", "unit":"", "label":"123 rue Exemple · Ville-exemple · H2X 1Y4"})
 page.st_searchbox = fake_searchbox
 page.resolve_suggestion = lambda *_: page.AddressSuggestion("123 rue Exemple", "Ville-exemple", "H2X 1Y4", "", "123 rue Exemple · Ville-exemple · H2X 1Y4")
-page.show_property_analysis()
-page.st_searchbox = original_searchbox
-page.resolve_suggestion = original_resolver
+try:
+    page.show_property_analysis()
+finally:
+    page.st_searchbox = original_searchbox
+    page.resolve_suggestion = original_resolver
 '''
         app = AppTest.from_string(source).run(timeout=20)
         self.assertEqual(app.session_state["observed_debounce"], 400)
@@ -166,11 +168,17 @@ import streamlit as st
 import components.property_analysis as page
 st.session_state.setdefault("address_form_consent", True)
 st.session_state.setdefault("address_form_manual_mode", True)
+original_suggest = page.suggest_addresses
+original_searchbox = page.st_searchbox
 page.suggest_addresses = lambda query, consent: (_ for _ in ()).throw(AssertionError("provider should not run"))
 def fake_searchbox(search_function, **kwargs):
     st.session_state["manual_options"] = search_function("123 rue Exemple")
 page.st_searchbox = fake_searchbox
-page.show_property_analysis()
+try:
+    page.show_property_analysis()
+finally:
+    page.suggest_addresses = original_suggest
+    page.st_searchbox = original_searchbox
 '''
         app = AppTest.from_string(source).run(timeout=20)
         self.assertEqual(app.session_state["manual_options"], [])

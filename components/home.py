@@ -20,11 +20,10 @@ def _hero() -> str:
 
 
 def _start_from_home() -> None:
-    address = st.session_state.get("home_address", "").strip()
-    if address:
-        # The analyzer hydrates its canonical address form on the next rerun.
-        # A dedicated hand-off avoids that hydration clearing the Home field.
-        st.session_state["home_address_pending"] = address
+    # The landing page intentionally does not collect an address. Consent and
+    # public-address lookups belong exclusively to the Analyse form.
+    st.session_state["address_form_start_empty"] = True
+    st.session_state.pop("home_address_pending", None)
     go_to("Analyser")
 
 
@@ -39,10 +38,7 @@ def show_home() -> None:
         unsafe_allow_html=True,
     )
     with st.container(border=True):
-        left, action, premium = st.columns([3, 1.35, 1.2])
-        with left:
-            st.text_input("Commencez avec une adresse ou un nom de projet", key="home_address", placeholder="Ex. 123 rue Exemple")
-            st.caption("Facultatif · aucune recherche publique ne démarre sans votre consentement dans le dossier.")
+        spacer, action, premium, tail = st.columns([1.1, 1.35, 1.2, 1.1])
         with action:
             st.write("")
             st.button("Révéler la valeur", type="primary", on_click=_start_from_home, use_container_width=True)

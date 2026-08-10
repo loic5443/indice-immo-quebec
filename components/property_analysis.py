@@ -21,7 +21,7 @@ from services.comparable_csv import csv_template, validate_csv_rows
 from services.analysis_workflow import STEPS, load_draft, save_draft, normalize_step, transition
 from services.entitlements_service import quota_status, consume_estimation
 from services.address_lookup_service import lookup
-from services.quebec_role_importer import search_role_units,role_street_variants,suggest_role_units
+from services.quebec_role_importer import display_role_address,search_role_units,role_street_variants,suggest_role_units
 from services.quebec_role_admin_service import territory_for_municipality
 from services.address_form_service import (
     AddressFormState,
@@ -117,10 +117,20 @@ def _hydrate_address_widgets(state: AddressFormState) -> None:
 def _address_state_for_current_user() -> AddressFormState:
     """Load exactly one canonical state for the active user/session."""
     owner_id = _address_owner_id()
+    start_empty = bool(st.session_state.pop("address_form_start_empty", False))
+    if start_empty:
+        state = empty_address_form_state()
+        st.session_state[ADDRESS_OWNER_KEY] = owner_id
+        st.session_state[ADDRESS_STATE_KEY] = state
+        st.session_state[ADDRESS_HYDRATE_KEY] = True
+        st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+        st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
+        st.session_state.pop(ADDRESS_RESOLUTION_KEY, None)
+        _clear_address_suggestions()
     # Anonymous sessions use ``None`` as their owner id.  Test key presence,
     # not only equality, or a fresh anonymous session would skip its first
     # canonical hydration (including the Accueil → Analyser hand-off).
-    if ADDRESS_OWNER_KEY not in st.session_state or st.session_state.get(ADDRESS_OWNER_KEY) != owner_id:
+    if not start_empty and (ADDRESS_OWNER_KEY not in st.session_state or st.session_state.get(ADDRESS_OWNER_KEY) != owner_id):
         state = empty_address_form_state()
         restored_draft = False
         if owner_id is not None:
@@ -211,12 +221,42 @@ def _set_address_editor_street(value: str) -> None:
 
     state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
     values = dict(state.values)
+    current_street = str(values.get("street", ""))
+    # streamlit-searchbox can replay the partial search term on the rerun
+    # immediately following a click.  A role-backed selection is already a
+    # verified public match: keep it while that term is merely a prefix of
+    # the selected street, but still invalidate it for a genuinely different
+    # address typed by the person.
+    if (
+        state.metadata.get("official_source") in {"role", "external"}
+        and _street_query_matches_selection(value, current_street)
+    ):
+        st.session_state[ADDRESS_EDITOR_STREET_KEY] = current_street
+        return
+    # Searchbox reruns may repeat the selected text. Keep a confirmed public
+    # result until the person has actually changed the address.
+    if useful_query(value) == useful_query(current_street):
+        st.session_state[ADDRESS_EDITOR_STREET_KEY] = value
+        return
     values["street"] = value
     errors = {name: message for name, message in state.errors.items() if name != "street"}
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = value
     st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors=errors)
     st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+
+
+def _street_query_matches_selection(query: str, selected: str) -> bool:
+    """Return whether a replayed search term still describes one selection."""
+
+    def key(value: str) -> str:
+        text = unicodedata.normalize("NFD", useful_query(value).casefold())
+        text = "".join(char for char in text if not unicodedata.combining(char))
+        text = re.sub(r"\b(rue|avenue|av\.?|boulevard|boul\.?|chemin|route|rang|place|montee)\b", " ", text)
+        return "".join(char for char in text if char.isalnum())
+
+    query_key, selected_key = key(query), key(selected)
+    return bool(query_key and selected_key and selected_key.startswith(query_key))
 
 
 def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
@@ -269,11 +309,11 @@ def _suggestion_key(suggestion: AddressSuggestion) -> str:
 
 
 def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: list[AddressSuggestion]) -> list[AddressSuggestion]:
-    """Keep external results first while deduplicating a bounded local fallback."""
+    """Prefer already-synchronized official roles, then deduplicate MRNF results."""
 
     merged: list[AddressSuggestion] = []
     seen: set[str] = set()
-    for suggestion in (*external, *local):
+    for suggestion in (*local, *external):
         key = _suggestion_key(suggestion)
         if key and key not in seen:
             seen.add(key)
@@ -281,6 +321,57 @@ def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: l
         if len(merged) >= 8:
             break
     return merged
+
+
+def _same_public_address(left: AddressSuggestion, right: AddressSuggestion) -> bool:
+    """Match a role address to a geocoded candidate without guessing."""
+
+    def key(value: str, *, street: bool) -> str:
+        text = unicodedata.normalize("NFD", value.casefold())
+        text = "".join(char for char in text if not unicodedata.combining(char))
+        if street:
+            text = re.sub(r"\b(rue|avenue|av\.?|boulevard|boul\.?|chemin|route|rang|place|montee)\b", " ", text)
+        return "".join(char for char in text if char.isalnum())
+
+    return bool(
+        left.street and right.street and left.city and right.city
+        and key(left.street, street=True) == key(right.street, street=True)
+        and key(left.city, street=False) == key(right.city, street=False)
+    )
+
+
+def _same_suggestion_text(left: AddressSuggestion, right: AddressSuggestion) -> bool:
+    """Compare public selection text without retaining provider payloads."""
+
+    def key(value: str) -> str:
+        text = unicodedata.normalize("NFD", value.casefold())
+        return "".join(char for char in text if char.isalnum() and not unicodedata.combining(char))
+
+    return bool(left.label and right.label and key(left.label) == key(right.label))
+
+
+def _enrich_local_suggestion(selected: AddressSuggestion, consent: bool) -> AddressSuggestion | None:
+    """Use MRNF after a click to fill a postal code absent from a role.
+
+    An unavailable enrichment is intentionally silent: the selected local role
+    remains valid public information and must never be replaced by an error.
+    """
+
+    if not consent:
+        return None
+    try:
+        enabled = source_enabled(SOURCE_ID, DATABASE_PATH)
+    except Exception:
+        enabled = False
+    if not enabled:
+        return None
+    response = resolve_freeform_address(f"{selected.street}, {selected.city}", True)
+    if response.status != "ok":
+        return None
+    for candidate in response.suggestions:
+        if _same_public_address(selected, candidate):
+            return candidate
+    return None
 
 
 def _on_address_city_change() -> None:
@@ -322,9 +413,25 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     )
     if selected.source == "empty":
         return
-    # The official endpoint resolves the opaque selection key to structured
-    # fields only after a person clicks it.  The key stays session-only.
-    resolved = selected if selected.source == "role" else resolve_suggestion(selected, bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)))
+    consent = bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False))
+    # The official endpoint resolves an opaque selection key only after a
+    # click. A local role result is already authoritative; an exact MRNF match
+    # can enrich it with a postal code but failure must not remove the role.
+    if selected.source == "role":
+        resolved = _enrich_local_suggestion(selected, consent) or selected
+    else:
+        resolved = resolve_suggestion(selected, consent)
+        if resolved is None:
+            # Some official type-ahead responses expose a key that cannot be
+            # resolved again by the provider. Retry the same, already
+            # consented public label through the documented free-form
+            # operation and accept only an exact public match.
+            fallback = resolve_freeform_address(selected.label, consent)
+            if fallback.status == "ok":
+                resolved = next(
+                    (candidate for candidate in fallback.suggestions if _same_suggestion_text(selected, candidate)),
+                    None,
+                )
     if resolved is None:
         _clear_address_suggestions()
         st.session_state[ADDRESS_SUGGESTIONS_KEY] = SuggestionResponse(
@@ -341,11 +448,23 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
             "city": resolved.city or values.get("city", ""),
             "postal": resolved.postal_code or values.get("postal", ""),
             "unit": resolved.unit or values.get("unit", ""),
-            "consent": bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
+            "consent": consent,
         }
     )
-    metadata = {"official_source": "role", "postal_optional": True} if selected.source == "role" else {}
-    st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors={}, metadata=metadata)
+    metadata = {
+        "official_source": selected.source,
+        "postal_optional": selected.source == "role" and not bool(resolved.postal_code),
+    }
+    selected_state = submit_address_form(
+        values["street"],
+        values["city"],
+        values["postal"],
+        values["unit"],
+        consent,
+        allow_missing_postal=bool(metadata["postal_optional"]),
+        metadata=metadata,
+    )
+    st.session_state[ADDRESS_STATE_KEY] = selected_state
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = resolved.street
     # This callback runs before the adjacent editors are instantiated in the
     # same rerun, so they can safely receive the selected canonical values.
@@ -356,10 +475,11 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     if selected.source == "role":
         st.session_state[ADDRESS_LOCAL_SELECTED_KEY] = True
-        st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup_fields(values["street"], values["city"], True, postal_available=False)
     else:
         st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
-    _persist_address_draft(st.session_state[ADDRESS_STATE_KEY])
+    if selected_state.valid:
+        st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(selected_state)
+    _persist_address_draft(selected_state)
     _clear_address_suggestions()
 
 
@@ -588,6 +708,7 @@ def show_property_analysis() -> None:
         )
         street, city, postal, unit = st.columns(4)
         with street:
+            suggestion_actions = st.container()
             st_searchbox(
                 _autocomplete_options,
                 label="Adresse",
@@ -652,6 +773,21 @@ def show_property_analysis() -> None:
                     st.caption(f"Sources : {SOURCE_LABEL} et rôles municipaux officiels synchronisés · résultats publics, non enregistrés automatiquement.")
                 else:
                     st.caption(f"Source : {SOURCE_LABEL} · résultats publics, non enregistrés automatiquement.")
+                # The live component opens a list while typing. Keep an
+                # accessible Streamlit action for the same ephemeral options
+                # as well: it makes selection reliable on every supported
+                # browser/component combination, without storing an address
+                # or requiring Enter, Tab or a second search.
+                with suggestion_actions:
+                    st.caption("Choisissez une suggestion pour remplir les renseignements disponibles.")
+                    for index, suggestion in enumerate(suggestion_response.suggestions):
+                        st.button(
+                            suggestion.label,
+                            key=f"address_suggestion_select_{index}",
+                            on_click=_select_address_suggestion,
+                            args=(suggestion.to_option(),),
+                            use_container_width=True,
+                        )
         st.caption("Après votre consentement, cette action peut d’abord révéler la valeur au rôle municipal; ImmoValue reste une estimation marchande distincte, calculable avec au moins trois comparables autorisés.")
         st.button(
             "Rechercher et révéler les renseignements disponibles",
@@ -784,7 +920,12 @@ def _show_role_overview(address_lookup: dict | None) -> None:
         return
     matches = address_lookup.get("matches", [])
     if matches:
-        chosen = st.selectbox("Unité officielle trouvée", range(len(matches)), key="official_role_unit", format_func=lambda index: matches[index]["address_text"] or matches[index]["matricule"] or "Unité officielle")
+        chosen = st.selectbox(
+            "Unité officielle trouvée", range(len(matches)), key="official_role_unit",
+            format_func=lambda index: display_role_address(
+                matches[index]["address_text"] or matches[index]["matricule"] or "Unité officielle"
+            ),
+        )
         match = matches[chosen]
         st.markdown("<article class='official-role-card'><span class='data-pill real'>Valeur municipale officielle</span><h3>Valeur au rôle — ce n’est pas une valeur marchande</h3></article>", unsafe_allow_html=True)
         land, building, total = st.columns(3)

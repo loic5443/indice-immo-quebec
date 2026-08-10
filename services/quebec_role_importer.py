@@ -72,6 +72,19 @@ def _role_key(value):
  return "".join(character for character in value if character.isalnum())
 
 
+def display_role_address(value):
+ """Return a readable label without changing raw official XML fields.
+
+ Municipal role XML often capitalizes road names. This is presentation-only:
+ searches and stored records continue to use the untouched public values.
+ """
+ text=' '.join(str(value or '').split())
+ if not text or text != text.upper(): return text
+ label=text.lower().title()
+ # Keep common French joining words lower-case when they are not leading.
+ return re.sub(r"(?<!^)\b(De|Du|Des|La|Le|Les|Et)\b",lambda match:match.group(1).lower(),label)
+
+
 def _structured_query(query):
  match=re.match(r"^\s*(\d+(?:\s*[-–—]\s*\d+)?[A-Za-zÀ-ÖØ-öø-ÿ]?)\s*,?\s*(.+?)\s*$",query)
  return (match.group(1),_role_key(match.group(2))) if match else (None,None)
@@ -134,6 +147,7 @@ def suggest_role_units(database_path, query, limit=8):
   for row in rows:
    street=' '.join(part for part in (row['civic_number'],row['street_name']) if part)
    if row['address_unit']: street=f"{street}, {row['address_unit']}"
+   street=display_role_address(street)
    signature=(_role_key(street),_role_key(row['municipality'] or ''))
    if street and signature not in seen:
     seen.add(signature);suggestions.append({'street':street,'city':row['municipality'] or '', 'postal_code':'','unit':'','source':'role'})

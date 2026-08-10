@@ -94,8 +94,8 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
 
-    def test_home_address_is_handed_to_the_canonical_analyzer_editor(self):
-        """The actual Accueil button keeps its value through routing and reruns."""
+    def test_home_reveal_opens_the_empty_canonical_analyzer_form(self):
+        """Accueil never collects an address; Analyse owns the empty form."""
         source = (
             "from pathlib import Path\n"
             "import streamlit as st\n"
@@ -114,24 +114,27 @@ class AddressFormUiTests(unittest.TestCase):
         app.run(timeout=20)
         app.session_state["main_navigation"] = "Accueil"
         app.run(timeout=20)
-        app.text_input(key="home_address").set_value("122 rue Publique, Territoire-test").run(timeout=20)
+        self.assertEqual(list(app.text_input), [])
         next(button for button in app.button if button.label == "Révéler la valeur").click().run(timeout=20)
         app.run(timeout=20)
         self.assertEqual(app.session_state["main_navigation"], "Analyser")
-        self.assertEqual(app.session_state["address_form_editor_street"], "122 rue Publique, Territoire-test")
+        self.assertEqual(app.session_state["address_form_editor_street"], "")
+        self.assertEqual(app.text_input(key="address_form_city").value, "")
+        self.assertEqual(app.text_input(key="address_form_postal").value, "")
         self.assertEqual(list(app.exception), [])
 
-    def test_consented_home_address_resolves_and_shows_public_role_without_calculation(self):
-        """One public fixture candidate fills the hand-off before local role lookup."""
+    def test_consented_address_form_shows_public_role_without_calculation(self):
+        """The Analyser form reveals a covered public role without financial calculation."""
         source = (
             "from pathlib import Path\n"
             "import components.property_analysis as page\n"
             f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
-            "page.resolve_freeform_address = lambda *_: page.SuggestionResponse('ok', (page.AddressSuggestion('123 rue Exemple', 'Ville-exemple', 'H2X 1Y4', '', '123 rue Exemple · Ville-exemple · H2X 1Y4'),))\n"
             "page.show_property_analysis()\n"
         )
         app = AppTest.from_string(source).run(timeout=20)
-        app.session_state["address_form_editor_street"] = "122 rue Publique, Territoire-test"
+        app.session_state["address_form_editor_street"] = "123 rue Exemple"
+        app.session_state["address_form_city"] = "Ville-exemple"
+        app.session_state["address_form_postal"] = "H2X 1Y4"
         app.checkbox(key="address_form_consent").set_value(True)
         app.button(key="address_lookup_submit").click().run(timeout=20)
         self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
@@ -144,8 +147,12 @@ class AddressFormUiTests(unittest.TestCase):
             "from pathlib import Path\n"
             "import components.property_analysis as page\n"
             f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
+            "original_resolver = page.resolve_freeform_address\n"
             "page.resolve_freeform_address = lambda *_: (_ for _ in ()).throw(AssertionError('public lookup should not run'))\n"
-            "page.show_property_analysis()\n"
+            "try:\n"
+            "    page.show_property_analysis()\n"
+            "finally:\n"
+            "    page.resolve_freeform_address = original_resolver\n"
         )
         app = AppTest.from_string(source).run(timeout=20)
         app.session_state["address_form_editor_street"] = "122 rue Publique, Territoire-test"
@@ -168,9 +175,11 @@ class AddressFormUiTests(unittest.TestCase):
             "    kwargs['submit_function'](options[0][1])\n"
             "page.st_searchbox = fake_searchbox\n"
             "st.session_state.setdefault('address_form_consent', True)\n"
-            "page.show_property_analysis()\n"
-            "page.st_searchbox = original_searchbox\n"
-            "page.suggest_addresses = original_suggest\n"
+            "try:\n"
+            "    page.show_property_analysis()\n"
+            "finally:\n"
+            "    page.st_searchbox = original_searchbox\n"
+            "    page.suggest_addresses = original_suggest\n"
         )
         app = AppTest.from_string(source).run(timeout=20)
         self.assertTrue(app.session_state["local_options"])
@@ -187,8 +196,9 @@ class AddressFormUiTests(unittest.TestCase):
             f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
             "original_searchbox = page.st_searchbox\n"
             "original_suggest = page.suggest_addresses\n"
+            "original_resolver = page.resolve_freeform_address\n"
             "page.suggest_addresses = lambda *_: page.SuggestionResponse('unavailable', message='source externe indisponible')\n"
-            "page.resolve_freeform_address = lambda *_: (_ for _ in ()).throw(AssertionError('la sélection locale ne doit pas appeler le fournisseur'))\n"
+            "page.resolve_freeform_address = lambda *_: page.SuggestionResponse('unavailable', message='source externe indisponible')\n"
             "def fake_searchbox(search_function, **kwargs):\n"
             "    if not st.session_state.get('selected_once'):\n"
             "        options = search_function('123 rue Ex')\n"
@@ -196,11 +206,16 @@ class AddressFormUiTests(unittest.TestCase):
             "        st.session_state['selected_once'] = True\n"
             "page.st_searchbox = fake_searchbox\n"
             "st.session_state.setdefault('address_form_consent', True)\n"
+            "if st.session_state.get('repeat_public_address'):\n"
+            "    page._set_address_editor_street('123 Rue Exemple')\n"
             "if st.session_state.get('change_public_address'):\n"
             "    page._set_address_editor_street('124 rue Nouvelle')\n"
-            "page.show_property_analysis()\n"
-            "page.st_searchbox = original_searchbox\n"
-            "page.suggest_addresses = original_suggest\n"
+            "try:\n"
+            "    page.show_property_analysis()\n"
+            "finally:\n"
+            "    page.st_searchbox = original_searchbox\n"
+            "    page.suggest_addresses = original_suggest\n"
+            "    page.resolve_freeform_address = original_resolver\n"
         )
         app = AppTest.from_string(source).run(timeout=20)
         self.assertEqual(app.text_input(key="address_form_postal").value, "")
@@ -213,9 +228,65 @@ class AddressFormUiTests(unittest.TestCase):
         app.button(key="address_lookup_submit").click().run(timeout=20)
         self.assertEqual(list(app.error), [])
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        app.session_state["repeat_public_address"] = True
+        app.run(timeout=20)
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
         app.session_state["change_public_address"] = True
         app.run(timeout=20)
         self.assertNotIn("Total au rôle", [metric.label for metric in app.metric])
+
+    def test_suggestion_actions_remain_clickable_when_the_live_widget_cannot_submit(self):
+        """Server-rendered suggestion actions back up the live searchbox selection."""
+        source = (
+            "from pathlib import Path\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
+            "original_searchbox = page.st_searchbox\n"
+            "original_suggest = page.suggest_addresses\n"
+            "page.suggest_addresses = lambda *_: page.SuggestionResponse('unavailable', message='source externe indisponible')\n"
+            "def fake_searchbox(search_function, **kwargs):\n"
+            "    search_function('123 rue Ex')\n"
+            "page.st_searchbox = fake_searchbox\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "try:\n"
+            "    page.show_property_analysis()\n"
+            "finally:\n"
+            "    page.st_searchbox = original_searchbox\n"
+            "    page.suggest_addresses = original_suggest\n"
+        )
+        app = AppTest.from_string(source).run(timeout=20)
+        self.assertEqual(app.button(key="address_suggestion_select_0").label, "123 Rue Exemple · Ville-exemple")
+        app.button(key="address_suggestion_select_0").click().run(timeout=20)
+        self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+
+    def test_local_selection_enriches_postal_without_delaying_role_result(self):
+        source = (
+            "from pathlib import Path\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
+            "original_searchbox = page.st_searchbox\n"
+            "original_resolver = page.resolve_freeform_address\n"
+            "page.resolve_freeform_address = lambda *_: page.SuggestionResponse('ok', (page.AddressSuggestion('123 Rue Exemple', 'Ville-exemple', 'H2X 1Y4', '', '123 Rue Exemple · Ville-exemple · H2X 1Y4'),))\n"
+            "def fake_searchbox(search_function, **kwargs):\n"
+            "    options = search_function('123 rue Ex')\n"
+            "    st.session_state['local_labels'] = [label for label, _ in options]\n"
+            "    kwargs['submit_function'](options[0][1])\n"
+            "page.st_searchbox = fake_searchbox\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "try:\n"
+            "    page.show_property_analysis()\n"
+            "finally:\n"
+            "    page.st_searchbox = original_searchbox\n"
+            "    page.resolve_freeform_address = original_resolver\n"
+        )
+        app = AppTest.from_string(source).run(timeout=20)
+        self.assertEqual(app.session_state["local_labels"], ["123 Rue Exemple · Ville-exemple"])
+        self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        self.assertFalse(any("code postal n’est pas publié" in item.value for item in app.info))
 
     def test_street_only_submission_keeps_city_postal_and_consent_canonical(self):
         app = self._app()
