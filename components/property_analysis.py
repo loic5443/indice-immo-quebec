@@ -5,7 +5,7 @@ import re
 import unicodedata
 
 import streamlit as st
-from streamlit_searchbox import st_searchbox
+from st_keyup import st_keyup
 
 from calculations.real_estate import AnalysisResult, PropertyInputs, calculate_analysis, validate_inputs
 from components.account import current_user, is_authenticated
@@ -70,6 +70,7 @@ ADDRESS_SUGGESTIONS_KEY = "address_form_suggestions"
 ADDRESS_SUGGESTION_QUERY_KEY = "address_form_suggestion_query"
 ADDRESS_AUTOCOMPLETE_KEY = "address_form_autocomplete"
 ADDRESS_EDITOR_STREET_KEY = "address_form_editor_street"
+ADDRESS_STREET_INPUT_KEY = "address_form_street_input"
 ADDRESS_MANUAL_MODE_KEY = "address_form_manual_mode"
 ADDRESS_RESOLUTION_KEY = "address_form_resolution"
 ADDRESS_RESOLUTION_SELECTION_KEY = "address_form_resolution_selection"
@@ -110,8 +111,9 @@ def _hydrate_address_widgets(state: AddressFormState) -> None:
         if field != "street":
             st.session_state[key] = state.values[field]
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = state.values["street"]
-    # The search component owns its own frontend state. Reset it only before
-    # rendering, so a selected address and the visible editor never diverge.
+    st.session_state[ADDRESS_STREET_INPUT_KEY] = state.values["street"]
+    # Clear the legacy component state so an old browser session cannot retain
+    # a second suggestions menu after switching to the native editor.
     st.session_state.pop(ADDRESS_AUTOCOMPLETE_KEY, None)
 
 
@@ -148,6 +150,8 @@ def _address_state_for_current_user() -> AddressFormState:
                     values[field] = st.session_state[key]
             if ADDRESS_EDITOR_STREET_KEY in st.session_state:
                 values["street"] = st.session_state[ADDRESS_EDITOR_STREET_KEY]
+            elif ADDRESS_STREET_INPUT_KEY in st.session_state:
+                values["street"] = st.session_state[ADDRESS_STREET_INPUT_KEY]
             state = AddressFormState(values=values, address=None, errors={})
         st.session_state[ADDRESS_OWNER_KEY] = owner_id
         st.session_state[ADDRESS_STATE_KEY] = state
@@ -301,13 +305,6 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
         # non-selectable status item keeps its listbox clear and French.
         return [(response.message or "Aucune adresse publique ne correspond. Vous pouvez poursuivre en mode manuel.", {"source": "empty", "label": response.message})]
     return [(suggestion.label, suggestion.to_option()) for suggestion in response.suggestions]
-
-
-def _autocomplete_editor(query: str) -> list[tuple[str, dict[str, str]]]:
-    """Refresh the canonical list without showing a second component menu."""
-
-    _autocomplete_options(query)
-    return []
 
 
 def _suggestion_key(suggestion: AddressSuggestion) -> str:
@@ -501,6 +498,7 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     )
     st.session_state[ADDRESS_STATE_KEY] = selected_state
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = resolved.street
+    st.session_state[ADDRESS_STREET_INPUT_KEY] = resolved.street
     # This callback runs before the adjacent editors are instantiated in the
     # same rerun, so they can safely receive the selected canonical values.
     st.session_state[ADDRESS_WIDGET_KEYS["city"]] = values["city"]
@@ -571,6 +569,7 @@ def _submit_address_lookup() -> None:
             city = candidate.city or city
             postal = candidate.postal_code or postal
             st.session_state[ADDRESS_EDITOR_STREET_KEY] = street
+            st.session_state[ADDRESS_STREET_INPUT_KEY] = street
             st.session_state[ADDRESS_WIDGET_KEYS["city"]] = city
             st.session_state[ADDRESS_WIDGET_KEYS["postal"]] = postal
     state = submit_address_form(
@@ -743,27 +742,12 @@ def show_property_analysis() -> None:
         )
         street, city, postal, unit = st.columns(4)
         with street:
-            st_searchbox(
-                _autocomplete_editor,
+            editor_street = st_keyup(
                 label="Adresse",
                 placeholder="Ex. 123 rue Exemple",
-                default=address_state.values["street"] or None,
-                default_searchterm=address_state.values["street"],
-                default_use_searchterm=True,
-                clear_on_submit=False,
-                edit_after_submit="option",
+                value=address_state.values["street"],
+                key=ADDRESS_STREET_INPUT_KEY,
                 debounce=400,
-                key=ADDRESS_AUTOCOMPLETE_KEY,
-                # Selection is rendered once below as a bounded Streamlit
-                # list. Hiding the component's own menu avoids two competing
-                # lists and keeps the editor fixed while typing.
-                style_overrides={
-                    "dropdown": {"height": 0},
-                    "searchbox": {
-                        "optionEmpty": "hidden",
-                        "menuList": {"display": "none"},
-                    },
-                },
             )
             suggestion_actions = st.empty()
             if "street" in address_state.errors:
@@ -800,8 +784,29 @@ def show_property_analysis() -> None:
                 st.info("Aucune adresse publique correspondante n’a été trouvée. Vérifiez l’adresse ou poursuivez en mode manuel.")
             elif resolution.status in {"unavailable", "rate_limited", "too_short"}:
                 st.info(resolution.message)
+        current_state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+        selected_street = current_state.values.get("street", "")
+        # The keyup component may briefly return its pre-click value during
+        # the rerun that follows a server-rendered suggestion click. Never let
+        # that transient blank overwrite a verified public selection.
+        if (
+            current_state.valid
+            and current_state.metadata.get("official_source") in {"role", "external"}
+            and not useful_query(editor_street)
+        ):
+            editor_street = selected_street
+        _set_address_editor_street(editor_street)
+        editor_street = st.session_state.get(ADDRESS_EDITOR_STREET_KEY, editor_street)
+        current_query = useful_query(editor_street)
+        if (
+            current_state.valid
+            and current_state.metadata.get("official_source") in {"role", "external"}
+            and useful_query(editor_street) == useful_query(selected_street)
+        ):
+            _clear_address_suggestions()
+        else:
+            _autocomplete_options(editor_street)
         suggestion_response = st.session_state.get(ADDRESS_SUGGESTIONS_KEY)
-        current_query = useful_query(st.session_state.get(ADDRESS_EDITOR_STREET_KEY, ""))
         if suggestion_response and st.session_state.get(ADDRESS_SUGGESTION_QUERY_KEY) == current_query:
             if suggestion_response.status == "ok" and not suggestion_response.suggestions and len(current_query) >= 3:
                 st.info("Aucune suggestion trouvée. Vous pouvez poursuivre avec la saisie manuelle.")

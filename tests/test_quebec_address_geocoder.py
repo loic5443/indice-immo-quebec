@@ -144,26 +144,19 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
 
 
 class QuebecAddressGeocoderUiTests(unittest.TestCase):
-    def test_searchbox_is_debounced_and_hides_its_internal_dropdown(self):
+    def test_live_editor_has_no_embedded_suggestion_menu(self):
         from streamlit.testing.v1 import AppTest
 
         source = '''
-import streamlit as st
 import components.property_analysis as page
-original_searchbox = page.st_searchbox
-def fake_searchbox(search_function, **kwargs):
-    st.session_state["observed_debounce"] = kwargs["debounce"]
-    st.session_state["observed_style"] = kwargs["style_overrides"]
-page.st_searchbox = fake_searchbox
-try:
-    page.show_property_analysis()
-finally:
-    page.st_searchbox = original_searchbox
+page.show_property_analysis()
 '''
         app = AppTest.from_string(source).run(timeout=20)
-        self.assertEqual(app.session_state["observed_debounce"], 400)
-        self.assertEqual(app.session_state["observed_style"]["dropdown"]["height"], 0)
-        self.assertEqual(app.session_state["observed_style"]["searchbox"]["optionEmpty"], "hidden")
+        component_source = Path("components/property_analysis.py").read_text(encoding="utf-8")
+        self.assertNotIn("streamlit_searchbox", component_source)
+        self.assertNotIn("st_searchbox(", component_source)
+        self.assertIn("st_keyup(", component_source)
+        self.assertIn("debounce=400", component_source)
 
     def test_manual_mode_never_calls_provider(self):
         from streamlit.testing.v1 import AppTest
@@ -173,18 +166,14 @@ import streamlit as st
 import components.property_analysis as page
 st.session_state.setdefault("address_form_consent", True)
 st.session_state.setdefault("address_form_manual_mode", True)
+st.session_state.setdefault("address_form_street_input", "123 rue Exemple")
 original_suggest = page.suggest_addresses
-original_searchbox = page.st_searchbox
 page.suggest_addresses = lambda query, consent: (_ for _ in ()).throw(AssertionError("provider should not run"))
-def fake_searchbox(search_function, **kwargs):
-    st.session_state["manual_options"] = search_function("123 rue Exemple")
-page.st_searchbox = fake_searchbox
 try:
     page.show_property_analysis()
 finally:
     page.suggest_addresses = original_suggest
-    page.st_searchbox = original_searchbox
 '''
         app = AppTest.from_string(source).run(timeout=20)
-        self.assertEqual(app.session_state["manual_options"], [])
+        self.assertNotIn("address_form_suggestions", app.session_state)
         self.assertTrue(any("Mode manuel actif" in item.value for item in app.caption))
