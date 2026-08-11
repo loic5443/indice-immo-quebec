@@ -155,8 +155,11 @@ page.show_property_analysis()
         component_source = Path("components/property_analysis.py").read_text(encoding="utf-8")
         self.assertNotIn("streamlit_searchbox", component_source)
         self.assertNotIn("st_searchbox(", component_source)
-        self.assertIn("st_keyup(", component_source)
-        self.assertIn("debounce=400", component_source)
+        self.assertIn("live_text_input(", component_source)
+        self.assertIn("debounce_ms=400", component_source)
+        live_component_source = Path("components/live_text_input_frontend/main.js").read_text(encoding="utf-8")
+        self.assertIn('addEventListener("input", scheduleValue)', live_component_source)
+        self.assertIn('addEventListener("keyup", scheduleValue)', live_component_source)
 
     def test_manual_mode_never_calls_provider(self):
         from streamlit.testing.v1 import AppTest

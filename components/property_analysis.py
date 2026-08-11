@@ -5,10 +5,10 @@ import re
 import unicodedata
 
 import streamlit as st
-from st_keyup import st_keyup
 
 from calculations.real_estate import AnalysisResult, PropertyInputs, calculate_analysis, validate_inputs
 from components.account import current_user, is_authenticated
+from components.live_text_input import live_text_input
 from components.immoengine import show_immoengine_result
 from components.scenarios import show_scenarios
 from components.sidebar import go_to
@@ -742,12 +742,12 @@ def show_property_analysis() -> None:
         )
         street, city, postal, unit = st.columns(4)
         with street:
-            editor_street = st_keyup(
+            editor_street = live_text_input(
                 label="Adresse",
                 placeholder="Ex. 123 rue Exemple",
                 value=address_state.values["street"],
                 key=ADDRESS_STREET_INPUT_KEY,
-                debounce=400,
+                debounce_ms=400,
             )
             suggestion_actions = st.empty()
             if "street" in address_state.errors:
