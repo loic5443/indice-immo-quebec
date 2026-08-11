@@ -126,39 +126,44 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
     def test_external_and_local_options_are_deduplicated_and_limited(self):
         from components.property_analysis import _merge_address_suggestions
 
-        external = (AddressSuggestion("", "", "", "", "123 rue Exemple · Ville-exemple · H2X 1Y4", "opaque"),)
+        external = (
+            AddressSuggestion(
+                "",
+                "",
+                "",
+                "",
+                "123 Rue Exemple · Ville-exemple · H2X 1Y4",
+                "external",
+            ),
+        )
         local = [AddressSuggestion("123 rue Exemple", "Ville-exemple", "", "", "123 rue Exemple · Ville-exemple", source="role") for _ in range(10)]
         merged = _merge_address_suggestions(external, local)
         self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0].source, "role")
+        self.assertEqual(merged[0].postal_code, "H2X 1Y4")
 
 
 class QuebecAddressGeocoderUiTests(unittest.TestCase):
-    def test_searchbox_is_debounced_and_selection_populates_fields(self):
+    def test_searchbox_is_debounced_and_hides_its_internal_dropdown(self):
         from streamlit.testing.v1 import AppTest
 
         source = '''
 import streamlit as st
 import components.property_analysis as page
 original_searchbox = page.st_searchbox
-original_resolver = page.resolve_suggestion
 def fake_searchbox(search_function, **kwargs):
     st.session_state["observed_debounce"] = kwargs["debounce"]
-    if not st.session_state.get("selected_once"):
-        st.session_state["selected_once"] = True
-        kwargs["submit_function"]({"street":"123 rue Exemple", "city":"Ville-exemple", "postal_code":"H2X 1Y4", "unit":"", "label":"123 rue Exemple · Ville-exemple · H2X 1Y4"})
+    st.session_state["observed_style"] = kwargs["style_overrides"]
 page.st_searchbox = fake_searchbox
-page.resolve_suggestion = lambda *_: page.AddressSuggestion("123 rue Exemple", "Ville-exemple", "H2X 1Y4", "", "123 rue Exemple · Ville-exemple · H2X 1Y4")
 try:
     page.show_property_analysis()
 finally:
     page.st_searchbox = original_searchbox
-    page.resolve_suggestion = original_resolver
 '''
         app = AppTest.from_string(source).run(timeout=20)
         self.assertEqual(app.session_state["observed_debounce"], 400)
-        self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
-        self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
-        self.assertEqual(list(app.error), [])
+        self.assertEqual(app.session_state["observed_style"]["dropdown"]["height"], 0)
+        self.assertEqual(app.session_state["observed_style"]["searchbox"]["optionEmpty"], "hidden")
 
     def test_manual_mode_never_calls_provider(self):
         from streamlit.testing.v1 import AppTest

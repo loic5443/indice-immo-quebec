@@ -74,6 +74,7 @@ ADDRESS_MANUAL_MODE_KEY = "address_form_manual_mode"
 ADDRESS_RESOLUTION_KEY = "address_form_resolution"
 ADDRESS_RESOLUTION_SELECTION_KEY = "address_form_resolution_selection"
 ADDRESS_LOCAL_SELECTED_KEY = "address_form_local_selected"
+MAX_ADDRESS_SUGGESTIONS = 6
 ADDRESS_WIDGET_KEYS = {
     "street": "address_form_street",
     "city": "address_form_city",
@@ -284,7 +285,7 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
             street=row["street"], city=row["city"], postal_code=row["postal_code"],
             unit=row["unit"], label=" · ".join(part for part in (row["street"], row["city"]) if part), source="role",
         )
-        for row in suggest_role_units(DATABASE_PATH, query, limit=8)
+        for row in suggest_role_units(DATABASE_PATH, query, limit=MAX_ADDRESS_SUGGESTIONS)
     ]
     combined = _merge_address_suggestions(external.suggestions, local)
     if combined:
@@ -302,25 +303,59 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
     return [(suggestion.label, suggestion.to_option()) for suggestion in response.suggestions]
 
 
+def _autocomplete_editor(query: str) -> list[tuple[str, dict[str, str]]]:
+    """Refresh the canonical list without showing a second component menu."""
+
+    _autocomplete_options(query)
+    return []
+
+
 def _suggestion_key(suggestion: AddressSuggestion) -> str:
-    value = re.sub(r"\b[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d\b", "", suggestion.label, flags=re.I)
+    # Providers do not always use the same street-type spelling as the
+    # municipal role (for example, "Rue" can be omitted). Compare the
+    # structured street and city, not the display label or its postal code.
+    value = " ".join((suggestion.street, suggestion.city)).strip() or suggestion.label
+    value = re.sub(
+        r"\b[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d\b",
+        "",
+        value,
+        flags=re.I,
+    )
+    value = re.sub(r"\b(rue|avenue|av\.?|boulevard|boul\.?|chemin|route|rang|place|montee)\b", " ", value, flags=re.I)
     value = "".join(char for char in unicodedata.normalize("NFD", value.casefold()) if not unicodedata.combining(char))
     return "".join(char for char in value if char.isalnum())
 
 
 def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: list[AddressSuggestion]) -> list[AddressSuggestion]:
-    """Prefer already-synchronized official roles, then deduplicate MRNF results."""
+    """Return one compact list, enriching a matching local role when possible."""
 
     merged: list[AddressSuggestion] = []
-    seen: set[str] = set()
+    positions: dict[str, int] = {}
     for suggestion in (*local, *external):
         key = _suggestion_key(suggestion)
-        if key and key not in seen:
-            seen.add(key)
+        if not key:
+            continue
+        position = positions.get(key)
+        if position is None:
+            positions[key] = len(merged)
             merged.append(suggestion)
-        if len(merged) >= 8:
-            break
-    return merged
+            continue
+        current = merged[position]
+        # A role unit is directly linked to its municipal values. Preserve that
+        # link while adding an official postal code exposed by MRNF's label.
+        if current.source == "role" and suggestion.source != "role" and not current.postal_code:
+            postal_match = re.search(r"\b[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d\b", suggestion.label, re.I)
+            postal = normalize_canadian_postal_code(postal_match.group(0)) if postal_match else ""
+            if postal:
+                merged[position] = AddressSuggestion(
+                    street=current.street,
+                    city=current.city,
+                    postal_code=postal,
+                    unit=current.unit,
+                    label=" · ".join(part for part in (current.street, current.city, postal) if part),
+                    source="role",
+                )
+    return merged[:MAX_ADDRESS_SUGGESTIONS]
 
 
 def _same_public_address(left: AddressSuggestion, right: AddressSuggestion) -> bool:
@@ -708,9 +743,8 @@ def show_property_analysis() -> None:
         )
         street, city, postal, unit = st.columns(4)
         with street:
-            suggestion_actions = st.container()
             st_searchbox(
-                _autocomplete_options,
+                _autocomplete_editor,
                 label="Adresse",
                 placeholder="Ex. 123 rue Exemple",
                 default=address_state.values["street"] or None,
@@ -720,8 +754,18 @@ def show_property_analysis() -> None:
                 edit_after_submit="option",
                 debounce=400,
                 key=ADDRESS_AUTOCOMPLETE_KEY,
-                submit_function=_select_address_suggestion,
+                # Selection is rendered once below as a bounded Streamlit
+                # list. Hiding the component's own menu avoids two competing
+                # lists and keeps the editor fixed while typing.
+                style_overrides={
+                    "dropdown": {"height": 0},
+                    "searchbox": {
+                        "optionEmpty": "hidden",
+                        "menuList": {"display": "none"},
+                    },
+                },
             )
+            suggestion_actions = st.empty()
             if "street" in address_state.errors:
                 st.error(address_state.errors["street"])
         with city:
@@ -778,7 +822,7 @@ def show_property_analysis() -> None:
                 # as well: it makes selection reliable on every supported
                 # browser/component combination, without storing an address
                 # or requiring Enter, Tab or a second search.
-                with suggestion_actions:
+                with suggestion_actions.container(height=220, border=False):
                     st.caption("Choisissez une suggestion pour remplir les renseignements disponibles.")
                     for index, suggestion in enumerate(suggestion_response.suggestions):
                         st.button(
