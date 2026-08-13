@@ -31,7 +31,11 @@ def transition(current_step,target_step,completed_steps,values):
  return {"step":current,"completed":completed,"errors":["Complétez les étapes précédentes avant de poursuivre."]}
 def validate_step(step, values):
  if step==1 and (not values.get("profile") or not values.get("objective")): return ["Profil et objectif requis."]
- if step==2 and (not values.get("property_name") or not values.get("property_type")): return ["Nom/adresse descriptive et type requis."]
+ if step==2:
+  errors=[]
+  if not values.get("property_name"): errors.append("Choisissez une adresse ou donnez un nom court au dossier.")
+  if not values.get("property_type"): errors.append("Le type de propriété est requis pour poursuivre.")
+  return errors
  if step==3 and (values.get("price",0)<=0 or values.get("down_payment",0)<=0 or values.get("down_payment",0)>=values.get("price",0)): return ["Prix et mise de fonds valides requis."]
  return []
 def save_draft(user_id,values,step,database_path):

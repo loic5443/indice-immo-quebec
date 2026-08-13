@@ -255,6 +255,51 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
         self.assertNotIn("address_lookup_submit", [button.key for button in app.button])
 
+    def test_selected_official_address_fills_dossier_name_and_continues(self):
+        """A selected official address removes the need to retype a duplicate dossier name."""
+        source = (
+            "from pathlib import Path\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
+            "original_suggest = page.suggest_addresses\n"
+            "page.suggest_addresses = lambda *_: page.SuggestionResponse('unavailable', message='source externe indisponible')\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "st.session_state.setdefault('address_form_street_input', '123 rue Ex')\n"
+            "try:\n"
+            "    page.show_property_analysis()\n"
+            "finally:\n"
+            "    page.suggest_addresses = original_suggest\n"
+        )
+        app = AppTest.from_string(source).run(timeout=20)
+        app.button(key="address_suggestion_select_0").click().run(timeout=20)
+        self.assertEqual(app.text_input(key="workflow_property_name").value, "123 Rue Exemple, Ville-exemple")
+        app.selectbox(key="workflow_property_type").set_value("Maison").run(timeout=20)
+        app.button(key="continue_to_finances").click().run(timeout=20)
+        self.assertEqual(app.selectbox(key="analysis_step_selector").value, 3)
+        self.assertNotIn("Nom/adresse descriptive et type requis.", [item.value for item in app.error])
+        self.assertEqual(list(app.error), [])
+
+    def test_selected_address_never_overwrites_a_custom_dossier_name(self):
+        source = (
+            "from pathlib import Path\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
+            "original_suggest = page.suggest_addresses\n"
+            "page.suggest_addresses = lambda *_: page.SuggestionResponse('unavailable', message='source externe indisponible')\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "st.session_state.setdefault('address_form_street_input', '123 rue Ex')\n"
+            "st.session_state.setdefault('workflow_property_name', 'Projet personnalisé')\n"
+            "try:\n"
+            "    page.show_property_analysis()\n"
+            "finally:\n"
+            "    page.suggest_addresses = original_suggest\n"
+        )
+        app = AppTest.from_string(source).run(timeout=20)
+        app.button(key="address_suggestion_select_0").click().run(timeout=20)
+        self.assertEqual(app.text_input(key="workflow_property_name").value, "Projet personnalisé")
+
     def test_failed_role_lookup_keeps_action_and_explains_the_failure(self):
         """No role match keeps the action available and exposes the manual fallback."""
         app = self._app()

@@ -830,6 +830,20 @@ def _show_visible_stage_progress(active_stage: int) -> None:
                 st.markdown(f"<p class='eyebrow'>ÉTAPE {number} · {state.upper()}</p><h3>{title}</h3><p class='section-intro'>{description}</p>", unsafe_allow_html=True)
 
 
+def _hydrate_dossier_name_from_selected_address() -> None:
+    """Use a selected official address as the optional dossier label, never overwriting a custom name."""
+
+    if useful_query(st.session_state.get("workflow_property_name", "")):
+        return
+    state = st.session_state.get(ADDRESS_STATE_KEY)
+    if not isinstance(state, AddressFormState) or not state.address:
+        return
+    if state.metadata.get("official_source") not in {"role", "external"}:
+        return
+    address = state.address
+    st.session_state["workflow_property_name"] = ", ".join(part for part in (address.street, address.city) if part)
+
+
 def _show_property_stage() -> None:
     """Render the simple first stage while retaining the existing workflow values."""
 
@@ -839,11 +853,12 @@ def _show_property_stage() -> None:
     if chosen_objective:
         st.session_state["workflow_objective"] = chosen_objective
         st.session_state["workflow_profile"] = ANALYSIS_OBJECTIVES[chosen_objective]
+    _hydrate_dossier_name_from_selected_address()
     name, kind = st.columns(2)
     with name:
-        st.text_input("Nom court du dossier", key="workflow_property_name", placeholder="Ex. Projet résidentiel")
+        st.text_input("Nom court du dossier (facultatif si une adresse est sélectionnée)", key="workflow_property_name", placeholder="Ex. Projet résidentiel")
     with kind:
-        st.selectbox("Type de propriété", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type")
+        st.selectbox("Type de propriété (requis)", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type")
     st.caption("Ces renseignements servent à organiser votre dossier. La recherche publique et les calculs restent séparés.")
     st.button("Continuer vers les finances", type="primary", key="continue_to_finances", on_click=_continue_to_finances)
 
