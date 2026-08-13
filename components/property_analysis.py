@@ -837,17 +837,21 @@ def show_property_analysis() -> None:
                             args=(suggestion.to_option(),),
                             use_container_width=True,
                         )
-        st.caption("Après votre consentement, cette action peut d’abord révéler la valeur au rôle municipal; ImmoValue reste une estimation marchande distincte, calculable avec au moins trois comparables autorisés.")
-        st.button(
-            "Rechercher et révéler les renseignements disponibles",
-            key="address_lookup_submit",
-            type="primary",
-            on_click=_submit_address_lookup,
-        )
+        address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
+        if not _has_revealed_public_information(address_lookup):
+            st.caption("Après votre consentement, cette action peut d’abord révéler la valeur au rôle municipal; ImmoValue reste une estimation marchande distincte, calculable avec au moins trois comparables autorisés.")
+            st.button(
+                "Rechercher et révéler les renseignements disponibles",
+                key="address_lookup_submit",
+                type="primary",
+                on_click=_submit_address_lookup,
+            )
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
     # Public results must be visible immediately after their explicit search.
     # They are not contingent on calculating private financial assumptions.
+    if _has_revealed_public_information(address_lookup):
+        st.success("Renseignements publics révélés ✓")
     _show_role_overview(address_lookup)
     step, completed = _ensure_workflow_state()
     st.progress(step / len(STEPS), text=f"Étape {step}/{len(STEPS)} — {STEPS[step-1]}")
@@ -944,6 +948,12 @@ def show_property_analysis() -> None:
     _show_results(inputs, calculate_analysis(inputs), profile, address_lookup)
 
 
+def _has_revealed_public_information(address_lookup: dict | None) -> bool:
+    """Return true only when a consented lookup has an official role result to show."""
+
+    return bool(address_lookup and address_lookup.get("consent") and address_lookup.get("matches"))
+
+
 def _show_role_overview(address_lookup: dict | None) -> None:
     """Show official assessment data only as a clearly labelled fiscal reference."""
 
@@ -965,7 +975,7 @@ def _show_role_overview(address_lookup: dict | None) -> None:
         st.info("Recherche publique non autorisée : activez le consentement puis lancez la recherche, ou continuez manuellement.")
         return
     if address_lookup.get("coverage") is False:
-        st.info("Aucun territoire municipal actif et synchronisé n’est disponible pour cette municipalité. Continuez manuellement ou demandez à un administrateur de synchroniser le territoire.")
+        st.error("Aucun territoire municipal actif et synchronisé n’est disponible pour cette municipalité. Continuez manuellement ou demandez à un administrateur de synchroniser le territoire.")
         return
     matches = address_lookup.get("matches", [])
     if matches:
@@ -985,7 +995,7 @@ def _show_role_overview(address_lookup: dict | None) -> None:
         return
     variants = address_lookup.get("variants", [])
     detail = f" Variante publique disponible : {', '.join(variants)}." if variants else ""
-    st.info("Le territoire est synchronisé, mais aucune unité officielle ne correspond exactement aux renseignements saisis. Vérifiez le numéro ou la voie, ou poursuivez manuellement." + detail)
+    st.error("Le territoire est synchronisé, mais aucune unité officielle ne correspond exactement aux renseignements saisis. Vérifiez le numéro ou la voie, ou poursuivez manuellement." + detail)
 
 
 def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, address_lookup: dict | None = None) -> None:

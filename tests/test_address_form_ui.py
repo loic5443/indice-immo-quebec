@@ -183,8 +183,8 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
         self.assertFalse(any("source externe indisponible" in item.value for item in app.info))
 
-    def test_local_selection_without_postal_survives_confirmation_and_reruns(self):
-        """A public role can be confirmed even when its XML has no postal code."""
+    def test_local_selection_without_postal_survives_reruns(self):
+        """A selected public role needs no second confirmation when postal is absent."""
         source = (
             "from pathlib import Path\n"
             "import streamlit as st\n"
@@ -210,14 +210,10 @@ class AddressFormUiTests(unittest.TestCase):
         app.button(key="address_suggestion_select_0").click().run(timeout=20)
         self.assertEqual(app.text_input(key="address_form_postal").value, "")
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
-        app.button(key="address_lookup_submit").click().run(timeout=20)
         self.assertEqual(list(app.error), [])
         self.assertFalse(any("source externe indisponible" in item.value for item in app.info))
         self.assertTrue(any("code postal n’est pas publié" in item.value for item in app.info))
-        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
-        app.button(key="address_lookup_submit").click().run(timeout=20)
-        self.assertEqual(list(app.error), [])
-        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        self.assertNotIn("address_lookup_submit", [button.key for button in app.button])
         app.session_state["repeat_public_address"] = True
         app.run(timeout=20)
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
@@ -226,7 +222,7 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertNotIn("Total au rôle", [metric.label for metric in app.metric])
 
     def test_suggestion_actions_remain_clickable_in_the_single_live_editor(self):
-        """The sole server-rendered list selects the local role result."""
+        """A selected local role replaces the redundant reveal action with confirmation."""
         source = (
             "from pathlib import Path\n"
             "import streamlit as st\n"
@@ -243,9 +239,27 @@ class AddressFormUiTests(unittest.TestCase):
         )
         app = AppTest.from_string(source).run(timeout=20)
         self.assertEqual(app.button(key="address_suggestion_select_0").label, "123 Rue Exemple · Ville-exemple")
+        self.assertIn("address_lookup_submit", [button.key for button in app.button])
         app.button(key="address_suggestion_select_0").click().run(timeout=20)
         self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        self.assertTrue(any("Renseignements publics révélés" in item.value for item in app.success))
+        self.assertNotIn("address_lookup_submit", [button.key for button in app.button])
+        app.run(timeout=20)
+        self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        self.assertNotIn("address_lookup_submit", [button.key for button in app.button])
+
+    def test_failed_role_lookup_keeps_action_and_explains_the_failure(self):
+        """No role match keeps the action available and exposes the manual fallback."""
+        app = self._app()
+        app.session_state["address_form_editor_street"] = "999 rue Inconnue"
+        app.text_input(key="address_form_city").set_value("Ville-exemple")
+        app.text_input(key="address_form_postal").set_value("H2X 1Y4")
+        app.checkbox(key="address_form_consent").set_value(True)
+        app.button(key="address_lookup_submit").click().run(timeout=20)
+        self.assertIn("address_lookup_submit", [button.key for button in app.button])
+        self.assertTrue(any("aucune unité officielle" in item.value.casefold() for item in app.error))
 
     def test_local_selection_enriches_postal_without_delaying_role_result(self):
         source = (
