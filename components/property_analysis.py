@@ -23,6 +23,7 @@ from services.entitlements_service import quota_status, consume_estimation
 from services.address_lookup_service import lookup
 from services.quebec_role_importer import display_role_address,search_role_units,role_street_variants,suggest_role_units
 from services.quebec_role_admin_service import territory_for_municipality
+from services.quebec_role_auto_sync import AutoSyncResult, synchronize_selected_municipality
 from services.address_form_service import (
     AddressFormState,
     empty_address_form_state,
@@ -81,6 +82,8 @@ ADDRESS_MANUAL_MODE_KEY = "address_form_manual_mode"
 ADDRESS_RESOLUTION_KEY = "address_form_resolution"
 ADDRESS_RESOLUTION_SELECTION_KEY = "address_form_resolution_selection"
 ADDRESS_LOCAL_SELECTED_KEY = "address_form_local_selected"
+ADDRESS_AUTO_SYNC_PENDING_KEY = "address_form_auto_sync_pending"
+ADDRESS_AUTO_SYNC_STATUS_KEY = "address_form_auto_sync_status"
 MAX_ADDRESS_SUGGESTIONS = 6
 ADDRESS_WIDGET_KEYS = {
     "street": "address_form_street",
@@ -209,6 +212,41 @@ def _clear_address_suggestions() -> None:
     st.session_state.pop(ADDRESS_SUGGESTION_QUERY_KEY, None)
 
 
+def _queue_auto_role_sync(state: AddressFormState) -> None:
+    """Queue one consented municipal lookup; the next render performs it once."""
+
+    if not state.valid or not state.address or not state.values.get("consent"):
+        return
+    # An imported local-role match is already authoritative; never redownload it.
+    if state.metadata.get("official_source") == "role":
+        return
+    st.session_state[ADDRESS_AUTO_SYNC_PENDING_KEY] = {"street": state.address.street, "city": state.address.city}
+
+
+def _run_queued_auto_role_sync() -> AutoSyncResult | None:
+    """Synchronize one exact territory after selecting a consented public address."""
+
+    pending = st.session_state.pop(ADDRESS_AUTO_SYNC_PENDING_KEY, None)
+    state = st.session_state.get(ADDRESS_STATE_KEY)
+    if not isinstance(pending, dict) or not isinstance(state, AddressFormState) or not state.valid or not state.address:
+        return None
+    if pending.get("street") != state.address.street or pending.get("city") != state.address.city:
+        return None
+    with st.status("Vérification des données officielles", expanded=False) as status:
+        result = synchronize_selected_municipality(DATABASE_PATH, state.address.city, bool(state.values.get("consent")))
+        if result.status in {"available", "synchronized"}:
+            status.update(label="Renseignements disponibles", state="complete")
+            st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(state)
+        elif result.status == "in_progress":
+            status.update(label="Synchronisation de cette municipalité", state="running")
+        else:
+            status.update(label="Renseignements officiels indisponibles", state="error")
+    st.session_state[ADDRESS_AUTO_SYNC_STATUS_KEY] = result.status
+    if result.status not in {"available", "synchronized", "in_progress"}:
+        st.error(result.message)
+    return result
+
+
 def _edit_address_field(field: str) -> None:
     """Invalidate only an edited canonical submission before the next confirmation."""
 
@@ -225,6 +263,7 @@ def _edit_address_field(field: str) -> None:
     st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors=errors)
     st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+    st.session_state.pop(ADDRESS_AUTO_SYNC_PENDING_KEY, None)
 
 
 def _set_address_editor_street(value: str) -> None:
@@ -255,6 +294,7 @@ def _set_address_editor_street(value: str) -> None:
     st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors=errors)
     st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+    st.session_state.pop(ADDRESS_AUTO_SYNC_PENDING_KEY, None)
 
 
 def _street_query_matches_selection(query: str, selected: str) -> bool:
@@ -518,6 +558,7 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     if selected_state.valid:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(selected_state)
+        _queue_auto_role_sync(selected_state)
     _persist_address_draft(selected_state)
     _clear_address_suggestions()
 
@@ -539,11 +580,19 @@ def _select_resolved_address() -> None:
         "city": candidate.city or values["city"],
         "postal": candidate.postal_code or values["postal"],
     })
-    st.session_state[ADDRESS_STATE_KEY] = AddressFormState(values=values, address=None, errors={})
+    selected_state = submit_address_form(
+        values["street"], values["city"], values["postal"], values.get("unit", ""),
+        bool(values.get("consent")), metadata={"official_source": "external"},
+    )
+    st.session_state[ADDRESS_STATE_KEY] = selected_state
     st.session_state[ADDRESS_HYDRATE_KEY] = True
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = values["street"]
     st.session_state[ADDRESS_WIDGET_KEYS["city"]] = values["city"]
     st.session_state[ADDRESS_WIDGET_KEYS["postal"]] = values["postal"]
+    if selected_state.valid:
+        st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(selected_state)
+        _queue_auto_role_sync(selected_state)
+        _persist_address_draft(selected_state)
 
 
 def _submit_address_lookup() -> None:
@@ -591,6 +640,7 @@ def _submit_address_lookup() -> None:
     _persist_address_draft(state)
     if state.valid:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(state)
+        _queue_auto_role_sync(state)
     else:
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     st.session_state[ADDRESS_HYDRATE_KEY] = True
@@ -1044,6 +1094,8 @@ def show_property_analysis() -> None:
                 on_click=_submit_address_lookup,
             )
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
+    _run_queued_auto_role_sync()
+    address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)
     address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
     # Public results must be visible immediately after their explicit search.
     # They are not contingent on calculating private financial assumptions.
