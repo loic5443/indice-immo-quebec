@@ -62,6 +62,12 @@ ANALYSIS_OBJECTIVES = {
     "Préparer une vente": "Propriétaire",
 }
 
+VISIBLE_ANALYSIS_STAGES = (
+    (1, "Propriété et valeur", "Choisissez la propriété et voyez les renseignements publics disponibles."),
+    (2, "Finances", "Ajoutez les chiffres de votre projet, puis calculez votre analyse."),
+    (3, "Résultats et rapport", "Consultez les résultats, sauvegardez votre dossier ou produisez un rapport."),
+)
+
 ADDRESS_STATE_KEY = "address_form_state"
 ADDRESS_LOOKUP_KEY = "address_form_lookup"
 ADDRESS_OWNER_KEY = "address_form_owner"
@@ -722,6 +728,182 @@ def _next_workflow_step() -> None:
     _move_workflow(st.session_state.get("analysis_step", 1) + 1)
 
 
+def _continue_to_finances() -> None:
+    """Advance the compatible nine-step draft through the first visible stage."""
+
+    _move_workflow(2)
+    if not st.session_state.get("workflow_errors"):
+        _move_workflow(3)
+
+
+def _analysis_is_calculated(inputs: PropertyInputs) -> bool:
+    """Keep personal results behind the existing explicit calculation action."""
+
+    return st.session_state.get("analysis_calculation_signature") == _analysis_signature(inputs)
+
+
+def _visible_analysis_stage(step: int, calculated: bool, has_financial_data: bool = False) -> int:
+    """Map the preserved technical workflow to the three public-facing stages."""
+
+    if calculated:
+        return 3
+    return 1 if step <= 2 and not has_financial_data else 2
+
+
+def _current_role_match(address_lookup: dict | None) -> dict | None:
+    """Return the selected official match without inventing a public value."""
+
+    matches = (address_lookup or {}).get("matches", [])
+    if not matches:
+        return None
+    try:
+        selected = int(st.session_state.get("official_role_unit", 0))
+    except (TypeError, ValueError):
+        selected = 0
+    return matches[max(0, min(selected, len(matches) - 1))]
+
+
+def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict | None, inputs: PropertyInputs, profile: str) -> None:
+    """Show only known facts and explicitly mark every unavailable result."""
+
+    if not address_state.address:
+        return
+    role_match = _current_role_match(address_lookup)
+    calculated = _analysis_is_calculated(inputs)
+    engine_result = evaluate_immoengine(inputs, calculate_analysis(inputs), profile) if calculated else None
+    immovalue = st.session_state.get("immovalue_generated_result")
+    if not isinstance(immovalue, dict) or not immovalue.get("available"):
+        immovalue = None
+
+    address = address_state.address
+    postal = f", {address.postal_code}" if address.postal_code else ""
+    unit = f", {address.unit}" if address.unit else ""
+    st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>RÉSUMÉ DU DOSSIER</p><h2>Ce qu’ImmoRadar sait pour l’instant</h2>", unsafe_allow_html=True)
+    st.caption(f"Adresse normalisée : {address.street}{unit}, {address.city}{postal}")
+    official, market, finances = st.columns(3)
+    with official:
+        with st.container(border=True):
+            st.markdown("### Valeur officielle")
+            if role_match:
+                st.metric("Valeur au rôle municipal", _money(role_match["total_value"] or 0))
+                st.caption(f"Rôle {role_match['role_year']} · MAMH / Données Québec")
+                st.caption("Référence fiscale officielle : ce n’est pas un prix de vente.")
+            else:
+                st.metric("Valeur au rôle municipal", "Données nécessaires")
+                st.caption("Choisissez une adresse couverte ou poursuivez manuellement.")
+    with market:
+        with st.container(border=True):
+            st.markdown("### Estimation marchande")
+            if immovalue:
+                st.metric("Fourchette ImmoValue", f"{_money(immovalue['low'])} à {_money(immovalue['high'])}")
+                st.caption(f"Expérimental · confiance {immovalue['confidence']} / 100")
+            else:
+                st.metric("ImmoValue", "À calculer")
+                st.caption("Ajoutez au moins trois comparables autorisés pour une estimation expérimentale.")
+    with finances:
+        with st.container(border=True):
+            st.markdown("### Analyse financière")
+            if engine_result and engine_result.score is not None:
+                st.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100")
+                st.caption(f"{engine_result.verdict.capitalize()} · confiance {engine_result.confidence_index} / 100")
+            else:
+                st.metric("Score ImmoRadar", "À calculer")
+                st.caption("Ajoutez les chiffres de votre projet puis lancez l’analyse.")
+
+    if role_match and calculated:
+        orientation = "La valeur municipale et votre analyse sont prêtes. Consultez ensuite les résultats et les vérifications."
+    elif role_match:
+        orientation = "La valeur municipale est disponible. Ajoutez vos chiffres pour comprendre les finances de votre projet."
+    else:
+        orientation = "Ajoutez ou choisissez une propriété pour révéler les renseignements publics disponibles, puis complétez vos chiffres."
+    st.info(orientation)
+
+
+def _show_visible_stage_progress(active_stage: int) -> None:
+    """Keep progress obvious without exposing nine technical steps by default."""
+
+    columns = st.columns(3)
+    for column, (number, title, description) in zip(columns, VISIBLE_ANALYSIS_STAGES):
+        with column:
+            with st.container(border=True):
+                state = "En cours" if number == active_stage else "À venir" if number > active_stage else "Terminé"
+                st.markdown(f"<p class='eyebrow'>ÉTAPE {number} · {state.upper()}</p><h3>{title}</h3><p class='section-intro'>{description}</p>", unsafe_allow_html=True)
+
+
+def _show_property_stage() -> None:
+    """Render the simple first stage while retaining the existing workflow values."""
+
+    st.markdown("<div class='section-space compact-space'></div><h2>1. Propriété et valeur</h2><p class='section-intro'>Choisissez votre objectif, puis recherchez la propriété dans le bloc ci-dessus.</p>", unsafe_allow_html=True)
+    st.selectbox("Votre objectif", list(ANALYSIS_OBJECTIVES), key="workflow_objective_choice")
+    chosen_objective = st.session_state.get("workflow_objective_choice", "")
+    if chosen_objective:
+        st.session_state["workflow_objective"] = chosen_objective
+        st.session_state["workflow_profile"] = ANALYSIS_OBJECTIVES[chosen_objective]
+    name, kind = st.columns(2)
+    with name:
+        st.text_input("Nom court du dossier", key="workflow_property_name", placeholder="Ex. Projet résidentiel")
+    with kind:
+        st.selectbox("Type de propriété", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type")
+    st.caption("Ces renseignements servent à organiser votre dossier. La recherche publique et les calculs restent séparés.")
+    st.button("Continuer vers les finances", type="primary", key="continue_to_finances", on_click=_continue_to_finances)
+
+
+def _show_finance_stage() -> None:
+    """Render the useful financial inputs first; less common inputs stay available."""
+
+    st.markdown("<div class='section-space compact-space'></div><h2>2. Vos chiffres</h2><p class='section-intro'>Ajoutez les montants que vous connaissez. Les résultats ne sont affichés qu’après votre calcul.</p>", unsafe_allow_html=True)
+    acquisition, financing = st.columns(2)
+    with acquisition:
+        st.number_input("Prix de la propriété ($)", min_value=0.0, step=5_000.0, key="property_price")
+        st.number_input("Mise de fonds ($)", min_value=0.0, step=5_000.0, key="down_payment")
+        st.number_input("Revenus locatifs mensuels ($)", min_value=0.0, step=100.0, key="rental_income")
+        st.number_input("Autres dépenses mensuelles ($)", min_value=0.0, step=25.0, key="other_expenses")
+    with financing:
+        st.number_input("Taux hypothécaire annuel (%)", min_value=0.0, max_value=25.0, step=0.05, format="%.2f", key="mortgage_rate")
+        st.number_input("Amortissement (années)", min_value=5, max_value=30, step=1, key="amortization_years")
+        st.number_input("Taxes municipales annuelles ($)", min_value=0.0, step=100.0, key="municipal_taxes")
+        st.number_input("Assurances mensuelles ($)", min_value=0.0, step=25.0, key="insurance")
+
+    with st.expander("Options avancées", expanded=False):
+        st.caption("Ces champs restent facultatifs. Ils améliorent la précision de votre lecture sans modifier les formules.")
+        first, second, third = st.columns(3)
+        with first:
+            st.number_input("Travaux initiaux ($)", min_value=0.0, step=1_000.0, key="initial_repairs")
+            st.number_input("Frais d'acquisition ($)", min_value=0.0, step=1_000.0, key="acquisition_costs")
+            st.number_input("Autres revenus mensuels ($)", min_value=0.0, step=50.0, key="other_income")
+            st.number_input("Taux de vacance (%)", min_value=0.0, max_value=100.0, step=0.5, key="vacancy_rate")
+            st.number_input("Revenu brut annuel du ménage ($, facultatif)", min_value=0.0, step=5_000.0, key="household_income")
+            st.number_input("Autres dettes mensuelles ($, facultatif)", min_value=0.0, step=100.0, key="other_debts")
+        with second:
+            st.number_input("Taxes scolaires annuelles ($)", min_value=0.0, step=50.0, key="school_taxes")
+            st.number_input("Frais de copropriété mensuels ($)", min_value=0.0, step=25.0, key="condo_fees")
+            st.number_input("Entretien courant mensuel ($)", min_value=0.0, step=25.0, key="maintenance")
+            st.number_input("Frais de gestion mensuels ($)", min_value=0.0, step=25.0, key="management")
+            st.number_input("Services publics mensuels ($)", min_value=0.0, step=25.0, key="utilities")
+            st.number_input("Réserve mensuelle dépenses majeures ($)", min_value=0.0, step=25.0, key="capital_reserve")
+        with third:
+            st.number_input("Croissance annuelle hypothétique des loyers (%)", min_value=-25.0, max_value=25.0, step=0.25, key="rent_growth")
+            st.number_input("Croissance annuelle hypothétique des dépenses (%)", min_value=-25.0, max_value=25.0, step=0.25, key="expense_growth")
+            st.number_input("Horizon de détention (années)", min_value=1, max_value=40, step=1, key="holding_period")
+            st.caption("Les projections utilisent uniquement les taux que vous saisissez. Elles ne prévoient pas le marché ni une valeur future.")
+        st.button("Réinitialiser les chiffres", on_click=reset_analysis, type="secondary", key="reset_analysis")
+
+
+def _show_technical_workflow(step: int) -> None:
+    """Keep the resumable nine-step workflow accessible without making it the main path."""
+
+    with st.expander("Parcours détaillé (facultatif)", expanded=False):
+        st.progress(step / len(STEPS), text=f"Progression détaillée : {step}/{len(STEPS)} — {STEPS[step - 1]}")
+        st.selectbox(
+            "Étape détaillée", list(range(1, len(STEPS) + 1)), key="analysis_step_selector",
+            format_func=lambda value: f"{value}. {STEPS[value - 1]}", on_change=_choose_workflow_step,
+        )
+        previous, next_step, _ = st.columns([1, 1, 3])
+        previous.button("Précédent", disabled=step == 1, on_click=_previous_workflow_step)
+        next_step.button("Suivant", disabled=step == len(STEPS), on_click=_next_workflow_step)
+        st.caption("Le parcours détaillé est conservé pour reprendre un brouillon existant. La vue principale reste organisée en trois étapes.")
+
+
 def show_property_analysis() -> None:
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value)
@@ -852,77 +1034,26 @@ def show_property_analysis() -> None:
     # They are not contingent on calculating private financial assumptions.
     if _has_revealed_public_information(address_lookup):
         st.success("Renseignements publics révélés ✓")
-    _show_role_overview(address_lookup)
     step, completed = _ensure_workflow_state()
-    st.progress(step / len(STEPS), text=f"Étape {step}/{len(STEPS)} — {STEPS[step-1]}")
-    st.selectbox(
-        "Étape du parcours", list(range(1, len(STEPS) + 1)), key="analysis_step_selector",
-        format_func=lambda value: f"{value}. {STEPS[value-1]}", on_change=_choose_workflow_step,
-    )
-    if step == 1:
-        st.selectbox("Que souhaitez-vous faire?", list(ANALYSIS_OBJECTIVES), key="workflow_objective_choice")
-        chosen_objective = st.session_state.get("workflow_objective_choice", "")
-        if chosen_objective:
-            st.session_state["workflow_objective"] = chosen_objective
-            st.session_state["workflow_profile"] = ANALYSIS_OBJECTIVES[chosen_objective]
-        st.caption("Le dossier adapte sa lecture à cet objectif. Vous pourrez toujours ajuster votre profil dans Mon compte; les dossiers existants ne sont pas modifiés.")
-    elif step == 2:
-        st.text_input("Nom descriptif de la propriété", key="workflow_property_name", placeholder="Ex. Duplex à Beauharnois")
-        st.selectbox("Type de propriété", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type")
-    previous, next_step, _ = st.columns([1, 1, 3])
-    previous.button("Précédent", disabled=step == 1, on_click=_previous_workflow_step)
-    next_step.button("Suivant", disabled=step == len(STEPS), on_click=_next_workflow_step)
+    inputs = _inputs_from_state()
+    profile = st.session_state["workflow_profile"]
+    calculated = _analysis_is_calculated(inputs)
+    _show_dossier_summary(address_state, address_lookup, inputs, profile)
+    _show_role_overview(address_lookup)
+    visible_stage = _visible_analysis_stage(step, calculated, bool(inputs.price or inputs.down_payment))
+    _show_visible_stage_progress(visible_stage)
+    if visible_stage == 1:
+        _show_property_stage()
+    elif visible_stage == 2:
+        _show_finance_stage()
+    else:
+        st.markdown("<div class='section-space compact-space'></div><h2>3. Résultats et rapport</h2><p class='section-intro'>Votre analyse est prête. Consultez la vue d’ensemble, puis sauvegardez votre dossier ou produisez votre rapport.</p>", unsafe_allow_html=True)
+    _show_technical_workflow(step)
     for workflow_error in st.session_state.get("workflow_errors", []):
         st.error(workflow_error)
-    st.caption("Les valeurs restent dans le brouillon de cette session; une analyse n'est sauvegardée dans l'historique qu'après votre confirmation.")
-    st.write("Saisissez vos hypothèses pour obtenir une analyse financière claire et personnalisée. Les calculs sont reproductibles et présentés avant impôt.")
-    with st.expander("Portée de l'analyse"):
-        st.write("ImmoRadar fonde ses résultats sur les renseignements et hypothèses fournis. La qualité de l'analyse dépend donc de leur exactitude et de leur exhaustivité.")
-    st.button("Réinitialiser l'analyse", on_click=reset_analysis, type="secondary")
-
-    with st.expander("Acquisition et financement — étape 3", expanded=step == 3):
-        acquisition, financing = st.columns(2)
-        with acquisition:
-            st.number_input("Prix de la propriété ($)", min_value=0.0, step=5_000.0, key="property_price")
-            st.number_input("Mise de fonds ($)", min_value=0.0, step=5_000.0, key="down_payment")
-            st.number_input("Travaux initiaux ($)", min_value=0.0, step=1_000.0, key="initial_repairs")
-            st.number_input("Frais d'acquisition ($)", min_value=0.0, step=1_000.0, key="acquisition_costs")
-        with financing:
-            st.number_input("Taux hypothécaire annuel (%)", min_value=0.0, max_value=25.0, step=0.05, format="%.2f", key="mortgage_rate")
-            st.number_input("Amortissement (années)", min_value=5, max_value=30, step=1, key="amortization_years")
-            st.number_input("Revenu brut annuel du ménage ($, facultatif)", min_value=0.0, step=5_000.0, key="household_income")
-            st.number_input("Autres dettes mensuelles ($, facultatif)", min_value=0.0, step=100.0, key="other_debts")
-
-    with st.expander("Revenus et dépenses d'exploitation — étape 4", expanded=step == 4):
-        revenue, monthly, annual = st.columns(3)
-        with revenue:
-            st.number_input("Revenus locatifs mensuels ($)", min_value=0.0, step=100.0, key="rental_income")
-            st.number_input("Autres revenus mensuels ($)", min_value=0.0, step=50.0, key="other_income")
-            st.number_input("Taux de vacance (%)", min_value=0.0, max_value=100.0, step=0.5, key="vacancy_rate")
-        with monthly:
-            st.number_input("Assurances mensuelles ($)", min_value=0.0, step=25.0, key="insurance")
-            st.number_input("Frais de copropriété mensuels ($)", min_value=0.0, step=25.0, key="condo_fees")
-            st.number_input("Entretien courant mensuel ($)", min_value=0.0, step=25.0, key="maintenance")
-            st.number_input("Frais de gestion mensuels ($)", min_value=0.0, step=25.0, key="management")
-            st.number_input("Services publics mensuels ($)", min_value=0.0, step=25.0, key="utilities")
-            st.number_input("Réserve mensuelle dépenses majeures ($)", min_value=0.0, step=25.0, key="capital_reserve")
-            st.number_input("Autres dépenses mensuelles ($)", min_value=0.0, step=25.0, key="other_expenses")
-        with annual:
-            st.number_input("Taxes municipales annuelles ($)", min_value=0.0, step=100.0, key="municipal_taxes")
-            st.number_input("Taxes scolaires annuelles ($)", min_value=0.0, step=50.0, key="school_taxes")
-
-    with st.expander("Hypothèses de projection — étape 8", expanded=step == 8):
-        growth, horizon = st.columns(2)
-        with growth:
-            st.number_input("Croissance annuelle hypothétique des loyers (%)", min_value=-25.0, max_value=25.0, step=0.25, key="rent_growth")
-            st.number_input("Croissance annuelle hypothétique des dépenses (%)", min_value=-25.0, max_value=25.0, step=0.25, key="expense_growth")
-        with horizon:
-            st.number_input("Horizon de détention (années)", min_value=1, max_value=40, step=1, key="holding_period")
-        st.caption("Ces projections utilisent uniquement vos taux de croissance déclarés. Elles ne prévoient pas le marché ni la valeur future de la propriété.")
-
-    inputs = _inputs_from_state()
+    st.caption("Les chiffres restent dans votre brouillon de session. Un dossier n’est sauvegardé dans Mes propriétés qu’après votre confirmation.")
     signature = _analysis_signature(inputs)
-    if st.button("Calculer / mettre à jour mon analyse", type="primary", key="calculate_analysis"):
+    if visible_stage == 2 and st.button("Calculer mon analyse", type="primary", key="calculate_analysis"):
         errors = validate_inputs(inputs)
         if errors:
             st.session_state["analysis_calculation_requested"] = True
@@ -932,12 +1063,13 @@ def show_property_analysis() -> None:
             st.session_state["analysis_calculation_requested"] = True
             st.session_state["analysis_calculation_signature"] = signature
             st.session_state["analysis_calculation_errors"] = []
+            st.success("Analyse calculée. Vos résultats sont prêts à consulter.")
     if st.session_state.get("analysis_calculation_requested") and st.session_state.get("analysis_calculation_signature") != signature:
         st.session_state.pop("analysis_calculation_signature", None)
     for error in st.session_state.get("analysis_calculation_errors", []):
         st.error(error)
     if st.session_state.get("analysis_calculation_signature") != signature:
-        st.info("Aucune analyse personnelle n’est affichée avant votre calcul. Saisissez vos hypothèses puis choisissez « Calculer / mettre à jour mon analyse ».")
+        st.info("Aucune analyse personnelle n’est affichée avant votre calcul. Ajoutez vos chiffres, puis choisissez « Calculer mon analyse ».")
         return
     if is_authenticated():
         profile = st.session_state["workflow_profile"]
@@ -999,7 +1131,7 @@ def _show_role_overview(address_lookup: dict | None) -> None:
 
 
 def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, address_lookup: dict | None = None) -> None:
-    st.markdown("<div class='section-space compact-space'></div><h2>Votre dossier immobilier 360</h2><p class='section-intro'>Commencez par la vue d’ensemble, puis consultez les chiffres, les vérifications et la provenance.</p>", unsafe_allow_html=True)
+    st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>RÉSULTATS ET RAPPORT</p><h2>Votre dossier immobilier 360</h2><p class='section-intro'>Commencez par l’essentiel, puis consultez vos chiffres, les vérifications et les sources.</p>", unsafe_allow_html=True)
     overview_tab, finances_tab, risks_tab, details_tab = st.tabs(["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"])
     engine_result = evaluate_immoengine(inputs, result, profile)
     with overview_tab:
@@ -1025,15 +1157,15 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         second.metric("Revenus effectifs mensuels", _money(result.effective_rental_income_monthly))
         third.metric("Flux de trésorerie mensuel", _money(result.cash_flow_monthly))
         a, b, c = st.columns(3)
-        a.metric("RNE annuel", _money(result.net_operating_income_annual))
+        a.metric("Revenus nets annuels (RNE)", _money(result.net_operating_income_annual))
         b.metric("Capital réellement investi", _money(result.actual_capital_invested))
         c.metric("Rendement sur capital", f"{result.cash_on_cash_return:.2f} %")
         d, e, f = st.columns(3)
         d.metric("Taux de capitalisation", f"{result.capitalization_rate:.2f} %")
-        e.metric("DSCR", f"{result.debt_service_coverage_ratio:.2f}x")
+        e.metric("Capacité à couvrir la dette (DSCR)", f"{result.debt_service_coverage_ratio:.2f}x")
         f.metric("Marge mensuelle de sécurité", _money(result.monthly_safety_margin))
         if result.housing_cost_ratio is not None:
-            st.info(f"Ratio déclaré des coûts de logement et autres dettes : {result.housing_cost_ratio:.1f} %. Méthode : (paiement hypothécaire + dépenses d'exploitation + autres dettes) / revenu brut mensuel. Ce n'est pas un critère officiel de prêteur.")
+            st.info(f"Part déclarée du revenu consacrée au logement et aux dettes : {result.housing_cost_ratio:.1f} %. Calcul : paiement hypothécaire + revenus et dépenses du projet + autres dettes, divisé par le revenu brut mensuel. Ce n’est pas un critère officiel de prêteur.")
         else:
             st.caption("Abordabilité indisponible : ajoutez le revenu brut annuel du ménage pour calculer le ratio déclaré des coûts de logement.")
         st.caption(f"Projection à {inputs.holding_period_years} ans : flux mensuel hypothétique {_money(result.projected_cash_flow_monthly)}, fondé seulement sur les croissances de loyers et dépenses saisies.")
@@ -1071,8 +1203,8 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
 
 def _show_immovalue() -> dict:
     """A local-only workspace; declared comparables stay separate from financial scoring."""
-    st.markdown("<div class='section-space'></div><h2>Estimation ImmoValue</h2>", unsafe_allow_html=True)
-    st.warning("ImmoValue expérimental — fondé sur les informations et comparables fournis par l'utilisateur. Il ne constitue pas une évaluation officielle.")
+    st.markdown("<div class='section-space'></div><h2>Estimation marchande (ImmoValue)</h2>", unsafe_allow_html=True)
+    st.caption("Expérimental : ImmoValue utilise uniquement les comparables que vous fournissez. Ce n’est pas une évaluation officielle.")
     with st.expander("1. Informations sur la propriété et 3. Comparables manuels", expanded=False):
         a, b, c = st.columns(3)
         with a:
