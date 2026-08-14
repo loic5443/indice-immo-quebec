@@ -1,6 +1,7 @@
 """Complete property analysis UI with enriched assumptions and deterministic scenarios."""
 
 from dataclasses import asdict
+from datetime import date
 import hashlib
 import json
 import re
@@ -17,6 +18,7 @@ from components.sidebar import go_to
 from data.database import save_analysis
 from data.database import DATABASE_PATH
 from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
+from domain.scenarios import build_resilience_tests, build_standard_scenarios
 from services.market_data_service import market_context_snapshot
 from domain.immovalue import SubjectProperty, estimate_immovalue
 from services.comparable_csv import csv_template, validate_csv_rows
@@ -1206,10 +1208,131 @@ def _show_role_overview(address_lookup: dict | None) -> None:
     st.error("Le territoire est synchronisé, mais aucune unité officielle ne correspond exactement aux renseignements saisis. Vérifiez le numéro ou la voie, ou poursuivez manuellement." + detail)
 
 
+def _summary_dossier_label() -> tuple[str, str]:
+    """Use the selected address or custom label without inventing either."""
+
+    state = st.session_state.get(ADDRESS_STATE_KEY)
+    if isinstance(state, AddressFormState) and state.address:
+        address = state.address
+        return ", ".join(part for part in (address.street, address.city) if part), st.session_state.get("workflow_property_type", "")
+    return st.session_state.get("workflow_property_name") or "Dossier immobilier", st.session_state.get("workflow_property_type", "")
+
+
+def _generated_immovalue() -> dict | None:
+    """Only an explicit ImmoValue action can populate the main synthesis."""
+
+    value = st.session_state.get("immovalue_generated_result")
+    return value if isinstance(value, dict) and value.get("available") else None
+
+
+def _show_summary_financial_cards(inputs: PropertyInputs, result: AnalysisResult) -> None:
+    """Present the seven useful indicators without presenting irrelevant zeros."""
+
+    has_rental_context = bool(inputs.rental_income_monthly or inputs.other_income_monthly)
+    items = (
+        ("Paiement hypothécaire", _money(result.monthly_payment), "Montant mensuel lié au prêt."),
+        ("Dépenses mensuelles", _money(result.total_monthly_expenses), "Frais d’exploitation et prêt."),
+        ("Revenus locatifs", _money(result.effective_rental_income_monthly) if has_rental_context else "Non applicable", "Après la vacance déclarée." if has_rental_context else "Aucun revenu locatif saisi."),
+        ("Flux de trésorerie", _money(result.cash_flow_monthly) if has_rental_context else "Non applicable", "Revenus moins dépenses." if has_rental_context else "Calcul locatif non applicable."),
+        ("Taux de capitalisation", f"{result.capitalization_rate:.2f} %" if has_rental_context else "Non applicable", "RNE annuel / prix." if has_rental_context else "Dépend des revenus locatifs."),
+        ("Rendement sur mise", f"{result.cash_on_cash_return:.2f} %" if has_rental_context else "Non applicable", "Flux annuel / capital investi." if has_rental_context else "Dépend des revenus locatifs."),
+        ("Capacité à couvrir la dette (DSCR)", f"{result.debt_service_coverage_ratio:.2f}x" if has_rental_context else "Non applicable", "RNE annuel / dette." if has_rental_context else "Dépend des revenus locatifs."),
+    )
+    for group in (items[:4], items[4:]):
+        columns = st.columns(len(group))
+        for column, (label, value, description) in zip(columns, group):
+            with column:
+                with st.container(border=True):
+                    st.metric(label, value)
+                    st.caption(description)
+
+
+def _show_summary_value_cards(address_lookup: dict | None, immovalue: dict | None) -> None:
+    """Keep fiscal, estimated and asking values distinct and easy to scan."""
+
+    role_match = _current_role_match(address_lookup)
+    asking = float(st.session_state.get("iv_asking") or 0)
+    official, market, asking_card = st.columns(3)
+    with official:
+        with st.container(border=True):
+            st.markdown("**Valeur municipale officielle**")
+            st.metric("Repère fiscal", _money(role_match["total_value"] or 0) if role_match else "À révéler")
+            st.caption("Ce n’est pas une valeur marchande.")
+    with market:
+        with st.container(border=True):
+            st.markdown("**Estimation ImmoValue**")
+            st.metric("Fourchette", f"{_money(immovalue['low'])} à {_money(immovalue['high'])}" if immovalue else "À produire")
+            st.caption(f"Expérimental · confiance {immovalue['confidence']} / 100" if immovalue else "Trois comparables admissibles sont requis.")
+    with asking_card:
+        with st.container(border=True):
+            st.markdown("**Prix demandé**")
+            st.metric("Prix saisi", _money(asking) if asking else "À ajouter")
+            st.caption("Ajoutez-le dans ImmoValue pour comparer l’écart." if not asking else "Montant déclaré par vous.")
+    if immovalue and asking:
+        gap = asking - immovalue["estimated_value"]
+        st.info(f"Écart avec ImmoValue : {_money(gap)} ({gap / immovalue['estimated_value'] * 100:+.1f} %). {immovalue.get('asking_comparison') or ''}".strip())
+    elif not immovalue:
+        st.caption("ImmoValue reste à produire avec trois comparables admissibles.")
+    elif not asking:
+        st.caption("Ajoutez un prix demandé pour obtenir l’écart en dollars et en pourcentage.")
+
+
+def _show_summary_scenarios(inputs: PropertyInputs, profile: str) -> None:
+    """Compact preview of existing deterministic scenarios; no formula changes."""
+
+    base = next(item for item in build_standard_scenarios(inputs, profile) if item.name == "Scénario de base")
+    rate_up = next(item for item in build_resilience_tests(inputs, profile)[0] if item.name == "Taux +1 point")
+    prudent = next(item for item in build_standard_scenarios(inputs, profile) if item.name == "Prudent")
+    for column, scenario in zip(st.columns(3), (base, rate_up, prudent)):
+        with column:
+            with st.container(border=True):
+                st.markdown(f"**{scenario.name}**")
+                st.metric("Flux mensuel", _money(scenario.financial.cash_flow_monthly))
+                st.caption(f"DSCR {scenario.financial.debt_service_coverage_ratio:.2f}x · {scenario.description}")
+
+
+def _return_to_summary_inputs() -> None:
+    st.session_state.pop("analysis_calculation_signature", None)
+    st.session_state.pop("analysis_calculation_errors", None)
+    st.session_state["analysis_calculation_requested"] = False
+
+
 def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, address_lookup: dict | None = None) -> None:
-    st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>RÉSULTATS ET RAPPORT</p><h2>Votre dossier immobilier 360</h2><p class='section-intro'>Commencez par l’essentiel, puis consultez vos chiffres, les vérifications et les sources.</p>", unsafe_allow_html=True)
-    overview_tab, finances_tab, risks_tab, details_tab = st.tabs(["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"])
     engine_result = evaluate_immoengine(inputs, result, profile)
+    immovalue_preview = _generated_immovalue()
+    dossier_label, property_type = _summary_dossier_label()
+    st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>RÉSULTATS ET RAPPORT</p><h2>Votre synthèse immobilière</h2><p class='section-intro'>Les repères essentiels de votre dossier, séparés selon leur source et vos hypothèses.</p>", unsafe_allow_html=True)
+    with st.container(border=True):
+        identity, verdict = st.columns([3, 1])
+        with identity:
+            st.markdown(f"### {dossier_label}")
+            st.caption(f"{property_type or 'Type de propriété à préciser'} · Analyse du {date.today().isoformat()}")
+        with verdict:
+            st.markdown(f"**{engine_result.verdict.capitalize()}**")
+            st.caption("Lecture déterministe de vos hypothèses.")
+        score, confidence = st.columns(2)
+        score.metric("ImmoScore", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Données insuffisantes")
+        confidence.metric("Confiance", f"{engine_result.confidence_index} / 100")
+        st.caption("Le score n’est pas une garantie. La confiance décrit la qualité et la complétude des données, pas la probabilité d’un bon achat.")
+
+    st.subheader("Comparer les valeurs")
+    _show_summary_value_cards(address_lookup, immovalue_preview)
+    st.subheader("Les essentiels financiers")
+    _show_summary_financial_cards(inputs, result)
+    strengths, checks = st.columns(2)
+    with strengths:
+        st.subheader("Points forts")
+        for item in engine_result.positive_factors[:3] or ["Aucun point fort déterministe n’est disponible avec les renseignements actuels."]:
+            st.success(item)
+    with checks:
+        st.subheader("Points à vérifier")
+        review_items = [*engine_result.negative_factors, *(f"Donnée à ajouter : {item}" for item in engine_result.missing_data)]
+        for item in review_items[:3] or ["Aucun point à vérifier déterministe n’est disponible avec les renseignements actuels."]:
+            st.warning(item)
+    st.subheader("Scénarios en un coup d’œil")
+    _show_summary_scenarios(inputs, engine_result.profile)
+
+    overview_tab, finances_tab, risks_tab, details_tab = st.tabs(["ImmoValue", "Détails financiers", "Vérifications détaillées", "Méthode et sources"])
     with overview_tab:
         immovalue = _show_immovalue(address_lookup)
         score, confidence, verdict = st.columns(3)
@@ -1253,7 +1376,14 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         st.write("ImmoValue est une fourchette expérimentale issue des comparables que vous fournissez. Le rôle municipal est une valeur fiscale officielle, distincte d’une valeur marchande. ImmoScore mesure l’adéquation de vos hypothèses à votre profil; il ne constitue pas une recommandation.")
         st.caption("Chaque renseignement officiel affiché indique sa provenance, son année et sa fraîcheur. Une donnée absente reste indisponible.")
 
-    st.markdown("<div class='save-analysis-panel'><h3>Sauvegarder et activer le suivi</h3><p>La sauvegarde crée votre dossier. Les alertes restent limitées aux changements réellement calculables et à votre forfait.</p>", unsafe_allow_html=True)
+    st.markdown("<div class='save-analysis-panel'><h3>Enregistrer votre synthèse</h3><p>Sauvegardez ce dossier ou revenez aux chiffres saisis. Les alertes Premium restent un aperçu verrouillé : aucun envoi n’est activé ici.</p>", unsafe_allow_html=True)
+    action_save, action_edit, action_premium = st.columns(3)
+    with action_edit:
+        st.button("Modifier les hypothèses", on_click=_return_to_summary_inputs, key="edit_analysis_hypotheses", use_container_width=True)
+    with action_premium:
+        st.button("Voir les alertes Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", use_container_width=True)
+    with action_save:
+        st.caption("Le PDF est disponible dans Mes propriétés après sauvegarde.")
     if is_authenticated():
         property_name = st.text_input("Nom ou adresse de la propriété", key="saved_property_name", placeholder="Ex. Duplex - Montréal")
         if st.button("Sauvegarder dans Mes propriétés", type="primary", key="save_analysis"):
