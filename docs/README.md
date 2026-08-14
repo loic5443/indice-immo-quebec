@@ -27,6 +27,10 @@ Les suggestions consenties du géocodeur officiel sont décrites dans [SOURCE_AD
 
 Le statut fonctionnel, les sources intégrées, les limites et les contrôles de confidentialité de la version 0.7.0 sont consignés dans le [rapport de clôture](REFONTE_BETA_CLOSURE.md).
 
+## ImmoValue guidé
+
+La [méthodologie ImmoValue](IMMOVALUE_METHODOLOGY.md), la [model card](MODEL_CARD_IMMOVALUE.md) et le [guide CSV](GUIDE_CSV_COMPARABLES.md) décrivent le parcours de comparables déclarés. Les statistiques agrégées ouvertes du Registre foncier sont documentées comme contexte seulement : elles ne remplacent pas des ventes comparables individuelles et ne participent pas au calcul.
+
 ## Structure produit actuelle
 
 La navigation principale regroupe **Accueil**, **Analyser**, **Mes propriétés**, **Marché** et **Premium**. Les éléments secondaires (compte, confidentialité, à propos et retours) restent accessibles hors de ce parcours principal. Le Dossier immobilier 360 rassemble les renseignements publics consentis, la valeur municipale distincte d’une valeur marchande, ImmoValue lorsqu’il est calculable, l’analyse financière, ImmoScore et le suivi. Les alertes n’apparaissent comme actives que lorsqu’un changement vérifiable peut réellement être calculé; les autres sont des aperçus Premium verrouillés.

@@ -1,6 +1,8 @@
 """Complete property analysis UI with enriched assumptions and deterministic scenarios."""
 
 from dataclasses import asdict
+import hashlib
+import json
 import re
 import unicodedata
 
@@ -18,6 +20,13 @@ from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 from services.market_data_service import market_context_snapshot
 from domain.immovalue import SubjectProperty, estimate_immovalue
 from services.comparable_csv import csv_template, validate_csv_rows
+from services.comparable_workspace import (
+    PROPERTY_TYPES,
+    comparison_conclusion,
+    duplicate_comparable,
+    reviewed_comparables,
+    today_iso,
+)
 from services.analysis_workflow import STEPS, load_draft, save_draft, normalize_step, transition
 from services.entitlements_service import quota_status, consume_estimation
 from services.address_lookup_service import lookup
@@ -1202,7 +1211,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
     overview_tab, finances_tab, risks_tab, details_tab = st.tabs(["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"])
     engine_result = evaluate_immoengine(inputs, result, profile)
     with overview_tab:
-        immovalue = _show_immovalue()
+        immovalue = _show_immovalue(address_lookup)
         score, confidence, verdict = st.columns(3)
         score.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Indisponible")
         confidence.metric("Confiance", f"{engine_result.confidence_index} / 100")
@@ -1268,82 +1277,249 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def _show_immovalue() -> dict:
-    """A local-only workspace; declared comparables stay separate from financial scoring."""
-    st.markdown("<div class='section-space'></div><h2>Estimation marchande (ImmoValue)</h2>", unsafe_allow_html=True)
-    st.caption("Expérimental : ImmoValue utilise uniquement les comparables que vous fournissez. Ce n’est pas une évaluation officielle.")
-    with st.expander("1. Informations sur la propriété et 3. Comparables manuels", expanded=False):
+def _immovalue_subject() -> SubjectProperty:
+    """Collect the subject inputs without assigning an official value to it."""
+
+    state = st.session_state.get(ADDRESS_STATE_KEY)
+    address_name = ""
+    if isinstance(state, AddressFormState) and state.address:
+        address_name = ", ".join(part for part in (state.address.street, state.address.city) if part)
+    name = st.text_input("Adresse ou nom de la propriété", key="iv_name", placeholder=address_name or "Ex. Projet résidentiel")
+    first, second, third = st.columns(3)
+    with first:
+        property_type = st.selectbox("Type de propriété", PROPERTY_TYPES, key="iv_type")
+    with second:
+        living_area = st.number_input("Superficie habitable (pi² ou m², selon votre référence)", min_value=0.0, key="iv_area")
+    with third:
+        asking = st.number_input("Prix demandé (facultatif)", min_value=0.0, step=5_000.0, key="iv_asking")
+    with st.expander("Détails de la propriété (facultatif)", expanded=False):
         a, b, c = st.columns(3)
         with a:
-            name = st.text_input("Adresse ou nom déclaré", key="iv_name")
-            property_type = st.selectbox("Type déclaré", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="iv_type")
-            units = st.number_input("Unités déclarées", 0, 20, key="iv_units")
+            units = st.number_input("Unités", min_value=0, max_value=20, key="iv_units")
         with b:
-            living_area = st.number_input("Superficie habitable déclarée", 0.0, key="iv_area")
-            land_area = st.number_input("Terrain déclaré", 0.0, key="iv_land")
-            year = st.number_input("Année de construction déclarée", 0, 2100, key="iv_year")
+            land_area = st.number_input("Superficie du terrain", min_value=0.0, key="iv_land")
         with c:
-            asking = st.number_input("Prix demandé facultatif", 0.0, key="iv_asking")
-            st.text_area("Rénovations et notes déclarées", key="iv_notes")
-        st.caption("Tous les renseignements ci-dessus sont déclarés par l'utilisateur et non vérifiés.")
+            year = st.number_input("Année de construction", min_value=0, max_value=2100, key="iv_year")
+        st.text_area("Notes personnelles sur la propriété (facultatif)", key="iv_notes")
+    return SubjectProperty(
+        name=name or address_name,
+        property_type=property_type,
+        units=st.session_state.get("iv_units") or None,
+        living_area=living_area or None,
+        land_area=st.session_state.get("iv_land") or None,
+        year_built=st.session_state.get("iv_year") or None,
+        asking_price=asking or None,
+        notes=st.session_state.get("iv_notes", ""),
+    )
+
+
+def _comparable_from_form(prefix: str, current: dict | None = None) -> dict:
+    """Render the minimum declared fields, with rarely used details collapsed."""
+
+    current = current or {}
+    one, two = st.columns(2)
+    with one:
+        address = st.text_input("Adresse ou nom descriptif", value=current.get("address", ""), key=f"{prefix}_address")
+        sale_price = st.number_input("Prix de vente conclu ($)", min_value=0.0, step=5_000.0, value=float(current.get("sale_price") or 0), key=f"{prefix}_price")
+        sale_date = st.date_input("Date de vente", value=current.get("sale_date") or today_iso(), key=f"{prefix}_date")
+    with two:
+        property_type = st.selectbox("Type de propriété", PROPERTY_TYPES, index=PROPERTY_TYPES.index(current.get("property_type", "")) if current.get("property_type", "") in PROPERTY_TYPES else 0, key=f"{prefix}_type")
+        living_area = st.number_input("Superficie habitable", min_value=0.0, value=float(current.get("living_area") or 0), key=f"{prefix}_area")
+        city = st.text_input("Ville", value=current.get("city", ""), key=f"{prefix}_city")
+    source = st.text_input("Source ou provenance", value=current.get("source_declared", ""), key=f"{prefix}_source")
+    closed = st.checkbox("Je confirme qu’il s’agit d’une vente conclue", value=bool(current.get("declared_closed_sale", False)), key=f"{prefix}_closed")
+    rights = st.checkbox("Je confirme avoir le droit d’utiliser cette donnée", value=bool(current.get("usage_right_confirmed", False)), key=f"{prefix}_rights")
+    with st.expander("Détails du comparable (facultatif)", expanded=False):
+        a, b, c = st.columns(3)
+        with a:
+            land_area = st.number_input("Terrain", min_value=0.0, value=float(current.get("land_area") or 0), key=f"{prefix}_land")
+            year_built = st.number_input("Année", min_value=0, max_value=2100, value=int(current.get("year_built") or 0), key=f"{prefix}_year")
+        with b:
+            bedrooms = st.number_input("Chambres", min_value=0, max_value=20, value=int(current.get("bedrooms") or 0), key=f"{prefix}_bedrooms")
+            bathrooms = st.number_input("Salles de bain", min_value=0.0, max_value=20.0, value=float(current.get("bathrooms") or 0), key=f"{prefix}_bathrooms")
+        with c:
+            distance = st.number_input("Distance déclarée (km)", min_value=0.0, value=float(current.get("distance_km") or 0), key=f"{prefix}_distance")
+            adjustment = st.number_input("Ajustement manuel ($)", value=float(current.get("manual_adjustment") or 0), step=1_000.0, key=f"{prefix}_adjustment")
+            st.caption("Cet ajustement déclaré est visible dans la méthode; il n’est pas calculé automatiquement.")
+    return {
+        "guided_entry": True, "address": address.strip(), "sale_price": sale_price, "sale_date": sale_date.isoformat(),
+        "property_type": property_type, "living_area": living_area, "city": city.strip(),
+        "source_declared": source.strip(), "declared_closed_sale": closed, "usage_right_confirmed": rights,
+        "land_area": land_area or None, "year_built": year_built or None, "bedrooms": bedrooms or None,
+        "bathrooms": bathrooms or None, "distance_km": distance, "manual_adjustment": adjustment,
+    }
+
+
+def _stable_immovalue_key(subject: SubjectProperty, comparables: list[dict]) -> str:
+    """Persistent idempotency key; changing a declared input creates a new action."""
+
+    payload = {"subject": asdict(subject), "comparables": comparables}
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+    return f"immovalue:{digest}"
+
+
+def _show_immovalue(address_lookup: dict | None = None) -> dict:
+    """Guide manual/CSV comparables without changing the ImmoValue algorithm."""
+
+    st.markdown("<div class='section-space'></div><h2>Estimation marchande (ImmoValue)</h2>", unsafe_allow_html=True)
+    st.caption("Expérimental : ajoutez vos ventes comparables autorisées. ImmoRadar ne collecte aucune transaction et ce résultat n’est pas une évaluation officielle.")
+    subject = _immovalue_subject()
+    st.session_state.setdefault("iv_manual_comparables", [])
+    manual_comparables = list(st.session_state["iv_manual_comparables"])
+    csv_comparables = list(st.session_state.get("iv_csv_comparables", []))
+    comparables = [*manual_comparables, *csv_comparables]
+    reviewed = reviewed_comparables(subject, comparables)
+    admissible = sum(item["display_status"] == "Admissible" for item in reviewed)
+    progress_label = "Estimation prête" if admissible >= 3 and subject.living_area else f"{admissible}/3 comparables admissibles"
+    st.progress(min(admissible, 3) / 3, text=progress_label)
+    if admissible < 3:
+        st.caption("Ajoutez une vente à la fois. Trois comparables admissibles sont requis avant de produire une estimation.")
+    elif not subject.living_area:
+        st.info("Les comparables sont prêts. Ajoutez la superficie habitable de la propriété pour calculer ImmoValue.")
+
+    with st.expander("Ajouter un comparable", expanded=admissible < 3):
+        with st.form("iv_add_comparable"):
+            candidate = _comparable_from_form("iv_add")
+            submitted = st.form_submit_button("Ajouter ce comparable", type="primary")
+        if submitted:
+            existing = [*manual_comparables, *csv_comparables]
+            if duplicate_comparable(candidate, existing):
+                st.error("Ce comparable semble déjà présent (adresse, date et prix identiques).")
+            else:
+                st.session_state["iv_manual_comparables"] = [*manual_comparables, candidate]
+                st.success("Comparable ajouté. Vérifiez son statut avant de produire l’estimation.")
+                st.rerun()
+
+    edit_index = st.session_state.get("iv_edit_comparable_index")
+    if isinstance(edit_index, int) and 0 <= edit_index < len(manual_comparables):
+        st.subheader(f"Modifier le comparable {edit_index + 1}")
+        with st.form(f"iv_edit_comparable_{edit_index}"):
+            edited = _comparable_from_form(f"iv_edit_{edit_index}", manual_comparables[edit_index])
+            save_edit = st.form_submit_button("Enregistrer les modifications", type="primary")
+        if save_edit:
+            others = [item for index, item in enumerate(manual_comparables) if index != edit_index] + csv_comparables
+            if duplicate_comparable(edited, others):
+                st.error("Ce comparable semble déjà présent (adresse, date et prix identiques).")
+            else:
+                manual_comparables[edit_index] = edited
+                st.session_state["iv_manual_comparables"] = manual_comparables
+                st.session_state.pop("iv_edit_comparable_index", None)
+                st.success("Comparable modifié.")
+                st.rerun()
+
+    if reviewed:
+        st.subheader("Vos comparables")
+        for index, item in enumerate(reviewed):
+            source_kind = "Saisie guidée" if index < len(manual_comparables) else "Import CSV"
+            with st.container(border=True):
+                label, status_column, actions = st.columns([5, 2, 3])
+                with label:
+                    st.markdown(f"**{item.get('address') or 'Comparable sans nom'}** · {item.get('city') or 'Ville à préciser'}")
+                    st.caption(f"{source_kind} · provenance : {item.get('source_declared') or 'à préciser'}")
+                with status_column:
+                    st.markdown(f"**{item['display_status']}**")
+                    st.caption(item["display_reason"])
+                with actions:
+                    if index < len(manual_comparables):
+                        if st.button("Modifier", key=f"iv_edit_{index}"):
+                            st.session_state["iv_edit_comparable_index"] = index
+                            st.rerun()
+                        if st.button("Supprimer", key=f"iv_delete_{index}"):
+                            st.session_state["iv_manual_comparables"] = [item for position, item in enumerate(manual_comparables) if position != index]
+                            st.session_state.pop("iv_edit_comparable_index", None)
+                            st.rerun()
+                    else:
+                        csv_index = index - len(manual_comparables)
+                        if st.button("Retirer l’import", key=f"iv_delete_csv_{csv_index}"):
+                            st.session_state["iv_csv_comparables"] = [item for position, item in enumerate(csv_comparables) if position != csv_index]
+                            st.rerun()
+
+    with st.expander("Import avancé (CSV local)", expanded=False):
+        st.caption("Le fichier reste local. Utilisez l’assistant ci-dessus si vous préférez ajouter vos comparables un par un.")
         st.download_button("Télécharger le modèle CSV", csv_template(), "comparables-immoradar.csv", "text/csv")
         uploaded = st.file_uploader("Importer un CSV local (jamais transmis à un service externe)", type="csv", key="comparables_csv")
         sales_confirmed = st.checkbox("Je confirme que les lignes représentent des ventes conclues", key="csv_sales_confirmed")
-        import_rights = st.checkbox("Je confirme mon droit d'utilisation pour ce fichier", key="csv_import_rights")
+        import_rights = st.checkbox("Je confirme mon droit d’utilisation pour ce fichier", key="csv_import_rights")
         if uploaded:
             valid_rows, row_errors = validate_csv_rows(uploaded.getvalue().decode("utf-8-sig", errors="replace"), import_rights, sales_confirmed)
             st.caption(f"Prévisualisation locale : {len(valid_rows)} ligne(s) valide(s), {len(row_errors)} erreur(s).")
-            if valid_rows: st.dataframe(valid_rows, hide_index=True, width="stretch")
-            for error in row_errors: st.error(f"Ligne {error['line']} : {error['error']}")
+            if valid_rows:
+                st.dataframe(valid_rows, hide_index=True, width="stretch")
+            for error in row_errors:
+                st.error(f"Ligne {error['line']} : {error['error']}")
             if st.button("Importer les lignes valides", disabled=not valid_rows, key="confirm_csv_import"):
-                st.session_state["iv_csv_comparables"] = valid_rows; st.success("Lignes valides importées localement.")
-            if st.button("Annuler l'import", key="cancel_csv_import"):
-                st.session_state.pop("iv_csv_comparables", None); st.info("Import annulé sans sauvegarde.")
-        comparables=list(st.session_state.get("iv_csv_comparables", []))
-        for index in range(3):
-            st.markdown(f"**Comparable {index + 1}**")
-            x, y, z = st.columns(3)
-            with x:
-                address=st.text_input("Adresse ou identifiant", key=f"iv_address_{index}")
-                sale_price=st.number_input("Prix de vente", 0.0, key=f"iv_price_{index}")
-                area=st.number_input("Superficie", 0.0, key=f"iv_carea_{index}")
-            with y:
-                ctype=st.selectbox("Type", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key=f"iv_ctype_{index}")
-                distance=st.number_input("Distance approximative (km)", 0.0, key=f"iv_distance_{index}")
-                c_units=st.number_input("Unités", 0, 20, key=f"iv_cunits_{index}")
-            with z:
-                source=st.text_input("Source déclarée", key=f"iv_source_{index}")
-                closed=st.checkbox("Vente conclue déclarée (pas une annonce active)", key=f"iv_closed_{index}")
-                rights=st.checkbox("Je confirme disposer du droit d'utilisation", key=f"iv_rights_{index}")
-            comparables.append({"address": address, "sale_date": "2026-01-01", "sale_price": sale_price, "living_area": area, "property_type": ctype, "units": c_units, "distance_km": distance, "source_declared": source, "declared_closed_sale": closed, "usage_right_confirmed": rights})
-    subject=SubjectProperty(name=name, property_type=property_type, units=units or None, living_area=living_area or None, land_area=land_area or None, year_built=year or None, asking_price=asking or None, notes=st.session_state.get("iv_notes", ""))
-    draft_key = f"immovalue:{hash((subject.name, subject.living_area, tuple(str(item) for item in comparables)))}"
-    # A connected user may open or resume an analysis before requesting an
-    # estimate.  Always render the deterministic availability state first;
-    # quota consumption remains limited to the explicit generation action.
-    estimate = st.session_state.get("immovalue_generated_result") or estimate_immovalue(subject, comparables)
+                unique = [item for item in valid_rows if not duplicate_comparable(item, [*manual_comparables, *csv_comparables])]
+                st.session_state["iv_csv_comparables"] = [*csv_comparables, *unique]
+                st.success(f"{len(unique)} ligne(s) valide(s) importée(s) localement.")
+                st.rerun()
+            if st.button("Annuler l’import", key="cancel_csv_import"):
+                st.session_state.pop("iv_csv_comparables", None)
+                st.info("Import annulé sans sauvegarde.")
+
+    comparables = [*st.session_state.get("iv_manual_comparables", []), *st.session_state.get("iv_csv_comparables", [])]
+    candidate = estimate_immovalue(subject, comparables)
+    draft_key = _stable_immovalue_key(subject, comparables)
+    generated = st.session_state.get("immovalue_generated_result")
+    estimate = generated if st.session_state.get("immovalue_generated_key") == draft_key else None
+    if generated and estimate is None:
+        st.session_state.pop("immovalue_generated_result", None)
+        st.session_state.pop("immovalue_generated_key", None)
+        st.session_state.pop("immovalue_generated_at", None)
+
     if is_authenticated():
-        user=current_user(); quota=quota_status(user["id"],user,DATABASE_PATH)
+        user = current_user()
+        quota = quota_status(user["id"], user, DATABASE_PATH)
         st.caption(quota["label"] + (" · Le quota est désactivé pendant la bêta." if not _quota_enforced() else ""))
-        if st.button("Produire l'estimation ImmoValue", type="primary", key="generate_immovalue"):
-            candidate=estimate_immovalue(subject, comparables)
-            if not candidate["available"]:
-                st.info("Estimation indisponible : ajoutez au moins trois comparables admissibles.")
-            elif not _quota_enforced() or consume_estimation(user["id"],user,DATABASE_PATH,draft_key):
-                st.session_state["immovalue_generated_result"]=candidate;estimate=candidate;st.success("Estimation produite.")
+    if estimate is None:
+        if not candidate["available"]:
+            st.info("Estimation non prête : ajoutez les renseignements manquants et au moins trois comparables admissibles. Cette étape ne consomme aucune estimation.")
+        elif st.button("Produire l’estimation ImmoValue", type="primary", key="generate_immovalue"):
+            if not is_authenticated() or not _quota_enforced() or consume_estimation(current_user()["id"], current_user(), DATABASE_PATH, draft_key):
+                st.session_state["immovalue_generated_result"] = candidate
+                st.session_state["immovalue_generated_key"] = draft_key
+                st.session_state["immovalue_generated_at"] = today_iso()
+                estimate = candidate
+                st.success("Estimation ImmoValue produite.")
             else:
-                st.warning("Votre estimation gratuite du mois est utilisée. L'analyse financière reste disponible.")
-                st.button("Découvrir Premium",on_click=go_to,args=("Premium",))
+                st.warning("Votre estimation gratuite du mois est utilisée. L’analyse financière reste disponible.")
+                st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="iv_premium")
+
+    if estimate and estimate["available"]:
+        st.subheader("Comparer les valeurs")
+        role_match = _current_role_match(address_lookup)
+        official, market, asking_card = st.columns(3)
+        with official:
+            with st.container(border=True):
+                st.markdown("**Valeur municipale officielle**")
+                st.metric("Valeur au rôle", _money(role_match["total_value"] or 0) if role_match else "Indisponible")
+                st.caption("Référence fiscale officielle, distincte d’une valeur marchande.")
+        with market:
+            with st.container(border=True):
+                st.markdown("**Estimation ImmoValue**")
+                st.metric("Valeur expérimentale", _money(estimate["estimated_value"]))
+                st.caption(f"Fourchette : {_money(estimate['low'])} à {_money(estimate['high'])} · confiance {estimate['confidence']} / 100")
+        with asking_card:
+            with st.container(border=True):
+                st.markdown("**Prix demandé**")
+                st.metric("Prix saisi", _money(subject.asking_price) if subject.asking_price else "À ajouter")
+                st.caption("Ajoutez un prix demandé pour visualiser l’écart avec ImmoValue." if not subject.asking_price else f"Écart : {_money(estimate['asking_gap'])} ({estimate['asking_gap'] / estimate['estimated_value'] * 100:+.1f} %)" )
+        st.info(comparison_conclusion(estimate))
+        st.caption(f"Calculée le {st.session_state.get('immovalue_generated_at', today_iso())} · {estimate['used_count']} comparables admissibles · dispersion {estimate['dispersion_pct']} %.")
+        with st.expander("Pourquoi cette estimation?", expanded=False):
+            st.write("La valeur centrale est une médiane pondérée des prix par superficie des ventes déclarées admissibles. La pondération favorise les comparables les plus similaires; elle ne crée aucun ajustement automatique.")
+            st.dataframe(
+                [{
+                    "Comparable": item.get("address") or "Non renseigné", "Statut": item["status"],
+                    "Similarité": f"{item['similarity']:.0f} / 100", "Prix / superficie": _money(item.get("price_per_area") or 0),
+                    "Provenance": item.get("source_declared") or "Non renseignée", "Ajustement déclaré": _money(item.get("manual_adjustment") or 0),
+                    "Données manquantes / remarque": item["reason"],
+                } for item in estimate["comparables"]],
+                hide_index=True, width="stretch",
+            )
+            st.caption("Les ajustements manuels, la provenance déclarée et les données manquantes restent visibles. Les statistiques de marché agrégées ne servent pas de comparables individuels.")
     else:
-        estimate=estimate_immovalue(subject, comparables)
-    if estimate["available"]:
-        one, two, three = st.columns(3); one.metric("Valeur expérimentale", f"{estimate['estimated_value']:,.0f} $".replace(',', ' ')); two.metric("Fourchette prudente", f"{estimate['low']:,.0f} $ à {estimate['high']:,.0f} $".replace(',', ' ')); three.metric("Confiance ImmoValue", f"{estimate['confidence']} / 100")
-        st.caption(f"{estimate['used_count']} comparables utilisés · dispersion {estimate['dispersion_pct']} % · {estimate['method']}")
-        if estimate["asking_comparison"]: st.info(f"Prix demandé : {estimate['asking_comparison']} (écart indicatif {estimate['asking_gap']:,.0f} $).")
-    else: st.info("Aucune estimation : ajoutez au moins trois comparables admissibles et la superficie du sujet.")
-    if estimate["comparables"]:
-        st.dataframe([{"Comparable": item.get("address") or "Non renseigné", "Statut": item["status"], "Similarité": f"{item['similarity']:.0f} / 100", "Raison": item["reason"]} for item in estimate["comparables"]], hide_index=True, width="stretch")
-    st.caption("ImmoValue est séparé d'ImmoScore : cette estimation n'influence pas le score financier et décisionnel.")
+        estimate = {"available": False, "comparables": candidate.get("comparables", [])}
+    st.caption("ImmoValue est séparé d’ImmoScore : cette estimation n’influence pas le score financier et décisionnel.")
     return estimate
 
 
