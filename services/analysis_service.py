@@ -36,12 +36,24 @@ def save_user_analysis(
         # Informative provenance snapshot; it does not enter ImmoEngine's score or verdict.
         "market_context_json": json.dumps(values.get("market_context", []), ensure_ascii=False),
         "immovalue_json": json.dumps(values.get("immovalue", {}), ensure_ascii=False),
+        # Public fiscal information is retained as a small, address-free snapshot.
+        # It remains separate from ImmoValue and from financial assumptions.
+        "official_role_snapshot_json": json.dumps(values.get("official_role_snapshot", {}), ensure_ascii=False),
     }
     return SQLiteRepository(database_path).save_analysis(user_id, property_name.strip(), payload)
 
 
 def list_user_analyses(user_id: int, database_path: Path | str) -> list[dict[str, Any]]:
     return SQLiteRepository(database_path).list_analyses(user_id)
+
+
+def get_user_analyses_for_comparison(
+    user_id: int, analysis_a_id: int, analysis_b_id: int, database_path: Path | str,
+) -> list[dict[str, Any]]:
+    """Load two immutable saved snapshots, enforcing ownership in SQLite."""
+    return SQLiteRepository(database_path).get_owned_analyses_for_comparison(
+        user_id, analysis_a_id, analysis_b_id,
+    )
 
 
 def count_user_analyses(user_id: int, database_path: Path | str) -> int:

@@ -33,4 +33,6 @@ La [méthodologie ImmoValue](IMMOVALUE_METHODOLOGY.md), la [model card](MODEL_CA
 
 ## Structure produit actuelle
 
+Le [comparateur de deux propriétés](COMPARATEUR_PROPRIETES.md) est intégré à **Mes propriétés**. Il compare deux instantanés appartenant au même compte, explique ses limites et ne constitue pas une recommandation d’achat.
+
 La navigation principale regroupe **Accueil**, **Analyser**, **Mes propriétés**, **Marché** et **Premium**. Les éléments secondaires (compte, confidentialité, à propos et retours) restent accessibles hors de ce parcours principal. Le Dossier immobilier 360 rassemble les renseignements publics consentis, la valeur municipale distincte d’une valeur marchande, ImmoValue lorsqu’il est calculable, l’analyse financière, ImmoScore et le suivi. Les alertes n’apparaissent comme actives que lorsqu’un changement vérifiable peut réellement être calculé; les autres sont des aperçus Premium verrouillés.

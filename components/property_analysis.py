@@ -1164,6 +1164,28 @@ def _has_revealed_public_information(address_lookup: dict | None) -> bool:
     return bool(address_lookup and address_lookup.get("consent") and address_lookup.get("matches"))
 
 
+def _official_role_snapshot(address_lookup: dict | None) -> dict:
+    """Keep only public fiscal fields needed to explain a future saved comparison."""
+    if not address_lookup or not address_lookup.get("consent"):
+        return {}
+    matches = address_lookup.get("matches") or []
+    selected = st.session_state.get("official_role_unit", 0)
+    if not isinstance(selected, int) or not 0 <= selected < len(matches):
+        selected = 0
+    if not matches:
+        return {}
+    match = matches[selected]
+    return {
+        "land_value": match.get("land_value"),
+        "building_value": match.get("building_value"),
+        "total_value": match.get("total_value"),
+        "role_year": match.get("role_year"),
+        "reference_date": match.get("market_reference_date"),
+        "source": "MAMH / Données Québec",
+        "license": "CC BY 4.0",
+    }
+
+
 def _show_role_overview(address_lookup: dict | None) -> None:
     """Show official assessment data only as a clearly labelled fiscal reference."""
 
@@ -1399,6 +1421,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                     "financial_inputs": asdict(inputs), "scenarios": scenarios, "resilience": resilience,
                     "market_context": market_context_snapshot(str(DATABASE_PATH)),
                     "immovalue": immovalue,
+                    "official_role_snapshot": _official_role_snapshot(address_lookup),
                 }, profile=engine_result.profile, engine_result=engine_result)
                 st.success("Dossier, scénarios et tests de résistance sauvegardés dans Mes propriétés.")
     else:

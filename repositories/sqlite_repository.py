@@ -60,8 +60,9 @@ class SQLiteRepository:
                 debt_service_coverage_ratio, engine_version, data_provenance, user_profile,
                 immo_score, confidence_index, engine_verdict, positive_factors_json,
                 negative_factors_json, missing_data_json, recommended_checks_json, immodna_json,
-                financial_inputs_json, scenarios_json, resilience_json, market_context_json, immovalue_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                financial_inputs_json, scenarios_json, resilience_json, market_context_json, immovalue_json,
+                official_role_snapshot_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (user_id, property_name, values["created_at"], values["price"], values["down_payment"],
                  values["rental_income"], values["monthly_expenses"], values["cash_flow"],
                  values["cash_on_cash_return"], values["capitalization_rate"],
@@ -70,7 +71,7 @@ class SQLiteRepository:
                  values["engine_verdict"], values["positive_factors_json"], values["negative_factors_json"],
                  values["missing_data_json"], values["recommended_checks_json"], values["immodna_json"],
                  values["financial_inputs_json"], values["scenarios_json"], values["resilience_json"],
-                 values["market_context_json"], values["immovalue_json"]),
+                 values["market_context_json"], values["immovalue_json"], values["official_role_snapshot_json"]),
             )
         return int(cursor.lastrowid)
 
@@ -80,6 +81,25 @@ class SQLiteRepository:
                 "SELECT * FROM analyses WHERE user_id = ? ORDER BY is_favorite DESC, created_at DESC", (user_id,)
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def get_owned_analyses_for_comparison(
+        self, user_id: int, analysis_a_id: int, analysis_b_id: int,
+    ) -> list[dict[str, Any]]:
+        """Return exactly two saved snapshots owned by one user, in requested order.
+
+        This is deliberately a scoped SQL query instead of loading a user's whole
+        history in the interface and filtering it there.  There is no administrator
+        bypass: comparison is always a view of the signed-in user's own dossiers.
+        """
+        if analysis_a_id == analysis_b_id:
+            return []
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT * FROM analyses WHERE user_id = ? AND id IN (?, ?)",
+                (user_id, analysis_a_id, analysis_b_id),
+            ).fetchall()
+        by_id = {int(row["id"]): dict(row) for row in rows}
+        return [by_id[analysis_id] for analysis_id in (analysis_a_id, analysis_b_id) if analysis_id in by_id]
 
     def delete_analysis(self, user_id: int, analysis_id: int) -> bool:
         with closing(self._connect()) as connection, connection:
