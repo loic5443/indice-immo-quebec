@@ -3,6 +3,7 @@
 import streamlit as st
 
 from components.sidebar import go_to
+from services.alert_service import build_calculable_alerts
 from services.entitlements_service import can_use
 
 
@@ -11,6 +12,17 @@ def show_alert_center(user: dict, analyses: list[dict]) -> None:
     if not can_use(user, "alerts"):
         st.markdown("<section class='premium-notice'><p class='eyebrow'>APERÇU PREMIUM VERROUILLÉ</p><h3>Surveillez ce qui peut changer votre décision</h3><p>Alertes de variation de valeur, impact de taux, mise à jour du rôle municipal et détérioration de marge financière. Elles ne sont pas actives pour ce forfait.</p></section>", unsafe_allow_html=True)
         st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="alerts_premium")
+        return
+    alerts = build_calculable_alerts(analyses)
+    if alerts:
+        st.caption("Alertes calculées à partir de vos instantanés sauvegardés. Aucun courriel n’est envoyé pendant la bêta privée.")
+        for alert in alerts:
+            with st.container(border=True):
+                label = "À VÉRIFIER" if alert["severity"] == "important" else "MISE À JOUR DISPONIBLE"
+                st.markdown(f"<p class='eyebrow'>{label}</p>", unsafe_allow_html=True)
+                st.subheader(alert["title"])
+                st.write(alert["detail"])
+                st.caption(f"Dossier : {alert['property_name']} · instantané du {str(alert['created_at'])[:10]}")
         return
     # No message is produced unless a comparison or a source update is truly
     # available. This avoids turning examples into apparent real events.

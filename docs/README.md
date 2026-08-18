@@ -31,6 +31,10 @@ Le statut fonctionnel, les sources intégrées, les limites et les contrôles de
 
 La [méthodologie ImmoValue](IMMOVALUE_METHODOLOGY.md), la [model card](MODEL_CARD_IMMOVALUE.md) et le [guide CSV](GUIDE_CSV_COMPARABLES.md) décrivent le parcours de comparables déclarés. Les statistiques agrégées ouvertes du Registre foncier sont documentées comme contexte seulement : elles ne remplacent pas des ventes comparables individuelles et ne participent pas au calcul.
 
+## Alertes factuelles
+
+Le centre d’alertes Premium lit uniquement les instantanés déjà sauvegardés : variation d’ImmoValue avec confiance suffisante, variation du rôle municipal et perte de flux dans le test « Taux +1 point ». Il ne déclenche aucun appel externe ni courriel pendant la bêta.
+
 ## Structure produit actuelle
 
 Le [comparateur de deux propriétés](COMPARATEUR_PROPRIETES.md) est intégré à **Mes propriétés**. Il compare deux instantanés appartenant au même compte, explique ses limites et ne constitue pas une recommandation d’achat.
