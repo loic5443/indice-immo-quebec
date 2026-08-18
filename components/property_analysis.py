@@ -1028,6 +1028,7 @@ def show_property_analysis() -> None:
             st.caption("Mode manuel actif : aucune recherche externe n’est effectuée.")
         else:
             st.caption("Les suggestions apparaissent automatiquement pendant la saisie.")
+            st.caption("La couverture des rôles municipaux officiels n’est pas encore complète pour tout le Québec. Si aucun rôle n’est disponible, vous pouvez poursuivre manuellement.")
         resolution = st.session_state.get(ADDRESS_RESOLUTION_KEY)
         if isinstance(resolution, SuggestionResponse):
             if resolution.status == "ok" and len(resolution.suggestions) > 1:

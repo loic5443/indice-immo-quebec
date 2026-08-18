@@ -79,6 +79,25 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
         self.assertTrue(second.cached)
         self.assertEqual(len(calls), 1)
 
+    def test_candidate_lookup_is_a_safe_fallback_when_suggest_is_unavailable(self):
+        """A temporary suggest outage must not remove official suggestions."""
+
+        calls = []
+
+        def fetcher(url):
+            calls.append(url)
+            if "/suggest?" in url:
+                raise TimeoutError()
+            return MRNF_CANDIDATE_PAYLOAD
+
+        result = suggest_addresses("123 rue Exemple", True, fetch_json=fetcher, now=lambda: 10)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual((result.suggestions[0].street, result.suggestions[0].city, result.suggestions[0].postal_code), ("123 rue Exemple", "Ville-exemple", "H2X 1Y4"))
+        self.assertEqual(len(calls), 2)
+        self.assertIn("/suggest?", calls[0])
+        self.assertIn("findAddressCandidates", calls[1])
+
     def test_missing_result_and_service_failure_keep_manual_mode(self):
         empty = suggest_addresses("999 rue absente", True, fetch_json=lambda _: {"suggestions": []}, now=lambda: 10)
         self.assertEqual(empty.status, "ok")

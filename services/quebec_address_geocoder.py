@@ -239,12 +239,19 @@ def suggest_addresses(
     _last_network_request = current_time
     try:
         # ``suggest`` is the official GeocodeServer operation specifically
-        # intended for type-ahead.  ``findAddressCandidates`` is used only
-        # after a person explicitly selects one suggestion below.
+        # intended for type-ahead.  Some official deployments temporarily
+        # expose it less reliably than ``findAddressCandidates``.  Falling
+        # back to that documented operation keeps the same consent, timeout,
+        # result limit and privacy guarantees, while returning structured
+        # form fields when it succeeds.
         payload = (fetch_json or _fetch_json)(_suggest_url(normalized_query))
         response = SuggestionResponse("ok", _parse_suggest_response(payload))
-    except Exception:  # Network/schema detail is deliberately never retained.
-        response = SuggestionResponse("unavailable", message="Le service d’adresses est momentanément indisponible. Vous pouvez poursuivre manuellement.")
+    except Exception:
+        try:
+            payload = (fetch_json or _fetch_json)(_official_url(normalized_query))
+            response = SuggestionResponse("ok", _parse_response(payload))
+        except Exception:  # Network/schema detail is deliberately never retained.
+            response = SuggestionResponse("unavailable", message="Le service d’adresses est momentanément indisponible. Vous pouvez poursuivre manuellement.")
     _CACHE[cache_key] = (current_time, response)
     return response
 
