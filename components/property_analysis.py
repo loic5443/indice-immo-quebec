@@ -34,7 +34,7 @@ from services.entitlements_service import quota_status, consume_estimation
 from services.address_lookup_service import lookup
 from services.quebec_role_importer import display_role_address,search_role_units,role_street_variants,suggest_role_units
 from services.quebec_role_admin_service import territory_for_municipality
-from services.quebec_role_auto_sync import AutoSyncResult, synchronize_selected_municipality
+from services.quebec_role_auto_sync import AutoSyncResult, municipal_coverage_status, synchronize_selected_municipality
 from services.address_form_service import (
     AddressFormState,
     empty_address_form_state,
@@ -488,6 +488,37 @@ def _on_manual_mode_change() -> None:
     """Changing mode is local-only and clears ephemeral external suggestions."""
 
     _clear_address_suggestions()
+
+
+def _show_municipal_coverage_hint() -> None:
+    """Show a local-only coverage state before the person launches a lookup."""
+
+    if not st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False):
+        return
+    if st.session_state.get(ADDRESS_MANUAL_MODE_KEY, False):
+        return
+    city = useful_query(st.session_state.get(ADDRESS_WIDGET_KEYS["city"], ""))
+    if not city:
+        return
+    try:
+        status = municipal_coverage_status(DATABASE_PATH, city)["status"]
+    except Exception:
+        # A local cache issue must never block the manual path or expose a
+        # city name in a technical diagnostic.
+        return
+    latest = st.session_state.get(ADDRESS_AUTO_SYNC_STATUS_KEY)
+    if latest == "unsupported_format":
+        st.caption("Rôle municipal : format officiel non pris en charge pour le moment. Vous pouvez poursuivre manuellement.")
+    elif status == "available":
+        st.caption("Rôle municipal : renseignements officiels déjà disponibles pour cette municipalité.")
+    elif status == "sync_available":
+        st.caption("Rôle municipal : synchronisation ciblée possible après votre recherche.")
+    elif status == "retry_later":
+        st.caption("Rôle municipal : une synchronisation récente a échoué; vous pourrez réessayer plus tard ou poursuivre manuellement.")
+    elif status in {"source_disabled", "territory_disabled"}:
+        st.caption("Rôle municipal : cette source n’est pas disponible actuellement. Vous pouvez poursuivre manuellement.")
+    else:
+        st.caption("Rôle municipal : aucune couverture officielle certaine pour cette municipalité. Vous pouvez poursuivre manuellement.")
 
 
 def _select_address_suggestion(suggestion: dict[str, str]) -> None:
@@ -1031,6 +1062,7 @@ def show_property_analysis() -> None:
         else:
             st.caption("Les suggestions apparaissent automatiquement pendant la saisie.")
             st.caption("La couverture des rôles municipaux officiels n’est pas encore complète pour tout le Québec. Si aucun rôle n’est disponible, vous pouvez poursuivre manuellement.")
+        _show_municipal_coverage_hint()
         resolution = st.session_state.get(ADDRESS_RESOLUTION_KEY)
         if isinstance(resolution, SuggestionResponse):
             if resolution.status == "ok" and len(resolution.suggestions) > 1:

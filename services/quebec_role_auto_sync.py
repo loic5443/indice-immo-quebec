@@ -176,6 +176,29 @@ def _territory_is_disabled(database_path: Path | str, territory: str) -> bool:
     return bool(row and not row[0])
 
 
+def municipal_coverage_status(database_path: Path | str, municipality: str) -> dict[str, str]:
+    """Describe one municipality's local role coverage without any network call.
+
+    The result deliberately contains only a categorical state and an internal
+    territory code.  It never includes the entered address or municipality
+    text, and it never refreshes the official index as part of a form render.
+    """
+
+    entry = _index_entry(database_path, municipality)
+    if entry is None:
+        return {"status": "manual", "territory_code": ""}
+    territory = entry["territory_code"]
+    if not source_enabled(SOURCE_ID, database_path):
+        return {"status": "source_disabled", "territory_code": territory}
+    if _territory_is_disabled(database_path, territory):
+        return {"status": "territory_disabled", "territory_code": territory}
+    if _territory_is_available(database_path, territory):
+        return {"status": "available", "territory_code": territory}
+    if _cooling_down(database_path, territory):
+        return {"status": "retry_later", "territory_code": territory}
+    return {"status": "sync_available", "territory_code": territory}
+
+
 def _cooling_down(database_path: Path | str, territory: str) -> bool:
     with closing(sqlite3.connect(database_path)) as connection:
         row = connection.execute("SELECT status,last_attempt_at FROM role_auto_sync_attempts WHERE territory_code=?", (territory,)).fetchone()

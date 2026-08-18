@@ -10,6 +10,7 @@ from data.database import initialize_database
 from streamlit.testing.v1 import AppTest
 from services.quebec_role_auto_sync import (
     AutoSyncResult,
+    municipal_coverage_status,
     resolve_official_territory,
     synchronize_selected_municipality,
 )
@@ -55,6 +56,12 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
         self._sync()
         result = self._sync(lambda _: (_ for _ in ()).throw(AssertionError("must use cached territory")))
         self.assertEqual(result.status, "available")
+        self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "available")
+
+    def test_coverage_status_is_local_only_and_explains_possible_sync(self):
+        resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
+        self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "sync_available")
+        self.assertEqual(municipal_coverage_status(self.db, "Ville inconnue")["status"], "manual")
 
     def test_disabled_territory_is_never_reactivated_or_downloaded(self):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
@@ -62,6 +69,7 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
             connection.execute("INSERT INTO role_territory_settings(territory_code,enabled) VALUES('01023',0)")
         result = self._sync(lambda _: (_ for _ in ()).throw(AssertionError("disabled territory must not download")))
         self.assertEqual(result.status, "territory_disabled")
+        self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "territory_disabled")
 
     def test_disabled_source_never_downloads(self):
         with sqlite3.connect(self.db) as connection, connection:
