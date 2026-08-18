@@ -38,8 +38,8 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def _sync(self, fetcher=lambda _: XML):
-        return synchronize_selected_municipality(self.db, "Ville test", True, fetcher=fetcher, index_fetcher=lambda _: INDEX)
+    def _sync(self, fetcher=lambda _: XML, version_fetcher=lambda _: "2.9"):
+        return synchronize_selected_municipality(self.db, "Ville test", True, fetcher=fetcher, index_fetcher=lambda _: INDEX, version_fetcher=version_fetcher)
 
     def test_exact_official_index_entry_syncs_one_territory_atomically(self):
         result = self._sync()
@@ -95,8 +95,7 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
         self.assertEqual(self._sync().status, "in_progress")
 
     def test_incompatible_xml_keeps_the_territory_empty_and_allows_manual_mode(self):
-        incompatible = XML.replace(b"<VERSION>2.9</VERSION>", b"<VERSION>3.0</VERSION>")
-        result = self._sync(lambda _: incompatible)
+        result = self._sync(lambda _: self.fail("unsupported XML must not download"), version_fetcher=lambda _: "3.0")
         self.assertEqual(result.status, "unsupported_format")
         self.assertIn("format", result.message)
         with sqlite3.connect(self.db) as connection:
@@ -105,7 +104,7 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
 
     def test_supported_27_xml_synchronizes_one_territory(self):
         compatible = XML.replace(b"<VERSION>2.9</VERSION>", b"<VERSION>2.7</VERSION>")
-        result = self._sync(lambda _: compatible)
+        result = self._sync(lambda _: compatible, version_fetcher=lambda _: "2.7")
         self.assertEqual((result.status, result.source_version, result.imported_units), ("synchronized", "2.7", 1))
 
     def test_non_exact_municipality_is_not_guessed(self):
@@ -145,7 +144,8 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
                 page,
                 "synchronize_selected_municipality",
                 side_effect=lambda database, city, consent: synchronize_selected_municipality(
-                    database, city, consent, fetcher=lambda _: XML, index_fetcher=lambda _: INDEX
+                    database, city, consent, fetcher=lambda _: XML, index_fetcher=lambda _: INDEX,
+                    version_fetcher=lambda _: "2.9",
                 ),
             ),
         ):

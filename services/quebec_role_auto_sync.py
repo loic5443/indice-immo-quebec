@@ -8,6 +8,7 @@ resolves it exactly in the official MAMH index, and imports one territory.
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import tempfile
 import threading
@@ -21,7 +22,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from services.diagnostics_service import source_enabled
-from services.quebec_role_importer import import_role_xml
+from services.quebec_role_importer import SUPPORTED_XML_VERSIONS, import_role_xml
 from services.quebec_role_sync import INDEX_URL, parse_index, validate_xml
 
 
@@ -101,6 +102,37 @@ def _official_download(url: str, maximum: int = MAX_BYTES) -> bytes:
         raise ValueError("official_http_error") from error
     except urllib.error.URLError as error:
         raise ValueError("official_network_unavailable") from error
+
+
+def probe_role_xml_version(url: str) -> str:
+    """Read only an official XML header before downloading a full territory.
+
+    This preflight request is intentionally bounded and never stores a role
+    payload.  It prevents a known unsupported format from consuming a full
+    municipal download during a user-initiated synchronization.
+    """
+
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname not in OFFICIAL_HOSTS:
+        raise ValueError("official_host_required")
+    opener = urllib.request.build_opener(_NoRedirect)
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "ImmoRadar/1.0 official-data", "Range": "bytes=0-4095"},
+    )
+    try:
+        with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
+            if response.geturl() != url:
+                raise ValueError("redirect_refused")
+            header = response.read(4096)
+    except urllib.error.HTTPError as error:
+        raise ValueError("official_http_error") from error
+    except urllib.error.URLError as error:
+        raise ValueError("official_network_unavailable") from error
+    match = re.search(br"<VERSION>\s*([^<\s]{1,20})\s*</VERSION>", header)
+    if not match:
+        raise ValueError("official_xml_header_invalid")
+    return match.group(1).decode("ascii", "strict")
 
 
 def _record_history(connection: sqlite3.Connection, territory: str, action: str, outcome: str, detail: str = "", *, checksum: str | None = None, units: int | None = None) -> None:
@@ -235,7 +267,7 @@ def _release_lock(database_path: Path | str, territory: str) -> None:
         connection.execute("DELETE FROM role_auto_sync_locks WHERE territory_code=?", (territory,))
 
 
-def synchronize_selected_municipality(database_path: Path | str, municipality: str, consent: bool, *, fetcher=_official_download, index_fetcher=_official_download) -> AutoSyncResult:
+def synchronize_selected_municipality(database_path: Path | str, municipality: str, consent: bool, *, fetcher=_official_download, index_fetcher=_official_download, version_fetcher=probe_role_xml_version) -> AutoSyncResult:
     """Safely synchronize at most one exact official territory after consent.
 
     The return value contains no address or municipality string.  Failures are
@@ -265,7 +297,11 @@ def synchronize_selected_municipality(database_path: Path | str, municipality: s
         _PROCESS_LOCK.release()
         return AutoSyncResult("in_progress", "Synchronisation de cette municipalité en cours. Vous pouvez poursuivre manuellement.", territory)
     try:
-        content = fetcher(_canonical_mamh_url(entry["source_url"]))
+        source_url = _canonical_mamh_url(entry["source_url"])
+        version = version_fetcher(source_url)
+        if version not in SUPPORTED_XML_VERSIONS:
+            raise ValueError("Version ou année XML invalide.")
+        content = fetcher(source_url)
         size = len(content)
         checksum = validate_xml(content, MAX_BYTES)
         with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as temporary:
