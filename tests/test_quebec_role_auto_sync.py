@@ -95,6 +95,11 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM role_assessment_units").fetchone()[0], 0)
             self.assertEqual(connection.execute("SELECT error_code FROM role_auto_sync_attempts WHERE territory_code='01023'").fetchone()[0], "unsupported_xml_format")
 
+    def test_supported_27_xml_synchronizes_one_territory(self):
+        compatible = XML.replace(b"<VERSION>2.9</VERSION>", b"<VERSION>2.7</VERSION>")
+        result = self._sync(lambda _: compatible)
+        self.assertEqual((result.status, result.source_version, result.imported_units), ("synchronized", "2.7", 1))
+
     def test_non_exact_municipality_is_not_guessed(self):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
         result = synchronize_selected_municipality(self.db, "Ville test voisine", True, fetcher=lambda _: XML)

@@ -5,6 +5,7 @@ from pathlib import Path
 
 PUBLIC_FIELDS={"RL0101Ax","RL0101Gx","RL0101Ix","RL0104A","RL0104B","RL0104C","RL0104D","RL0104E","RL0104F","RL0104G","RL0104H","RL0105A","RL0302A","RL0306A","RL0307A","RL0401A","RL0402A","RL0403A","RL0404A"}
 FORBIDDEN_FIELDS={"owner","proprietaire","courriel","email","telephone","postal","lot","cadastre"}
+SUPPORTED_XML_VERSIONS=frozenset({"2.7","2.9"})
 
 def inspect_role_xml(path, territory="01023"):
  """Compatibility inspection that never exposes an evaluation-unit payload."""
@@ -14,7 +15,7 @@ def inspect_role_xml(path, territory="01023"):
   elif element.tag=="RLM01A" and (element.text or "").strip()!=territory: raise ValueError("Territoire XML inattendu.")
   elif element.tag=="RLM02A": year=int((element.text or "").strip())
   elif element.tag=="RLUEx": units+=1; element.clear()
- if version!="2.9" or not year: raise ValueError("Version ou année XML invalide.")
+ if version not in SUPPORTED_XML_VERSIONS or not year: raise ValueError("Version ou année XML invalide.")
  return {"territory_code":territory,"version":version,"year":year,"units":units,"ingested_fields":sorted(PUBLIC_FIELDS)}
 
 def _text(element, tag): return (element.findtext('.//'+tag) or '').strip() or None
@@ -49,7 +50,7 @@ def import_role_xml(path, database_path, territory="01023"):
    try: rows.append(_unit(element,sequence,territory,year or 0,checksum,version or "inconnue"))
    except ValueError: rejected+=1
    element.clear()
- if version!="2.9" or not year: raise ValueError("Version ou année XML invalide.")
+ if version not in SUPPORTED_XML_VERSIONS or not year: raise ValueError("Version ou année XML invalide.")
  c=sqlite3.connect(database_path)
  try:
   c.execute("BEGIN IMMEDIATE")
