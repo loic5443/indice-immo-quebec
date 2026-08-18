@@ -54,6 +54,12 @@ page.show_saved_analyses()
         self.assertIn("Paiement hypothécaire mensuel", text)
         self.assertIn("Scénarios sauvegardés", text)
 
+    def test_comparative_pdf_is_premium_only(self):
+        free = self._app("free")
+        premium = self._app("premium")
+        self.assertNotIn("Télécharger le rapport comparatif PDF", [item.label for item in free.download_button])
+        self.assertIn("Télécharger le rapport comparatif PDF", [item.label for item in premium.download_button])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -109,6 +109,71 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
     return stream.getvalue()
 
 
+def generate_comparison_report_pdf(comparison: dict[str, Any]) -> bytes:
+    """Create a Premium report from two already-authorized saved snapshots only."""
+    font_name = _register_font()
+    styles = _styles(font_name)
+    stream = BytesIO()
+    document = SimpleDocTemplate(
+        stream, pagesize=LETTER, rightMargin=0.58 * inch, leftMargin=0.58 * inch,
+        topMargin=0.62 * inch, bottomMargin=0.58 * inch,
+    )
+    first, second = comparison["a"], comparison["b"]
+    story = [
+        Spacer(1, 1.15 * inch), Paragraph("IMMORADAR", styles["cover_brand"]),
+        Paragraph("Rapport comparatif de propriétés", styles["cover_title"]), Spacer(1, 0.26 * inch),
+        Paragraph(escape(str(first.get("name", "Propriété A"))), styles["cover_property"]),
+        Paragraph("et", styles["center"]),
+        Paragraph(escape(str(second.get("name", "Propriété B"))), styles["cover_property"]),
+        Spacer(1, 0.32 * inch),
+        Paragraph("Fondé exclusivement sur deux instantanés sauvegardés de votre espace. Aucun calcul n'est refait.", styles["center"]),
+        Paragraph("Ce rapport ne constitue ni une recommandation d'achat ni une évaluation officielle.", styles["center"]),
+        PageBreak(),
+    ]
+    story += _heading("1. Vue d'ensemble", styles)
+    story += [_table([
+        ["", "Propriété A", "Propriété B"],
+        ["Dossier", first.get("name", "Non disponible"), second.get("name", "Non disponible")],
+        ["Date de l'analyse", first.get("date", "Non disponible"), second.get("date", "Non disponible")],
+        ["Profil sauvegardé", first.get("profile", "Non disponible"), second.get("profile", "Non disponible")],
+        ["Version ImmoEngine", first.get("engine_version", "Non disponible"), second.get("engine_version", "Non disponible")],
+    ], styles, [1.5 * inch, 2.62 * inch, 2.62 * inch])]
+    story += [Spacer(1, 0.15 * inch), Paragraph(escape(comparison["conclusion"]), styles["note"])]
+    if comparison.get("engine_versions_differ"):
+        story += [Paragraph("Les versions ImmoEngine diffèrent : les données sont comparées telles qu'elles ont été sauvegardées.", styles["warning"])]
+
+    story += _heading("2. Indicateurs comparés", styles)
+    indicator_rows = [["Indicateur", "Propriété A", "Propriété B", "Lecture"]]
+    for item in comparison.get("indicators", []):
+        indicator_rows.append([
+            item.get("label", "Indicateur"), _comparison_value(item.get("key", ""), item.get("a")),
+            _comparison_value(item.get("key", ""), item.get("b")), _comparison_relation(item.get("relation")),
+        ])
+    story += [_table(indicator_rows, styles, [2.0 * inch, 1.55 * inch, 1.55 * inch, 1.65 * inch]), PageBreak()]
+
+    story += _heading("3. Scénarios sauvegardés", styles)
+    scenario_rows = [["Scénario", "Propriété A", "Propriété B"]]
+    for scenario in comparison.get("scenarios", {}).values():
+        scenario_rows.append([
+            scenario.get("label", "Scénario"), _comparison_value("cash_flow", scenario.get("a")),
+            _comparison_value("cash_flow", scenario.get("b")),
+        ])
+    story += [_table(scenario_rows, styles, [2.5 * inch, 2.13 * inch, 2.13 * inch])]
+
+    story += _heading("4. Ce qui distingue chaque propriété", styles)
+    for key, title in (("a", "Propriété A"), ("b", "Propriété B")):
+        story += _list_section(title + " - points d'alignement", comparison.get("strengths", {}).get(key, []), styles)
+        story += _list_section(title + " - à vérifier", comparison.get("checks", {}).get(key, []), styles)
+
+    story += _heading("5. Sources et limites", styles)
+    story += [
+        Paragraph("La valeur municipale, lorsqu'elle est disponible, est un repère fiscal et non une valeur marchande. ImmoValue reste une estimation expérimentale issue de comparables déclarés. ImmoScore et la confiance décrivent les hypothèses et leur complétude; ils ne garantissent pas une décision.", styles["body"]),
+        Paragraph("Le rapport lit uniquement les instantanés sélectionnés dans le compte connecté. Il n'inclut aucun dossier d'un autre utilisateur et ne transmet aucune donnée à un service externe.", styles["note"]),
+    ]
+    document.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    return stream.getvalue()
+
+
 def _register_font() -> str:
     """Use a standard PDF font with reliable Western French character support."""
     return "Helvetica"
@@ -208,6 +273,27 @@ def _market_context_text(context):
         f"{item.get('metric')} {item.get('value')} {item.get('unit')} — observé le {item.get('observed_at')} — {item.get('source_url')}"
         for item in context
     )
+
+
+def _comparison_value(key: str, value: Any) -> str:
+    if value is None:
+        return "Non disponible"
+    if key in {"cash_on_cash_return", "capitalization_rate"}:
+        return f"{float(value):.2f} %"
+    if key == "dscr":
+        return f"{float(value):.2f}x"
+    if key in {"score", "confidence", "immovalue_confidence"}:
+        return f"{float(value):.0f} / 100"
+    return _money(value)
+
+
+def _comparison_relation(relation: str | None) -> str:
+    return {
+        "avantage_a": "Avantage A",
+        "avantage_b": "Avantage B",
+        "égalité": "Équivalent",
+        "non_comparable": "Non comparable",
+    }.get(relation, "Non comparable")
 
 
 def _money(value): return f"{float(value):,.0f} $".replace(",", " ")

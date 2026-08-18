@@ -9,7 +9,7 @@ from components.alerts import show_alert_center
 from data.database import DATABASE_PATH, delete_analysis, list_analyses, toggle_favorite
 from services.entitlements_service import can_use
 from services.property_comparison_service import ComparisonAccessError, compare_saved_analyses
-from services.report_service import generate_report_pdf
+from services.report_service import generate_comparison_report_pdf, generate_report_pdf
 
 
 def _money(value: float) -> str:
@@ -102,6 +102,11 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
         return
 
     st.success("Comparaison complète basée sur les instantanés sauvegardés.")
+    st.download_button(
+        "Télécharger le rapport comparatif PDF", generate_comparison_report_pdf(comparison),
+        file_name="immoradar-comparaison.pdf", mime="application/pdf",
+        key="comparison_pdf", use_container_width=True,
+    )
     for item in comparison["indicators"]:
         value_a = _comparison_value(item["key"], item["a"])
         value_b = _comparison_value(item["key"], item["b"])
