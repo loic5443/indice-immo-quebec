@@ -107,6 +107,11 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
         result = self._sync(lambda _: compatible, version_fetcher=lambda _: "2.7")
         self.assertEqual((result.status, result.source_version, result.imported_units), ("synchronized", "2.7", 1))
 
+    def test_supported_28_xml_synchronizes_one_territory(self):
+        compatible = XML.replace(b"<VERSION>2.9</VERSION>", b"<VERSION>2.8</VERSION>")
+        result = self._sync(lambda _: compatible, version_fetcher=lambda _: "2.8")
+        self.assertEqual((result.status, result.source_version, result.imported_units), ("synchronized", "2.8", 1))
+
     def test_non_exact_municipality_is_not_guessed(self):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
         result = synchronize_selected_municipality(self.db, "Ville test voisine", True, fetcher=lambda _: XML)

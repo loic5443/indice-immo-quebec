@@ -491,7 +491,11 @@ def _on_manual_mode_change() -> None:
 
 
 def _show_municipal_coverage_hint() -> None:
-    """Show a local-only coverage state before the person launches a lookup."""
+    """Show a local-only, actionable coverage state before a lookup.
+
+    The form only reads the local official-index cache here: merely rendering
+    this hint must never start a public request.
+    """
 
     if not st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False):
         return
@@ -508,17 +512,17 @@ def _show_municipal_coverage_hint() -> None:
         return
     latest = st.session_state.get(ADDRESS_AUTO_SYNC_STATUS_KEY)
     if latest == "unsupported_format":
-        st.caption("Rôle municipal : format officiel non pris en charge pour le moment. Vous pouvez poursuivre manuellement.")
+        st.warning("Couverture municipale : le format officiel de cette municipalité n’est pas encore compatible. Vous pouvez poursuivre manuellement.")
     elif status == "available":
-        st.caption("Rôle municipal : renseignements officiels déjà disponibles pour cette municipalité.")
+        st.success("Couverture municipale prête : les renseignements officiels sont déjà disponibles pour cette municipalité.")
     elif status == "sync_available":
-        st.caption("Rôle municipal : synchronisation ciblée possible après votre recherche.")
+        st.info("Couverture municipale possible : après votre recherche consentie, ImmoRadar synchronisera uniquement cette municipalité.")
     elif status == "retry_later":
-        st.caption("Rôle municipal : une synchronisation récente a échoué; vous pourrez réessayer plus tard ou poursuivre manuellement.")
+        st.warning("Couverture municipale à réessayer : une synchronisation récente a échoué. Vous pouvez poursuivre manuellement.")
     elif status in {"source_disabled", "territory_disabled"}:
-        st.caption("Rôle municipal : cette source n’est pas disponible actuellement. Vous pouvez poursuivre manuellement.")
+        st.info("Couverture municipale indisponible : cette source officielle est désactivée. Vous pouvez poursuivre manuellement.")
     else:
-        st.caption("Rôle municipal : aucune couverture officielle certaine pour cette municipalité. Vous pouvez poursuivre manuellement.")
+        st.info("Couverture municipale non confirmée : aucun rôle officiel ne peut être relié avec certitude. Vous pouvez poursuivre manuellement.")
 
 
 def _select_address_suggestion(suggestion: dict[str, str]) -> None:

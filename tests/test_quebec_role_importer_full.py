@@ -16,6 +16,11 @@ class RoleImporterFullTests(unittest.TestCase):
   summary=import_role_xml(self.xml,self.db)
   self.assertEqual(summary['version'],'2.7')
   self.assertEqual(search_role_units(self.db,'01023','12 RUE')[0]['total_value'],300)
+ def test_imports_supported_28_xml_with_the_same_public_whitelist(self):
+  self.xml.write_text(XML.replace('<VERSION>2.9</VERSION>','<VERSION>2.8</VERSION>'))
+  summary=import_role_xml(self.xml,self.db)
+  self.assertEqual(summary['version'],'2.8')
+  self.assertEqual(search_role_units(self.db,'01023','12 RUE')[0]['total_value'],300)
  def test_rejects_wrong_territory(self):
   self.xml.write_text(XML.replace('01023','99999',1))
   with self.assertRaises(ValueError):

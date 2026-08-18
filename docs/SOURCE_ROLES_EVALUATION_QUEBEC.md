@@ -6,4 +6,6 @@ L'API CKAN et l'index trimestriel `https://mamh.gouv.qc.ca/role/indexRole.csv` o
 
 Le territoire officiel `70022` (Beauharnois) a été validé contre l’index MAMH : `RM70022.xml`, version 2.9, rôle 2026. Son import local est transactionnel et absent de Git; les unités publiques y sont recherchées par numéro civique et voie normalisée. Les libellés de voies du rôle peuvent omettre le type (« Rue »), sans qu’ImmoRadar n’élargisse la recherche à un autre numéro civique ou à une autre voie.
 
+La compatibilité de l’importeur est volontairement limitée aux versions XML observées et validées 2.7, 2.8 et 2.9. Une vérification de l’en-tête officiel précède tout téléchargement territorial complet; un format inconnu n’est pas importé et le parcours manuel reste disponible. La version 2.8 a été validée sur un petit territoire officiel (187 unités, environ 208 Ko) dans une base temporaire, sans conserver le XML ni les unités dans Git.
+
 Le Référentiel québécois des adresses (RQA) est consigné comme source candidate dans le registre. Sa fiche officielle est <https://www.donneesquebec.ca/recherche/dataset/referentiel-quebecois-des-adresses>, avec une licence CC BY 4.0, une couverture québécoise et une fréquence mensuelle annoncées. Il n'est pas téléchargé ici : le jeu complet (environ 596 Mo) fera l'objet d'un lot séparé avant toute intégration.

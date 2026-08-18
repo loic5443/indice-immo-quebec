@@ -5,7 +5,10 @@ from pathlib import Path
 
 PUBLIC_FIELDS={"RL0101Ax","RL0101Gx","RL0101Ix","RL0104A","RL0104B","RL0104C","RL0104D","RL0104E","RL0104F","RL0104G","RL0104H","RL0105A","RL0302A","RL0306A","RL0307A","RL0401A","RL0402A","RL0403A","RL0404A"}
 FORBIDDEN_FIELDS={"owner","proprietaire","courriel","email","telephone","postal","lot","cadastre"}
-SUPPORTED_XML_VERSIONS=frozenset({"2.7","2.9"})
+# The importer accepts only versions verified against official MAMH XML files.
+# Version 2.8 was inspected and imported in a temporary database before being
+# enabled; any unknown version still remains in the manual path.
+SUPPORTED_XML_VERSIONS=frozenset({"2.7","2.8","2.9"})
 
 def inspect_role_xml(path, territory="01023"):
  """Compatibility inspection that never exposes an evaluation-unit payload."""
