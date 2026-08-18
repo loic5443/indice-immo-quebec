@@ -89,9 +89,11 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
     def test_incompatible_xml_keeps_the_territory_empty_and_allows_manual_mode(self):
         incompatible = XML.replace(b"<VERSION>2.9</VERSION>", b"<VERSION>3.0</VERSION>")
         result = self._sync(lambda _: incompatible)
-        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.status, "unsupported_format")
+        self.assertIn("format", result.message)
         with sqlite3.connect(self.db) as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM role_assessment_units").fetchone()[0], 0)
+            self.assertEqual(connection.execute("SELECT error_code FROM role_auto_sync_attempts WHERE territory_code='01023'").fetchone()[0], "unsupported_xml_format")
 
     def test_non_exact_municipality_is_not_guessed(self):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)

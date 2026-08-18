@@ -39,6 +39,15 @@ MRNF_CANDIDATE_PAYLOAD = {
     ]
 }
 
+MRNF_MAGIC_KEY_CANDIDATE_PAYLOAD = {
+    "candidates": [
+        {
+            "address": "123 rue Exemple, Ville-exemple H2X 1Y4",
+            "attributes": {"ZIP": "H2X1Y4", "City": "Ville-exemple"},
+        }
+    ]
+}
+
 
 class QuebecAddressGeocoderTests(unittest.TestCase):
     def setUp(self):
@@ -123,6 +132,15 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
         resolved = resolve_suggestion(selected, True, fetch_json=lambda url: requested.append(url) or MRNF_CANDIDATE_PAYLOAD)
         self.assertEqual((resolved.street, resolved.city, resolved.postal_code), ("123 rue Exemple", "Ville-exemple", "H2X 1Y4"))
         self.assertIn("findAddressCandidates", requested[0])
+
+    def test_magic_key_candidate_without_street_attributes_still_fills_the_form(self):
+        """MRNF sometimes returns City/ZIP only after a suggestion click."""
+
+        selected = AddressSuggestion("", "", "", "", "123 rue Exemple, Ville-exemple H2X1Y4", "opaque-key")
+        resolved = resolve_suggestion(selected, True, fetch_json=lambda _: MRNF_MAGIC_KEY_CANDIDATE_PAYLOAD)
+
+        self.assertIsNotNone(resolved)
+        self.assertEqual((resolved.street, resolved.city, resolved.postal_code), ("123 rue Exemple", "Ville-exemple", "H2X 1Y4"))
 
     def test_selected_option_is_not_resolved_without_consent(self):
         selected = AddressSuggestion("", "", "", "", "123 rue Exemple, Ville-exemple H2X1Y4", "opaque-key")

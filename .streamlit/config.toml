@@ -1,0 +1,5 @@
+[server]
+# The local SQLite database changes whenever a municipal role is imported.
+# Watching files would restart Streamlit in the middle of that transaction.
+# Production-style sessions therefore reload only when the server is restarted.
+fileWatcherType = "none"

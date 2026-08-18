@@ -257,10 +257,19 @@ def synchronize_selected_municipality(database_path: Path | str, municipality: s
             _record_history(connection, territory, "public_auto_import", "success", "official_xml_validated", checksum=checksum, units=summary["imported_units"])
         return AutoSyncResult("synchronized", "Renseignements officiels disponibles.", territory, summary["imported_units"], size, summary["version"])
     except Exception as error:
-        code = str(error) if str(error) in {"official_host_required", "redirect_refused", "official_file_too_large", "official_http_error", "official_network_unavailable"} else type(error).__name__
+        unsupported_format = str(error) == "Version ou année XML invalide."
+        code = (
+            "unsupported_xml_format"
+            if unsupported_format
+            else str(error)
+            if str(error) in {"official_host_required", "redirect_refused", "official_file_too_large", "official_http_error", "official_network_unavailable"}
+            else type(error).__name__
+        )
         with closing(sqlite3.connect(database_path)) as connection, connection:
             _record_attempt(connection, territory, "failed", code)
             _record_history(connection, territory, "public_auto_import", "failed", code)
+        if unsupported_format:
+            return AutoSyncResult("unsupported_format", "Le rôle municipal officiel utilise un format qui n’est pas encore pris en charge. Vous pouvez poursuivre manuellement.", territory)
         return AutoSyncResult("failed", "Les données officielles ne peuvent pas être synchronisées pour le moment. Vous pouvez poursuivre manuellement.", territory)
     finally:
         _release_lock(database_path, territory)

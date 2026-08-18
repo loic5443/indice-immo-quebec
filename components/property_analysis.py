@@ -250,6 +250,8 @@ def _run_queued_auto_role_sync() -> AutoSyncResult | None:
             st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(state)
         elif result.status == "in_progress":
             status.update(label="Synchronisation de cette municipalité", state="running")
+        elif result.status == "unsupported_format":
+            status.update(label="Format du rôle municipal non pris en charge", state="error")
         else:
             status.update(label="Renseignements officiels indisponibles", state="error")
     st.session_state[ADDRESS_AUTO_SYNC_STATUS_KEY] = result.status
@@ -1208,7 +1210,15 @@ def _show_role_overview(address_lookup: dict | None) -> None:
         st.info("Recherche publique non autorisée : activez le consentement puis lancez la recherche, ou continuez manuellement.")
         return
     if address_lookup.get("coverage") is False:
-        st.error("Aucun territoire municipal actif et synchronisé n’est disponible pour cette municipalité. Continuez manuellement ou demandez à un administrateur de synchroniser le territoire.")
+        sync_status = st.session_state.get(ADDRESS_AUTO_SYNC_STATUS_KEY)
+        if sync_status == "unsupported_format":
+            st.info("Le rôle municipal officiel de cette municipalité utilise un format qui n’est pas encore pris en charge. Vous pouvez poursuivre votre analyse manuellement.")
+        elif sync_status in {"failed", "cooldown", "index_unavailable"}:
+            st.info("La synchronisation de ce rôle municipal officiel n’est pas disponible pour le moment. Vous pouvez poursuivre votre analyse manuellement et réessayer plus tard.")
+        elif sync_status == "territory_disabled":
+            st.info("Ce rôle municipal est désactivé. Vous pouvez poursuivre votre analyse manuellement.")
+        else:
+            st.info("Aucun rôle municipal officiel synchronisé n’est disponible pour cette municipalité. Vous pouvez poursuivre votre analyse manuellement.")
         return
     matches = address_lookup.get("matches", [])
     if matches:

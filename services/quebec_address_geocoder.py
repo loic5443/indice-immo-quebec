@@ -8,6 +8,7 @@ are never passed to telemetry, diagnostics, drafts or application logs.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import re
 import time
 from typing import Any, Callable
 from urllib.parse import urlencode, urlparse
@@ -148,6 +149,19 @@ def _candidate_to_suggestion(candidate: Any) -> AddressSuggestion | None:
     city = _clean_text(fields.get("City"))
     postal_code = normalize_canadian_postal_code(_clean_text(fields.get("ZIP"), 12)) or ""
     street = " ".join(part for part in (f"{number}{suffix}".strip(), odonym, direction) if part)
+    if not street:
+        # A selected MRNF ``magicKey`` sometimes resolves to a candidate whose
+        # attributes contain only City and ZIP.  The official ``address``
+        # display field still contains the normalized civic address.  Keep
+        # using it instead of rejecting a valid official selection, while
+        # removing only an exact trailing city/postal portion that MRNF itself
+        # supplied.  This never invents a street, city or postal code.
+        street = _clean_text(candidate.get("address"))
+        if city:
+            city_tail = re.escape(city)
+            postal_tail = re.escape(postal_code) if postal_code else r"[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d"
+            street = re.sub(rf"\s*,\s*{city_tail}(?:\s+{postal_tail})?\s*$", "", street, flags=re.IGNORECASE)
+        street = re.sub(r"\s+[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d\s*$", "", street, flags=re.IGNORECASE).strip(" ,")
     if not street:
         return None
     label = " · ".join(part for part in (street, city, postal_code) if part)
