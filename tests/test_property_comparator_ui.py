@@ -60,6 +60,13 @@ page.show_saved_analyses()
         self.assertNotIn("Télécharger le rapport comparatif PDF", [item.label for item in free.download_button])
         self.assertIn("Télécharger le rapport comparatif PDF", [item.label for item in premium.download_button])
 
+    def test_individual_pdf_is_premium_only(self):
+        free = self._app("free")
+        premium = self._app("premium")
+        self.assertNotIn("Télécharger le rapport PDF", [item.label for item in free.download_button])
+        self.assertIn("Télécharger le rapport PDF", [item.label for item in premium.download_button])
+        self.assertTrue(any(button.label == "Découvrir Premium" for button in free.button))
+
     def test_premium_can_activate_local_follow_without_an_email(self):
         app = self._app("premium")
         follow = next(button for button in app.button if button.label == "Suivre ce dossier")

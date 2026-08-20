@@ -29,7 +29,7 @@ def show_premium() -> None:
         ("Estimations ImmoValue", "1 complète / mois lorsque calculable", "Illimitées"),
         ("Dossiers et historique", "Dossier de base", "Historique complet"),
         ("Explications et scénarios", "Calculs essentiels", "Détails et scénarios avancés"),
-        ("Rapport PDF", "Disponible selon le dossier", "Rapport complet"),
+        ("Rapport PDF", "Aperçu dans Mes propriétés", "Rapport complet"),
         ("Comparaisons", "Aperçu", "Comparaisons avancées · bientôt disponible"),
         ("Alertes et suivi", "Aperçu verrouillé", "Alertes intelligentes · bientôt disponible"),
         ("Villes et données enrichies", "Repères officiels", "Bientôt disponible"),

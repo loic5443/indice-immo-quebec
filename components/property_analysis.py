@@ -1530,7 +1530,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
     with action_premium:
         st.button("Voir les alertes Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", use_container_width=True)
     with action_save:
-        st.caption("Le PDF est disponible dans Mes propriétés après sauvegarde.")
+        st.caption("Le rapport PDF complet est disponible dans Mes propriétés avec Premium ou un accès administrateur de bêta.")
     if is_authenticated():
         property_name = st.text_input("Nom ou adresse de la propriété", key="saved_property_name", placeholder="Ex. Duplex - Montréal")
         if st.button("Sauvegarder dans Mes propriétés", type="primary", key="save_analysis"):

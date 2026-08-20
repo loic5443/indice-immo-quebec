@@ -344,12 +344,15 @@ def show_saved_analyses() -> None:
                 st.markdown("**Contexte de marché observé lors de la sauvegarde**")
                 for item in market_context:
                     st.write(f"{item['metric']} : {item['value']} {item['unit']} · observé le {item['observed_at']} · [source officielle]({item['source_url']})")
-            # Temporary development access for free accounts; entitlement checks can be added later.
-            st.download_button(
-                "Télécharger le rapport PDF", generate_report_pdf(analysis),
-                file_name=f"immoradar-analyse-{analysis['id']}.pdf", mime="application/pdf",
-                key=f"pdf_{analysis['id']}", use_container_width=True,
-            )
+            if can_use(user, "reports"):
+                st.download_button(
+                    "Télécharger le rapport PDF", generate_report_pdf(analysis),
+                    file_name=f"immoradar-analyse-{analysis['id']}.pdf", mime="application/pdf",
+                    key=f"pdf_{analysis['id']}", use_container_width=True,
+                )
+            else:
+                st.caption("Le rapport PDF complet est un aperçu Premium pendant la bêta privée.")
+                st.button("Découvrir Premium", key=f"report_premium_{analysis['id']}", on_click=go_to, args=("Premium",), use_container_width=True)
             open_column, follow_column, favorite_column, delete_column = st.columns(4)
             if open_column.button("Ouvrir et modifier", key=f"reopen_{analysis['id']}", use_container_width=True):
                 try:
