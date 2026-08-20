@@ -70,7 +70,7 @@ DEFAULTS = {
     "vacancy_rate": 0.0, "maintenance": 0.0, "management": 0.0,
     "utilities": 0.0, "capital_reserve": 0.0, "initial_repairs": 0.0,
     "acquisition_costs": 0.0, "other_income": 0.0, "rent_growth": 0.0,
-    "expense_growth": 0.0, "holding_period": 5,
+    "expense_growth": 0.0, "holding_period": 5, "mortgage_renewal_date": None,
 }
 
 ANALYSIS_OBJECTIVES = {
@@ -147,6 +147,16 @@ def _apply_reopen_draft() -> str | None:
     st.session_state["workflow_objective"] = objective if objective in ANALYSIS_OBJECTIVES else ""
     st.session_state["workflow_objective_choice"] = st.session_state["workflow_objective"]
     st.session_state["workflow_profile"] = str(payload.get("profile") or "")
+    renewal_date = payload.get("mortgage_renewal_date")
+    if isinstance(renewal_date, str):
+        try:
+            st.session_state["mortgage_renewal_date"] = date.fromisoformat(renewal_date)
+        except ValueError:
+            st.session_state["mortgage_renewal_date"] = None
+    else:
+        # An older snapshot has no renewal date. Never keep the prior draft's
+        # date when opening it as a fresh editable dossier.
+        st.session_state["mortgage_renewal_date"] = None
     st.session_state["analysis_step"] = 1
     st.session_state["analysis_completed_steps"] = {1}
     st.session_state["analysis_reopen_show_property_stage"] = True
@@ -1053,6 +1063,8 @@ def _show_finance_stage() -> None:
             st.number_input("Croissance annuelle hypothétique des loyers (%)", min_value=-25.0, max_value=25.0, step=0.25, key="rent_growth")
             st.number_input("Croissance annuelle hypothétique des dépenses (%)", min_value=-25.0, max_value=25.0, step=0.25, key="expense_growth")
             st.number_input("Horizon de détention (années)", min_value=1, max_value=40, step=1, key="holding_period")
+            st.date_input("Date de renouvellement hypothécaire (facultatif)", value=None, key="mortgage_renewal_date")
+            st.caption("Elle sert seulement à afficher un rappel local dans vos alertes suivies. Aucun courriel n’est envoyé.")
             st.caption("Les projections utilisent uniquement les taux que vous saisissez. Elles ne prévoient pas le marché ni une valeur future.")
         st.button("Réinitialiser les chiffres", on_click=reset_analysis, type="secondary", key="reset_analysis")
 
@@ -1535,6 +1547,11 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                         **asdict(inputs),
                         "_analysis_objective": st.session_state.get("workflow_objective", ""),
                         "_property_type": st.session_state.get("workflow_property_type", ""),
+                        "mortgage_renewal_date": (
+                            st.session_state["mortgage_renewal_date"].isoformat()
+                            if isinstance(st.session_state.get("mortgage_renewal_date"), date)
+                            else None
+                        ),
                     },
                     "market_context": market_context_snapshot(str(DATABASE_PATH)),
                     "immovalue": immovalue,

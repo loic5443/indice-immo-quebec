@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import unicodedata
 from collections import defaultdict
+from datetime import date
 from typing import Any
 
 
@@ -45,6 +46,19 @@ def _rate_plus_one_cash_flow(analysis: dict[str, Any]) -> float | None:
     return None
 
 
+def _mortgage_renewal_date(analysis: dict[str, Any]) -> date | None:
+    """Read only an explicitly saved ISO date; invalid or absent values stay absent."""
+
+    financial = _json_object(analysis.get("financial_inputs_json"), {})
+    value = financial.get("mortgage_renewal_date") if isinstance(financial, dict) else None
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def _money(value: float) -> str:
     return f"{value:,.0f} $".replace(",", " ")
 
@@ -61,12 +75,13 @@ def _alert(kind: str, severity: str, title: str, detail: str, analysis: dict[str
     }
 
 
-def build_calculable_alerts(analyses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_calculable_alerts(analyses: list[dict[str, Any]], today: date | None = None) -> list[dict[str, Any]]:
     """Return alerts supported by saved data only; this never refreshes or guesses.
 
     The caller supplies an owner-scoped list. No address, financial value or alert
     payload is transmitted: these are ephemeral messages displayed in-app only.
     """
+    today = today or date.today()
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for analysis in analyses:
         key = _property_key(analysis)
@@ -116,6 +131,17 @@ def build_calculable_alerts(analyses: list[dict[str, Any]]) -> list[dict[str, An
                 f"Dans le scénario sauvegardé « Taux +1 point », le flux passe de {_money(current_cash_flow)} à {_money(stressed_cash_flow)} par mois. C’est un test de sensibilité, pas une prévision de taux.",
                 latest,
             ))
+
+        renewal_date = _mortgage_renewal_date(latest)
+        if renewal_date:
+            days_remaining = (renewal_date - today).days
+            if 0 <= days_remaining <= 180:
+                severity = "important" if days_remaining <= 90 else "info"
+                alerts.append(_alert(
+                    "mortgage_renewal", severity, "Renouvellement hypothécaire à préparer",
+                    f"La date de renouvellement que vous avez saisie est dans {days_remaining} jour(s), le {renewal_date.isoformat()}. Vérifiez vos options de financement; ce rappel ne prévoit pas l’évolution des taux.",
+                    latest,
+                ))
 
     priority = {"important": 0, "info": 1}
     return sorted(alerts, key=lambda item: (priority[item["severity"]], str(item["created_at"])))

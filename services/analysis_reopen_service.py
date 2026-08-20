@@ -84,5 +84,6 @@ def prepare_reopen_draft(user_id: int, analysis_id: int, database_path: Path | s
         "objective": str(objective) if isinstance(objective, str) else "",
         "property_type": str(property_type) if isinstance(property_type, str) else "",
         "financial_values": _numeric_inputs(financial),
+        "mortgage_renewal_date": financial.get("mortgage_renewal_date") if isinstance(financial.get("mortgage_renewal_date"), str) else None,
         "asking_price": asking_price,
     }

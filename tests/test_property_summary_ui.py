@@ -67,6 +67,13 @@ class PropertySummaryUiTests(unittest.TestCase):
         captions = "\n".join(item.value for item in app.caption)
         self.assertIn("reste distinct du rôle municipal et d’ImmoValue", captions)
 
+    def test_renewal_date_is_optional_in_advanced_financial_inputs(self):
+        app = AppTest.from_string(
+            "import components.property_analysis as page\n"
+            "page._show_finance_stage()\n"
+        ).run(timeout=20)
+        self.assertEqual(app.date_input(key="mortgage_renewal_date").label, "Date de renouvellement hypothécaire (facultatif)")
+
 
 if __name__ == "__main__":
     unittest.main()

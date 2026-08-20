@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -34,6 +35,7 @@ class AnalysisReopenServiceTests(unittest.TestCase):
                 "rental_income_monthly": 2_900,
                 "_analysis_objective": "Investir et louer",
                 "_property_type": "Duplex",
+                "mortgage_renewal_date": "2027-06-15",
             },
             "immovalue": {"available": False, "subject": {"asking_price": 525_000}},
             "official_role_snapshot": {"total_value": 450_000, "source": "Source officielle"},
@@ -54,6 +56,7 @@ class AnalysisReopenServiceTests(unittest.TestCase):
         self.assertEqual(draft["property_type"], "Duplex")
         self.assertEqual(draft["objective"], "Investir et louer")
         self.assertEqual(draft["asking_price"], 525_000)
+        self.assertEqual(draft["mortgage_renewal_date"], "2027-06-15")
         self.assertEqual(draft["financial_values"]["property_price"], 500_000)
         self.assertEqual(draft["financial_values"]["mortgage_rate"], 4.85)
         self.assertNotIn("official_role_snapshot", draft)
@@ -87,6 +90,7 @@ class AnalysisReopenServiceTests(unittest.TestCase):
         self.assertEqual(app.text_input(key="workflow_property_name").value, "Dossier de test")
         self.assertEqual(app.selectbox(key="workflow_property_type").value, "Duplex")
         self.assertEqual(app.number_input(key="iv_asking").value, 525_000)
+        self.assertEqual(app.session_state["mortgage_renewal_date"], date(2027, 6, 15))
         self.assertEqual(app.session_state["property_price"], 500_000)
         self.assertEqual(app.text_input(key="address_form_city").value, "")
         self.assertEqual(app.text_input(key="address_form_postal").value, "")

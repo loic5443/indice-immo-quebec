@@ -1,11 +1,12 @@
 """Focused tests for factual, non-notifying saved-dossier alerts."""
 
 import unittest
+from datetime import date
 
 from services.alert_service import build_calculable_alerts
 
 
-def _analysis(identifier, created_at, *, estimate, role_total, cash_flow, stressed_cash_flow, confidence=55):
+def _analysis(identifier, created_at, *, estimate, role_total, cash_flow, stressed_cash_flow, confidence=55, renewal_date=None):
     return {
         "id": identifier,
         "property_name": "Dossier de test",
@@ -22,6 +23,7 @@ def _analysis(identifier, created_at, *, estimate, role_total, cash_flow, stress
             '{"tests": [{"name": "Taux +1 point", "financial": {"cash_flow_monthly": %s}}]}' % stressed_cash_flow
             if stressed_cash_flow is not None else "{}"
         ),
+        "financial_inputs_json": ('{"mortgage_renewal_date": "%s"}' % renewal_date) if renewal_date else "{}",
     }
 
 
@@ -45,6 +47,14 @@ class AlertServiceTests(unittest.TestCase):
         second = _analysis(2, "2026-02-01 10:00 UTC", estimate=470000, role_total=410000, cash_flow=100, stressed_cash_flow=20)
         second["property_name"] = "Autre dossier"
         self.assertEqual(build_calculable_alerts([first, second]), [])
+
+    def test_renewal_reminder_requires_an_explicit_upcoming_date(self):
+        analysis = _analysis(1, "2026-01-01 10:00 UTC", estimate=None, role_total=None, cash_flow=0, stressed_cash_flow=None, renewal_date="2026-03-01")
+        alerts = build_calculable_alerts([analysis], today=date(2026, 1, 1))
+        reminder = next(item for item in alerts if item["kind"] == "mortgage_renewal")
+        self.assertEqual(reminder["severity"], "important")
+        self.assertIn("59 jour(s)", reminder["detail"])
+        self.assertEqual(build_calculable_alerts([analysis], today=date(2026, 4, 1)), [])
 
 
 if __name__ == "__main__":
