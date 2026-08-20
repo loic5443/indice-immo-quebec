@@ -961,11 +961,14 @@ def _show_property_stage() -> None:
         st.session_state["workflow_objective"] = chosen_objective
         st.session_state["workflow_profile"] = ANALYSIS_OBJECTIVES[chosen_objective]
     _hydrate_dossier_name_from_selected_address()
-    name, kind = st.columns(2)
+    name, kind, asking = st.columns(3)
     with name:
         st.text_input("Nom court du dossier (facultatif si une adresse est sélectionnée)", key="workflow_property_name", placeholder="Ex. Projet résidentiel")
     with kind:
         st.selectbox("Type de propriété (requis)", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type")
+    with asking:
+        st.number_input("Prix demandé (facultatif)", min_value=0.0, step=5_000.0, key="iv_asking")
+    st.caption("Le prix demandé sert uniquement à comparer le rôle municipal et ImmoValue lorsqu’elle est disponible. Il ne remplace pas le prix retenu pour vos calculs financiers.")
     st.caption("Ces renseignements servent à organiser votre dossier. La recherche publique et les calculs restent séparés.")
     st.button("Continuer vers les finances", type="primary", key="continue_to_finances", on_click=_continue_to_finances)
 
@@ -976,7 +979,7 @@ def _show_finance_stage() -> None:
     st.markdown("<div class='section-space compact-space'></div><h2>2. Vos chiffres</h2><p class='section-intro'>Ajoutez les montants que vous connaissez. Les résultats ne sont affichés qu’après votre calcul.</p>", unsafe_allow_html=True)
     acquisition, financing = st.columns(2)
     with acquisition:
-        st.number_input("Prix de la propriété ($)", min_value=0.0, step=5_000.0, key="property_price")
+        st.number_input("Prix retenu pour vos calculs ($)", min_value=0.0, step=5_000.0, key="property_price")
         st.number_input("Mise de fonds ($)", min_value=0.0, step=5_000.0, key="down_payment")
         st.number_input("Revenus locatifs mensuels ($)", min_value=0.0, step=100.0, key="rental_income")
         st.number_input("Autres dépenses mensuelles ($)", min_value=0.0, step=25.0, key="other_expenses")
@@ -985,6 +988,7 @@ def _show_finance_stage() -> None:
         st.number_input("Amortissement (années)", min_value=5, max_value=30, step=1, key="amortization_years")
         st.number_input("Taxes municipales annuelles ($)", min_value=0.0, step=100.0, key="municipal_taxes")
         st.number_input("Assurances mensuelles ($)", min_value=0.0, step=25.0, key="insurance")
+    st.caption("Le prix retenu peut correspondre au prix demandé, à votre offre ou à une autre hypothèse. Il reste distinct du rôle municipal et d’ImmoValue.")
 
     with st.expander("Options avancées", expanded=False):
         st.caption("Ces champs restent facultatifs. Ils améliorent la précision de votre lecture sans modifier les formules.")

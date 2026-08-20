@@ -44,6 +44,27 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertIn("plus élevée ou plus basse", notices)
         self.assertIn("secteur", notices)
 
+    def test_property_stage_collects_an_optional_asking_price_before_finances(self):
+        app = AppTest.from_string(
+            "import components.property_analysis as page\n"
+            "page._show_property_stage()\n"
+        ).run(timeout=20)
+        asking = app.number_input(key="iv_asking")
+        self.assertEqual(asking.label, "Prix demandé (facultatif)")
+        asking.set_value(575_000.0).run(timeout=20)
+        self.assertEqual(app.number_input(key="iv_asking").value, 575_000.0)
+        captions = "\n".join(item.value for item in app.caption)
+        self.assertIn("Il ne remplace pas le prix retenu", captions)
+
+    def test_financial_price_is_labeled_as_a_separate_assumption(self):
+        app = AppTest.from_string(
+            "import components.property_analysis as page\n"
+            "page._show_finance_stage()\n"
+        ).run(timeout=20)
+        self.assertEqual(app.number_input(key="property_price").label, "Prix retenu pour vos calculs ($)")
+        captions = "\n".join(item.value for item in app.caption)
+        self.assertIn("reste distinct du rôle municipal et d’ImmoValue", captions)
+
 
 if __name__ == "__main__":
     unittest.main()
