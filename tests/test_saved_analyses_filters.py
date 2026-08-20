@@ -2,7 +2,7 @@
 
 import unittest
 
-from components.saved_analyses import _filter_saved_analyses, _saved_official_role, _tracking_overview
+from components.saved_analyses import _filter_saved_analyses, _saved_official_role, _snapshot_history_rows, _tracking_overview
 from services.dossier_tracking_service import dossier_fingerprint
 
 
@@ -40,6 +40,16 @@ class SavedAnalysisFiltersTests(unittest.TestCase):
         })
         self.assertEqual(snapshot["total_value"], 404_100)
         self.assertIsNone(_saved_official_role({"official_role_snapshot_json": "{}"}))
+
+    def test_snapshot_history_uses_only_saved_values_and_marks_absences(self):
+        rows = _snapshot_history_rows((
+            {"created_at": "2026-02-01", "cash_flow": 250, "immo_score": 65, "official_role_snapshot_json": '{"total_value": 404100}'},
+            {"created_at": "2026-01-01", "cash_flow": 0, "immo_score": None, "official_role_snapshot_json": "{}"},
+        ))
+        self.assertEqual(rows[0]["Flux mensuel"], "250 $")
+        self.assertEqual(rows[0]["Rôle municipal"], "404 100 $")
+        self.assertEqual(rows[1]["Score"], "Non disponible")
+        self.assertEqual(rows[1]["Rôle municipal"], "Non disponible")
 
 
 if __name__ == "__main__":

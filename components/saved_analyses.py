@@ -67,6 +67,22 @@ def _saved_official_role(analysis: dict) -> dict | None:
     return snapshot
 
 
+def _snapshot_history_rows(snapshots: tuple[dict, ...]) -> list[dict[str, str]]:
+    """Prepare a compact timeline from immutable values already saved by the user."""
+
+    rows: list[dict[str, str]] = []
+    for snapshot in snapshots[:5]:
+        role = _saved_official_role(snapshot)
+        score = snapshot.get("immo_score")
+        rows.append({
+            "Date": str(snapshot.get("created_at") or "")[:10] or "Non publiée",
+            "Flux mensuel": _money(snapshot.get("cash_flow") or 0),
+            "Score": f"{float(score):.0f} / 100" if isinstance(score, (int, float)) else "Non disponible",
+            "Rôle municipal": _money(role["total_value"]) if role else "Non disponible",
+        })
+    return rows
+
+
 def _filter_saved_analyses(
     analyses: list[dict], query: str, scope: str, sort_by: str, tracked_fingerprints: set[str], user_id: int,
 ) -> list[dict]:
@@ -288,6 +304,10 @@ def show_saved_analyses() -> None:
                     f"{status} sur {history.total} pour ce dossier. Les alertes Premium comparent uniquement "
                     "ces versions sauvegardées, sans refaire vos calculs."
                 )
+                with st.container(border=True):
+                    st.markdown("**Historique des instantanés**")
+                    st.dataframe(_snapshot_history_rows(history.snapshots), hide_index=True, width="stretch")
+                    st.caption("Les montants et scores sont ceux sauvegardés à chaque date. Une donnée absente reste non disponible.")
             first, second, third = st.columns(3)
             first.metric("Prix analysé", _money(analysis["price"]))
             second.metric("Flux mensuel", _money(analysis["cash_flow"]))
