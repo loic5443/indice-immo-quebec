@@ -104,6 +104,7 @@ ADDRESS_RESOLUTION_SELECTION_KEY = "address_form_resolution_selection"
 ADDRESS_LOCAL_SELECTED_KEY = "address_form_local_selected"
 ADDRESS_AUTO_SYNC_PENDING_KEY = "address_form_auto_sync_pending"
 ADDRESS_AUTO_SYNC_STATUS_KEY = "address_form_auto_sync_status"
+ANALYSIS_REOPEN_PENDING_KEY = "analysis_reopen_pending"
 MAX_ADDRESS_SUGGESTIONS = 6
 ADDRESS_WIDGET_KEYS = {
     "street": "address_form_street",
@@ -119,6 +120,35 @@ def reset_analysis() -> None:
     st.session_state.pop("analysis_calculation_signature", None)
     st.session_state.pop("analysis_calculation_requested", None)
     st.session_state.pop("analysis_calculation_errors", None)
+
+
+def _apply_reopen_draft() -> str | None:
+    """Apply one ownership-scoped saved snapshot before widgets are rendered."""
+
+    payload = st.session_state.pop(ANALYSIS_REOPEN_PENDING_KEY, None)
+    if not isinstance(payload, dict) or not is_authenticated():
+        return None
+    if payload.get("owner_id") != current_user().get("id"):
+        return None
+    for key, value in payload.get("financial_values", {}).items():
+        if key in DEFAULTS and isinstance(value, (int, float)) and not isinstance(value, bool):
+            st.session_state[key] = value
+    st.session_state["iv_asking"] = payload.get("asking_price") or 0.0
+    st.session_state["workflow_property_name"] = str(payload.get("property_name") or "")
+    st.session_state["workflow_property_type"] = str(payload.get("property_type") or "")
+    objective = str(payload.get("objective") or "")
+    st.session_state["workflow_objective"] = objective if objective in ANALYSIS_OBJECTIVES else ""
+    st.session_state["workflow_objective_choice"] = st.session_state["workflow_objective"]
+    st.session_state["workflow_profile"] = str(payload.get("profile") or "")
+    st.session_state["analysis_step"] = 1
+    st.session_state["analysis_completed_steps"] = {1}
+    st.session_state["analysis_reopen_show_property_stage"] = True
+    st.session_state["workflow_errors"] = []
+    st.session_state["address_form_start_empty"] = True
+    st.session_state.pop("analysis_calculation_signature", None)
+    st.session_state.pop("analysis_calculation_requested", None)
+    st.session_state.pop("analysis_calculation_errors", None)
+    return "Dossier ouvert dans un nouveau brouillon. Vérifiez vos chiffres avant de recalculer; aucune recherche publique n’a été relancée."
 
 
 def _money(value: float) -> str:
@@ -820,6 +850,8 @@ def _move_workflow(target: int) -> None:
     st.session_state["analysis_completed_steps"] = state["completed"]
     st.session_state["analysis_step_selector"] = state["step"]
     st.session_state["workflow_errors"] = state["errors"]
+    if state["step"] > 1:
+        st.session_state.pop("analysis_reopen_show_property_stage", None)
     _persist_workflow(state["step"], state["completed"])
 
 
@@ -955,6 +987,9 @@ def _show_property_stage() -> None:
     """Render the simple first stage while retaining the existing workflow values."""
 
     st.markdown("<div class='section-space compact-space'></div><h2>1. Propriété et valeur</h2><p class='section-intro'>Choisissez votre objectif, puis recherchez la propriété dans le bloc ci-dessus.</p>", unsafe_allow_html=True)
+    # Keep the established first-run default so the first visible step is
+    # immediately usable.  Reopened dossiers provide their original objective
+    # before this widget is created, therefore it remains selected there.
     st.selectbox("Votre objectif", list(ANALYSIS_OBJECTIVES), key="workflow_objective_choice")
     chosen_objective = st.session_state.get("workflow_objective_choice", "")
     if chosen_objective:
@@ -1033,9 +1068,12 @@ def _show_technical_workflow(step: int) -> None:
 def show_property_analysis() -> None:
     for key, value in DEFAULTS.items():
         st.session_state.setdefault(key, value)
+    reopen_notice = _apply_reopen_draft()
     st.markdown("<p class='eyebrow'>DOSSIER IMMOBILIER 360</p>", unsafe_allow_html=True)
     st.title("Révéler la valeur et analyser votre projet")
     st.markdown("<p class='section-intro'>Adresse, renseignements publics autorisés, valeur disponible, finances et suivi : un seul dossier, sans transformer les données manquantes en conclusions.</p>", unsafe_allow_html=True)
+    if reopen_notice:
+        st.success(reopen_notice)
     address_state = _address_state_for_current_user()
     with st.expander("Commencer par une adresse", expanded=True):
         st.checkbox(
@@ -1170,7 +1208,11 @@ def show_property_analysis() -> None:
     calculated = _analysis_is_calculated(inputs)
     _show_dossier_summary(address_state, address_lookup, inputs, profile)
     _show_role_overview(address_lookup)
-    visible_stage = _visible_analysis_stage(step, calculated, bool(inputs.price or inputs.down_payment))
+    visible_stage = (
+        1
+        if st.session_state.get("analysis_reopen_show_property_stage")
+        else _visible_analysis_stage(step, calculated, bool(inputs.price or inputs.down_payment))
+    )
     _show_visible_stage_progress(visible_stage)
     if visible_stage == 1:
         _show_property_stage()
@@ -1482,7 +1524,11 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                     "cash_flow": result.cash_flow_monthly, "cash_on_cash_return": result.cash_on_cash_return,
                     "capitalization_rate": result.capitalization_rate,
                     "debt_service_coverage_ratio": result.debt_service_coverage_ratio,
-                    "financial_inputs": asdict(inputs), "scenarios": scenarios, "resilience": resilience,
+                    "financial_inputs": {
+                        **asdict(inputs),
+                        "_analysis_objective": st.session_state.get("workflow_objective", ""),
+                        "_property_type": st.session_state.get("workflow_property_type", ""),
+                    },
                     "market_context": market_context_snapshot(str(DATABASE_PATH)),
                     "immovalue": immovalue,
                     "official_role_snapshot": _official_role_snapshot(address_lookup),

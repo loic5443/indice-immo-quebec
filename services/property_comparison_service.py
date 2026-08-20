@@ -63,7 +63,7 @@ def _snapshot(analysis: dict[str, Any]) -> dict[str, Any]:
         "name": analysis.get("property_name") or "Dossier sans nom",
         "date": analysis.get("created_at"),
         "profile": analysis.get("user_profile") or "Investisseur locatif",
-        "property_type": financial_inputs.get("property_type") or financial_inputs.get("property_type_label"),
+        "property_type": financial_inputs.get("_property_type") or financial_inputs.get("property_type") or financial_inputs.get("property_type_label"),
         "price": _number(analysis.get("price")),
         "municipal_value": _number(official_role.get("total_value")),
         "municipal_role_year": official_role.get("role_year"),

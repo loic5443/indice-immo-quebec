@@ -9,6 +9,7 @@ from components.alerts import show_alert_center
 from data.database import DATABASE_PATH, delete_analysis, list_analyses, toggle_favorite
 from services.entitlements_service import can_use
 from services.property_comparison_service import ComparisonAccessError, compare_saved_analyses
+from services.analysis_reopen_service import AnalysisReopenAccessError, prepare_reopen_draft
 from services.report_service import generate_comparison_report_pdf, generate_report_pdf
 
 
@@ -233,9 +234,19 @@ def show_saved_analyses() -> None:
                 file_name=f"immoradar-analyse-{analysis['id']}.pdf", mime="application/pdf",
                 key=f"pdf_{analysis['id']}", use_container_width=True,
             )
-            actions, delete_column, _ = st.columns([1, 1, 2])
+            open_column, favorite_column, delete_column = st.columns(3)
+            if open_column.button("Ouvrir et modifier", key=f"reopen_{analysis['id']}", use_container_width=True):
+                try:
+                    st.session_state["analysis_reopen_pending"] = prepare_reopen_draft(
+                        user["id"], int(analysis["id"]), DATABASE_PATH,
+                    )
+                except AnalysisReopenAccessError:
+                    st.error("Ce dossier n’est pas disponible dans votre espace.")
+                else:
+                    go_to("Analyser")
+                    st.rerun()
             favorite_label = "Retirer des favoris" if analysis["is_favorite"] else "Ajouter aux favoris"
-            if actions.button(favorite_label, key=f"favorite_{analysis['id']}", use_container_width=True):
+            if favorite_column.button(favorite_label, key=f"favorite_{analysis['id']}", use_container_width=True):
                 toggle_favorite(user["id"], analysis["id"], DATABASE_PATH)
                 st.rerun()
             if delete_column.button("Supprimer", key=f"delete_{analysis['id']}", use_container_width=True):

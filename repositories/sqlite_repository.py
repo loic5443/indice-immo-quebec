@@ -82,6 +82,15 @@ class SQLiteRepository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def get_owned_analysis(self, user_id: int, analysis_id: int) -> dict[str, Any] | None:
+        """Load one saved analysis only when it belongs to the active account."""
+
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM analyses WHERE id = ? AND user_id = ?", (analysis_id, user_id),
+            ).fetchone()
+        return dict(row) if row else None
+
     def get_owned_analyses_for_comparison(
         self, user_id: int, analysis_a_id: int, analysis_b_id: int,
     ) -> list[dict[str, Any]]:
