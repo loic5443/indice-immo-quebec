@@ -48,8 +48,12 @@ class SavedAnalysisFiltersTests(unittest.TestCase):
         ))
         self.assertEqual(rows[0]["Flux mensuel"], "250 $")
         self.assertEqual(rows[0]["Rôle municipal"], "404 100 $")
+        self.assertEqual(rows[1]["Flux mensuel"], "0 $")
         self.assertEqual(rows[1]["Score"], "Non disponible")
         self.assertEqual(rows[1]["Rôle municipal"], "Non disponible")
+
+        missing = _snapshot_history_rows(({"created_at": "2026-01-01", "cash_flow": None, "immo_score": None},))
+        self.assertEqual(missing[0]["Flux mensuel"], "Non disponible")
 
 
 if __name__ == "__main__":

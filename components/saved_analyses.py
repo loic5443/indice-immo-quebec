@@ -74,9 +74,10 @@ def _snapshot_history_rows(snapshots: tuple[dict, ...]) -> list[dict[str, str]]:
     for snapshot in snapshots[:5]:
         role = _saved_official_role(snapshot)
         score = snapshot.get("immo_score")
+        cash_flow = snapshot.get("cash_flow")
         rows.append({
             "Date": str(snapshot.get("created_at") or "")[:10] or "Non publiée",
-            "Flux mensuel": _money(snapshot.get("cash_flow") or 0),
+            "Flux mensuel": _money(cash_flow) if isinstance(cash_flow, (int, float)) else "Non disponible",
             "Score": f"{float(score):.0f} / 100" if isinstance(score, (int, float)) else "Non disponible",
             "Rôle municipal": _money(role["total_value"]) if role else "Non disponible",
         })
