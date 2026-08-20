@@ -89,6 +89,7 @@ class DatabaseTests(unittest.TestCase):
             "financial_inputs": {"vacancy_rate_pct": 3.0},
             "scenarios": [{"name": "Scénario de base"}],
             "resilience": {"status": "sensible"},
+            "immovalue": {"available": False, "subject": {"asking_price": 525_000}},
         }
         analysis_id = save_analysis(
             user["id"], "Duplex Alice", enriched_values, self.database_path,
@@ -103,6 +104,7 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(saved[0]["engine_verdict"], engine_result.verdict)
         self.assertIn("vacancy_rate_pct", saved[0]["financial_inputs_json"])
         self.assertIn("Scénario de base", saved[0]["scenarios_json"])
+        self.assertIn("525000", saved[0]["immovalue_json"])
         self.assertTrue(delete_analysis(user["id"], analysis_id, self.database_path))
 
     def test_saved_analysis_keeps_external_context_separate_from_engine(self):

@@ -1734,7 +1734,10 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
             )
             st.caption("Les ajustements manuels, la provenance déclarée et les données manquantes restent visibles. Les statistiques de marché agrégées ne servent pas de comparables individuels.")
     else:
-        estimate = {"available": False, "comparables": candidate.get("comparables", [])}
+        # Keep the declared subject snapshot even when three comparables are
+        # not available yet. This preserves an optional asking price in a
+        # saved dossier without presenting an ImmoValue result prematurely.
+        estimate = candidate
     st.caption("ImmoValue est séparé d’ImmoScore : cette estimation n’influence pas le score financier et décisionnel.")
     return estimate
 

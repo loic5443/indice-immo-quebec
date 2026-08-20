@@ -79,6 +79,16 @@ class PropertyComparisonServiceTests(unittest.TestCase):
         self.assertIsNone(score["a"])
         self.assertTrue(any("Score ImmoRadar" in item for item in result["checks"]["a"]))
 
+    def test_keeps_a_declared_asking_price_before_immovalue_is_available(self):
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
+            connection.execute(
+                "UPDATE analyses SET immovalue_json=? WHERE id=?",
+                (json.dumps({"available": False, "subject": {"asking_price": 555_000}}), self.analysis_a),
+            )
+        result = compare_saved_analyses(self.alice["id"], self.analysis_a, self.analysis_b, self.database_path)
+        self.assertEqual(result["a"]["asking_price"], 555_000)
+        self.assertIsNone(result["a"]["immovalue"])
+
     def test_advanced_comparison_entitlement_is_centralized(self):
         self.assertFalse(can_use({"plan": "free", "role": "user"}, "advanced_comparisons"))
         self.assertTrue(can_use({"plan": "premium", "role": "user"}, "advanced_comparisons"))

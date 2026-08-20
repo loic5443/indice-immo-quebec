@@ -34,6 +34,17 @@ def _analysis_label(analysis: dict) -> str:
     return f"{analysis.get('property_name') or 'Dossier sans nom'} · {date}"
 
 
+def _saved_asking_price(analysis: dict) -> float | None:
+    """Read only the declared subject amount from an analysis snapshot."""
+
+    try:
+        payload = json.loads(analysis.get("immovalue_json") or "{}")
+        value = payload.get("subject", {}).get("asking_price") if isinstance(payload, dict) else None
+        return float(value) if isinstance(value, (int, float)) else None
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
 def _show_comparison_metric(label: str, value_a: str, value_b: str, relation: str | None = None) -> None:
     """Keep each indicator narrow and readable on a phone."""
     with st.container(border=True):
@@ -181,6 +192,9 @@ def show_saved_analyses() -> None:
                 f"**Moteur :** {analysis['engine_version']}  \n"
                 f"**Provenance :** {analysis['data_provenance']}"
             )
+            asking_price = _saved_asking_price(analysis)
+            if asking_price is not None:
+                st.caption(f"Prix demandé déclaré : {_money(asking_price)} · distinct de la valeur municipale et d’ImmoValue.")
             if analysis["immo_score"] is not None:
                 st.markdown(
                     f"**Profil ImmoEngine :** {analysis['user_profile']}  \n"

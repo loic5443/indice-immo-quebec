@@ -39,14 +39,21 @@ def _resilience_financial(analysis: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _immovalue_payload(analysis: dict[str, Any]) -> dict[str, Any]:
+    """Read the immutable ImmoValue payload, including an unavailable draft."""
+
+    return _json_object(analysis.get("immovalue_json"), {})
+
+
 def _immovalue(analysis: dict[str, Any]) -> dict[str, Any]:
-    value = _json_object(analysis.get("immovalue_json"), {})
+    value = _immovalue_payload(analysis)
     return value if value.get("available") else {}
 
 
 def _snapshot(analysis: dict[str, Any]) -> dict[str, Any]:
     """Extract displayable stored fields only; this function never recalculates values."""
-    immovalue = _immovalue(analysis)
+    immovalue_payload = _immovalue_payload(analysis)
+    immovalue = immovalue_payload if immovalue_payload.get("available") else {}
     official_role = _json_object(analysis.get("official_role_snapshot_json"), {})
     financial_inputs = _json_object(analysis.get("financial_inputs_json"), {})
     base = _scenario_financial(analysis, "Scénario de base")
@@ -66,7 +73,10 @@ def _snapshot(analysis: dict[str, Any]) -> dict[str, Any]:
         "immovalue_low": _number(immovalue.get("low")),
         "immovalue_high": _number(immovalue.get("high")),
         "immovalue_confidence": _number(immovalue.get("confidence")),
-        "asking_price": _number(immovalue.get("subject", {}).get("asking_price")) if isinstance(immovalue.get("subject"), dict) else None,
+        # The asking price belongs to the declared subject, not to an
+        # ImmoValue result. It therefore remains available when the estimate
+        # is still waiting for three comparable sales.
+        "asking_price": _number(immovalue_payload.get("subject", {}).get("asking_price")) if isinstance(immovalue_payload.get("subject"), dict) else None,
         "monthly_payment": _number(base.get("monthly_payment")) or _number(financial_inputs.get("monthly_payment")),
         "monthly_expenses": _number(analysis.get("monthly_expenses")),
         "rental_income": _number(analysis.get("rental_income")),
