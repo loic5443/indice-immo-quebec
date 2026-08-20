@@ -2,7 +2,7 @@
 
 import unittest
 
-from components.saved_analyses import _filter_saved_analyses, _tracking_overview
+from components.saved_analyses import _filter_saved_analyses, _saved_official_role, _tracking_overview
 from services.dossier_tracking_service import dossier_fingerprint
 
 
@@ -33,6 +33,13 @@ class SavedAnalysisFiltersTests(unittest.TestCase):
             "resilience_json": '{"tests": [{"name": "Taux +1 point", "financial": {"cash_flow_monthly": -25}}]}',
         }
         self.assertEqual(_tracking_overview([analysis]), {"total": 1, "important": 1, "updates": 0})
+
+    def test_saved_official_role_remains_a_fiscal_snapshot(self):
+        snapshot = _saved_official_role({
+            "official_role_snapshot_json": '{"total_value": 404100, "role_year": 2026, "reference_date": "2026-01-01"}',
+        })
+        self.assertEqual(snapshot["total_value"], 404_100)
+        self.assertIsNone(_saved_official_role({"official_role_snapshot_json": "{}"}))
 
 
 if __name__ == "__main__":

@@ -55,6 +55,18 @@ def _saved_asking_price(analysis: dict) -> float | None:
         return None
 
 
+def _saved_official_role(analysis: dict) -> dict | None:
+    """Read a public fiscal snapshot without treating it as market value."""
+
+    try:
+        snapshot = json.loads(analysis.get("official_role_snapshot_json") or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("total_value"), (int, float)):
+        return None
+    return snapshot
+
+
 def _filter_saved_analyses(
     analyses: list[dict], query: str, scope: str, sort_by: str, tracked_fingerprints: set[str], user_id: int,
 ) -> list[dict]:
@@ -292,6 +304,14 @@ def show_saved_analyses() -> None:
             asking_price = _saved_asking_price(analysis)
             if asking_price is not None:
                 st.caption(f"Prix demandé déclaré : {_money(asking_price)} · distinct de la valeur municipale et d’ImmoValue.")
+            official_role = _saved_official_role(analysis)
+            if official_role:
+                reference = official_role.get("reference_date") or "date de référence non publiée"
+                st.caption(
+                    f"Valeur au rôle municipal sauvegardée : {_money(official_role['total_value'])} · "
+                    f"rôle {official_role.get('role_year') or 'année non publiée'} · {reference}. "
+                    "Repère fiscal officiel, distinct d’une valeur marchande."
+                )
             if analysis["immo_score"] is not None:
                 st.markdown(
                     f"**Profil ImmoEngine :** {analysis['user_profile']}  \n"
