@@ -20,8 +20,10 @@ class PropertySummaryUiTests(unittest.TestCase):
             self.assertIn(label, labels)
         self.assertIn("Modifier les hypothèses", [button.label for button in app.button])
         self.assertIn("Voir les alertes Premium", [button.label for button in app.button])
-        self.assertTrue(any(item.label == "ImmoValue" for item in app.tabs))
-        self.assertTrue(any(item.label == "Vérifications détaillées" for item in app.tabs))
+        self.assertEqual(
+            [item.label for item in app.tabs],
+            ["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"],
+        )
 
     def test_non_rental_summary_does_not_present_zero_as_a_return(self):
         app = AppTest.from_string(

@@ -1416,7 +1416,9 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
     st.subheader("Scénarios en un coup d’œil")
     _show_summary_scenarios(inputs, engine_result.profile)
 
-    overview_tab, finances_tab, risks_tab, details_tab = st.tabs(["ImmoValue", "Détails financiers", "Vérifications détaillées", "Méthode et sources"])
+    overview_tab, finances_tab, risks_tab, details_tab = st.tabs([
+        "Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources",
+    ])
     with overview_tab:
         immovalue = _show_immovalue(address_lookup)
         score, confidence, verdict = st.columns(3)

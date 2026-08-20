@@ -90,7 +90,7 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertIn("ImmoValue", labels)
         self.assertIn("Score ImmoRadar", labels)
         self.assertTrue(any("Ce qu’ImmoRadar sait pour l’instant" in item.value for item in app.markdown))
-        self.assertTrue(any("Référence fiscale officielle" in item.value for item in app.caption))
+        self.assertTrue(any("repère fiscal officiel" in item.value for item in app.info))
         self.assertTrue(any("Adresse normalisée" in item.value for item in app.caption))
         self.assertTrue(any("valeur marchande" in item.value for item in app.markdown))
         self.assertTrue(any("Aucune analyse personnelle" in item.value for item in app.info))
