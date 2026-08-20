@@ -54,6 +54,48 @@ def _saved_asking_price(analysis: dict) -> float | None:
         return None
 
 
+def _filter_saved_analyses(
+    analyses: list[dict], query: str, scope: str, sort_by: str, tracked_fingerprints: set[str], user_id: int,
+) -> list[dict]:
+    """Filter only the already owner-scoped list; names never leave the session."""
+
+    query = query.strip().casefold()
+    filtered = [
+        analysis for analysis in analyses
+        if not query or query in str(analysis.get("property_name") or "").casefold()
+    ]
+    if scope == "Favoris":
+        filtered = [analysis for analysis in filtered if bool(analysis.get("is_favorite"))]
+    elif scope == "Suivis":
+        filtered = [
+            analysis for analysis in filtered
+            if dossier_fingerprint(user_id, analysis.get("property_name")) in tracked_fingerprints
+        ]
+
+    if sort_by == "Plus ancien":
+        return sorted(filtered, key=lambda item: (str(item.get("created_at") or ""), int(item.get("id") or 0)))
+    if sort_by == "Score le plus élevé":
+        return sorted(
+            filtered,
+            key=lambda item: (item.get("immo_score") is None, -(float(item.get("immo_score") or 0)), -int(item.get("id") or 0)),
+        )
+    if sort_by == "Favoris puis récents":
+        return sorted(
+            filtered,
+            key=lambda item: (int(bool(item.get("is_favorite"))), str(item.get("created_at") or ""), int(item.get("id") or 0)),
+            reverse=True,
+        )
+    return sorted(filtered, key=lambda item: (str(item.get("created_at") or ""), int(item.get("id") or 0)), reverse=True)
+
+
+def _reset_saved_analysis_filters() -> None:
+    """Reset only local UI state, never a saved dossier or follow choice."""
+
+    st.session_state["saved_analysis_search"] = ""
+    st.session_state["saved_analysis_scope"] = "Tous"
+    st.session_state["saved_analysis_sort"] = "Favoris puis récents"
+
+
 def _show_comparison_metric(label: str, value_a: str, value_b: str, relation: str | None = None) -> None:
     """Keep each indicator narrow and readable on a phone."""
     with st.container(border=True):
@@ -188,7 +230,22 @@ def show_saved_analyses() -> None:
     st.caption(f"{len({dossier_fingerprint(user['id'], item['property_name']) for item in tracked_analyses})} dossier(s) suivi(s) · aucun courriel n’est envoyé pendant la bêta.")
     _show_property_comparator(user, analyses)
     history_by_id = snapshot_positions(analyses)
-    for analysis in analyses:
+    st.markdown("<div class='section-space compact-space'></div><h2>Vos dossiers</h2>", unsafe_allow_html=True)
+    search_column, scope_column, sort_column, reset_column = st.columns([4, 2, 2, 1])
+    with search_column:
+        query = st.text_input("Rechercher un dossier", placeholder="Nom ou adresse déjà sauvegardé", key="saved_analysis_search")
+    with scope_column:
+        scope = st.selectbox("Afficher", ["Tous", "Favoris", "Suivis"], key="saved_analysis_scope")
+    with sort_column:
+        sort_by = st.selectbox("Trier", ["Favoris puis récents", "Plus récent", "Plus ancien", "Score le plus élevé"], key="saved_analysis_sort")
+    with reset_column:
+        st.write("")
+        st.button("Effacer", key="reset_saved_analysis_filters", on_click=_reset_saved_analysis_filters, use_container_width=True)
+    displayed_analyses = _filter_saved_analyses(analyses, query, scope, sort_by, tracked_fingerprints, user["id"])
+    st.caption(f"{len(displayed_analyses)} dossier(s) affiché(s). La recherche reste dans cette session et n’est jamais envoyée à un service externe.")
+    if not displayed_analyses:
+        st.info("Aucun dossier ne correspond à ces filtres.")
+    for analysis in displayed_analyses:
         favorite = "★ Favori" if analysis["is_favorite"] else "☆"
         label = f"{favorite}  {analysis['property_name']} · dernière mise à jour {analysis['created_at'][:10]}"
         with st.expander(label):
