@@ -30,7 +30,13 @@ from services.comparable_workspace import (
     today_iso,
 )
 from services.analysis_workflow import STEPS, load_draft, save_draft, normalize_step, transition
-from services.entitlements_service import quota_status, consume_estimation
+from services.entitlements_service import can_use, quota_status, consume_estimation
+from services.dossier_tracking_service import (
+    DossierTrackingAccessError,
+    dossier_fingerprint,
+    set_dossier_tracking,
+    tracked_dossier_fingerprints,
+)
 from services.address_lookup_service import lookup
 from services.quebec_role_importer import display_role_address,search_role_units,role_street_variants,suggest_role_units
 from services.quebec_role_admin_service import territory_for_municipality
@@ -105,6 +111,7 @@ ADDRESS_LOCAL_SELECTED_KEY = "address_form_local_selected"
 ADDRESS_AUTO_SYNC_PENDING_KEY = "address_form_auto_sync_pending"
 ADDRESS_AUTO_SYNC_STATUS_KEY = "address_form_auto_sync_status"
 ANALYSIS_REOPEN_PENDING_KEY = "analysis_reopen_pending"
+LAST_SAVED_ANALYSIS_KEY = "last_saved_analysis"
 MAX_ADDRESS_SUGGESTIONS = 6
 ADDRESS_WIDGET_KEYS = {
     "street": "address_form_street",
@@ -1504,7 +1511,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         st.write("ImmoValue est une fourchette expérimentale issue des comparables que vous fournissez. Le rôle municipal est une valeur fiscale officielle, distincte d’une valeur marchande. ImmoScore mesure l’adéquation de vos hypothèses à votre profil; il ne constitue pas une recommandation.")
         st.caption("Chaque renseignement officiel affiché indique sa provenance, son année et sa fraîcheur. Une donnée absente reste indisponible.")
 
-    st.markdown("<div class='save-analysis-panel'><h3>Enregistrer votre synthèse</h3><p>Sauvegardez ce dossier ou revenez aux chiffres saisis. Les alertes Premium restent un aperçu verrouillé : aucun envoi n’est activé ici.</p>", unsafe_allow_html=True)
+    st.markdown("<div class='save-analysis-panel'><h3>Enregistrer votre synthèse</h3><p>Sauvegardez ce dossier ou revenez aux chiffres saisis. Le suivi reste local : aucun courriel ni envoi automatique n’est activé pendant la bêta.</p>", unsafe_allow_html=True)
     action_save, action_edit, action_premium = st.columns(3)
     with action_edit:
         st.button("Modifier les hypothèses", on_click=_return_to_summary_inputs, key="edit_analysis_hypotheses", use_container_width=True)
@@ -1518,7 +1525,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
             if not property_name.strip():
                 st.error("Veuillez donner un nom ou une adresse à cette analyse.")
             else:
-                save_analysis(current_user()["id"], property_name, {
+                analysis_id = save_analysis(current_user()["id"], property_name, {
                     "price": inputs.price, "down_payment": inputs.down_payment,
                     "rental_income": inputs.rental_income_monthly, "monthly_expenses": result.total_monthly_expenses,
                     "cash_flow": result.cash_flow_monthly, "cash_on_cash_return": result.cash_on_cash_return,
@@ -1533,7 +1540,36 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                     "immovalue": immovalue,
                     "official_role_snapshot": _official_role_snapshot(address_lookup),
                 }, profile=engine_result.profile, engine_result=engine_result)
+                st.session_state[LAST_SAVED_ANALYSIS_KEY] = {
+                    "id": analysis_id,
+                    "owner_id": current_user()["id"],
+                    "property_name": property_name.strip(),
+                }
                 st.success("Dossier, scénarios et tests de résistance sauvegardés dans Mes propriétés.")
+        saved = st.session_state.get(LAST_SAVED_ANALYSIS_KEY, {})
+        if (
+            isinstance(saved, dict)
+            and saved.get("owner_id") == current_user()["id"]
+            and saved.get("property_name") == property_name.strip()
+            and isinstance(saved.get("id"), int)
+        ):
+            if can_use(current_user(), "alerts"):
+                followed = dossier_fingerprint(current_user()["id"], property_name) in tracked_dossier_fingerprints(
+                    current_user()["id"], DATABASE_PATH
+                )
+                label = "Suivi de ce dossier actif" if followed else "Activer le suivi de ce dossier"
+                if st.button(label, key="activate_saved_dossier_tracking", disabled=followed):
+                    try:
+                        set_dossier_tracking(current_user()["id"], saved["id"], True, DATABASE_PATH)
+                    except DossierTrackingAccessError:
+                        st.error("Le dossier sauvegardé n’est plus disponible dans votre espace.")
+                    else:
+                        st.success("Suivi activé. Les alertes Premium liront seulement les changements vérifiables de ce dossier.")
+                        st.rerun()
+                if followed:
+                    st.caption("Le suivi est actif. Vous pouvez le désactiver dans Mes propriétés.")
+            else:
+                st.caption("Le suivi des changements vérifiables est inclus dans l’aperçu Premium. Aucun courriel n’est activé pendant la bêta.")
     else:
         st.write("Connectez-vous pour conserver cette analyse, ses scénarios et ses tests de résistance.")
         st.button("Créer un compte ou se connecter", on_click=go_to, args=("Mon compte",), key="save_analysis_login")
