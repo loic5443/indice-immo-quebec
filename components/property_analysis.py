@@ -80,6 +80,15 @@ VISIBLE_ANALYSIS_STAGES = (
     (3, "Résultats et rapport", "Consultez les résultats, sauvegardez votre dossier ou produisez un rapport."),
 )
 
+# A municipal assessment roll is an official fiscal reference, not a live
+# market appraisal.  Keep this explanation identical wherever the three
+# values are compared so the role is never mistaken for ImmoValue.
+MUNICIPAL_VALUE_CONTEXT = (
+    "La valeur au rôle municipal est un repère fiscal officiel établi à une date de référence. "
+    "Elle peut être plus élevée ou plus basse que le prix du marché actuel, notamment selon "
+    "l’année du rôle, le secteur et l’évolution récente du marché. Ce n’est pas une estimation marchande."
+)
+
 ADDRESS_STATE_KEY = "address_form_state"
 ADDRESS_LOOKUP_KEY = "address_form_lookup"
 ADDRESS_OWNER_KEY = "address_form_owner"
@@ -885,7 +894,7 @@ def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict 
             if role_match:
                 st.metric("Valeur au rôle municipal", _money(role_match["total_value"] or 0))
                 st.caption(f"Rôle {role_match['role_year']} · MAMH / Données Québec")
-                st.caption("Référence fiscale officielle : ce n’est pas un prix de vente.")
+                st.caption("Repère fiscal officiel : il peut différer du prix du marché actuel.")
             else:
                 st.metric("Valeur au rôle municipal", "Données nécessaires")
                 st.caption("Choisissez une adresse couverte ou poursuivez manuellement.")
@@ -1271,6 +1280,7 @@ def _show_role_overview(address_lookup: dict | None) -> None:
         building.metric("Bâtiment", _money(match["building_value"] or 0))
         total.metric("Total au rôle", _money(match["total_value"] or 0))
         st.caption(f"Rôle {match['role_year']} · date de référence {match['market_reference_date'] or 'non publiée'} · source MAMH / Données Québec · licence CC BY 4.0. Cette valeur n’est jamais appliquée automatiquement à ImmoValue ou à vos finances.")
+        st.info(MUNICIPAL_VALUE_CONTEXT)
         return
     variants = address_lookup.get("variants", [])
     detail = f" Variante publique disponible : {', '.join(variants)}." if variants else ""
@@ -1337,6 +1347,7 @@ def _show_summary_value_cards(address_lookup: dict | None, immovalue: dict | Non
             st.markdown("**Prix demandé**")
             st.metric("Prix saisi", _money(asking) if asking else "À ajouter")
             st.caption("Ajoutez-le dans ImmoValue pour comparer l’écart." if not asking else "Montant déclaré par vous.")
+    st.info(MUNICIPAL_VALUE_CONTEXT)
     if immovalue and asking:
         gap = asking - immovalue["estimated_value"]
         st.info(f"Écart avec ImmoValue : {_money(gap)} ({gap / immovalue['estimated_value'] * 100:+.1f} %). {immovalue.get('asking_comparison') or ''}".strip())
@@ -1703,6 +1714,7 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
                 st.markdown("**Prix demandé**")
                 st.metric("Prix saisi", _money(subject.asking_price) if subject.asking_price else "À ajouter")
                 st.caption("Ajoutez un prix demandé pour visualiser l’écart avec ImmoValue." if not subject.asking_price else f"Écart : {_money(estimate['asking_gap'])} ({estimate['asking_gap'] / estimate['estimated_value'] * 100:+.1f} %)" )
+        st.info(MUNICIPAL_VALUE_CONTEXT)
         st.info(comparison_conclusion(estimate))
         st.caption(f"Calculée le {st.session_state.get('immovalue_generated_at', today_iso())} · {estimate['used_count']} comparables admissibles · dispersion {estimate['dispersion_pct']} %.")
         with st.expander("Pourquoi cette estimation?", expanded=False):

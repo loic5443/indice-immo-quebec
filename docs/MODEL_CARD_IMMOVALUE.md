@@ -8,6 +8,6 @@ La confiance est plafonnée à 65/100 car les comparables restent déclarés et 
 
 ## Interprétation et comparaison
 
-La carte de résultat présente séparément la valeur du rôle municipal, l’estimation ImmoValue et le prix demandé déclaré. La valeur du rôle est une référence fiscale officielle; elle n’est jamais renommée valeur marchande, ni injectée dans le modèle. Lorsqu’un prix demandé existe, la conclusion déterministe indique seulement s’il est dans, au-dessus ou sous la fourchette, avec l’écart calculé. Elle ne recommande jamais d’acheter, de vendre ou de négocier.
+La carte de résultat présente séparément la valeur du rôle municipal, l’estimation ImmoValue et le prix demandé déclaré. La valeur du rôle est une référence fiscale officielle; elle peut être plus élevée ou plus basse que le prix du marché actuel, notamment selon l’année du rôle, le secteur et l’évolution récente du marché. Elle n’est jamais renommée valeur marchande, ni injectée dans le modèle. Lorsqu’un prix demandé existe, la conclusion déterministe indique seulement s’il est dans, au-dessus ou sous la fourchette, avec l’écart calculé. Elle ne recommande jamais d’acheter, de vendre ou de négocier.
 
 Les statistiques agrégées ouvertes du Registre foncier servent uniquement de contexte documenté potentiel. Elles ne constituent ni une vente comparable ni une entrée du modèle.

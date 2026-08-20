@@ -34,6 +34,16 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertEqual(values["Revenus locatifs"], "Non applicable")
         self.assertEqual(values["Flux de trésorerie"], "Non applicable")
 
+    def test_value_comparison_explains_the_fiscal_role_limit(self):
+        app = AppTest.from_string(
+            "import components.property_analysis as page\n"
+            "page._show_summary_value_cards(None, None)\n"
+        ).run(timeout=20)
+        notices = "\n".join(item.value for item in app.info)
+        self.assertIn("repère fiscal officiel", notices)
+        self.assertIn("plus élevée ou plus basse", notices)
+        self.assertIn("secteur", notices)
+
 
 if __name__ == "__main__":
     unittest.main()
