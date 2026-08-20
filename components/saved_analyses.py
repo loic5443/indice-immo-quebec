@@ -11,6 +11,7 @@ from services.entitlements_service import can_use
 from services.property_comparison_service import ComparisonAccessError, compare_saved_analyses
 from services.analysis_reopen_service import AnalysisReopenAccessError, prepare_reopen_draft
 from services.report_service import generate_comparison_report_pdf, generate_report_pdf
+from services.snapshot_history_service import snapshot_positions
 
 
 def _money(value: float) -> str:
@@ -176,10 +177,18 @@ def show_saved_analyses() -> None:
 
     st.caption(f"{len(analyses)} analyse(s) sauvegardée(s) · Les favoris apparaissent en premier.")
     _show_property_comparator(user, analyses)
+    history_by_id = snapshot_positions(analyses)
     for analysis in analyses:
         favorite = "★ Favori" if analysis["is_favorite"] else "☆"
         label = f"{favorite}  {analysis['property_name']} · dernière mise à jour {analysis['created_at'][:10]}"
         with st.expander(label):
+            history = history_by_id.get(int(analysis["id"]))
+            if history and history.total > 1:
+                status = "Dernier instantané" if history.is_latest else f"Instantané {history.position}"
+                st.caption(
+                    f"{status} sur {history.total} pour ce dossier. Les alertes Premium comparent uniquement "
+                    "ces versions sauvegardées, sans refaire vos calculs."
+                )
             first, second, third = st.columns(3)
             first.metric("Prix analysé", _money(analysis["price"]))
             second.metric("Flux mensuel", _money(analysis["cash_flow"]))
