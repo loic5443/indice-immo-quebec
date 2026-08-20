@@ -2,7 +2,7 @@
 
 import unittest
 
-from components.saved_analyses import _filter_saved_analyses
+from components.saved_analyses import _filter_saved_analyses, _tracking_overview
 from services.dossier_tracking_service import dossier_fingerprint
 
 
@@ -25,6 +25,14 @@ class SavedAnalysisFiltersTests(unittest.TestCase):
     def test_sorting_keeps_missing_scores_last(self):
         result = _filter_saved_analyses(self.analyses, "", "Tous", "Score le plus élevé", self.tracked, self.user_id)
         self.assertEqual([item["id"] for item in result], [1, 2, 3])
+
+    def test_tracking_overview_counts_only_factual_alert_categories(self):
+        analysis = {
+            "id": 1, "property_name": "Projet Alpha", "created_at": "2026-02-01",
+            "cash_flow": 100, "immovalue_json": "{}", "official_role_snapshot_json": "{}",
+            "resilience_json": '{"tests": [{"name": "Taux +1 point", "financial": {"cash_flow_monthly": -25}}]}',
+        }
+        self.assertEqual(_tracking_overview([analysis]), {"total": 1, "important": 1, "updates": 0})
 
 
 if __name__ == "__main__":

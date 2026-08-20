@@ -7,6 +7,7 @@ from components.account import current_user, is_authenticated
 from components.sidebar import go_to
 from components.alerts import show_alert_center
 from data.database import DATABASE_PATH, delete_analysis, list_analyses, toggle_favorite
+from services.alert_service import build_calculable_alerts
 from services.entitlements_service import can_use
 from services.property_comparison_service import ComparisonAccessError, compare_saved_analyses
 from services.analysis_reopen_service import AnalysisReopenAccessError, prepare_reopen_draft
@@ -94,6 +95,17 @@ def _reset_saved_analysis_filters() -> None:
     st.session_state["saved_analysis_search"] = ""
     st.session_state["saved_analysis_scope"] = "Tous"
     st.session_state["saved_analysis_sort"] = "Favoris puis récents"
+
+
+def _tracking_overview(analyses: list[dict]) -> dict[str, int]:
+    """Count only alerts that can be proved from followed saved snapshots."""
+
+    alerts = build_calculable_alerts(analyses)
+    return {
+        "total": len(alerts),
+        "important": sum(alert["severity"] == "important" for alert in alerts),
+        "updates": sum(alert["severity"] == "info" for alert in alerts),
+    }
 
 
 def _show_comparison_metric(label: str, value_a: str, value_b: str, relation: str | None = None) -> None:
@@ -228,6 +240,14 @@ def show_saved_analyses() -> None:
     tracked_fingerprints = tracked_dossier_fingerprints(user["id"], DATABASE_PATH)
     tracked_analyses = filter_tracked_analyses(user["id"], analyses, DATABASE_PATH)
     st.caption(f"{len({dossier_fingerprint(user['id'], item['property_name']) for item in tracked_analyses})} dossier(s) suivi(s) · aucun courriel n’est envoyé pendant la bêta.")
+    if can_use(user, "alerts"):
+        overview = _tracking_overview(tracked_analyses)
+        st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>SUIVI ACTIF</p><h2>Ce qui mérite votre attention</h2>", unsafe_allow_html=True)
+        all_alerts, important_alerts, updates = st.columns(3)
+        all_alerts.metric("Alertes calculables", overview["total"])
+        important_alerts.metric("À vérifier", overview["important"])
+        updates.metric("Mises à jour", overview["updates"])
+        st.caption("Ces compteurs lisent uniquement vos instantanés suivis. Ils ne prévoient rien et ne déclenchent aucun envoi.")
     _show_property_comparator(user, analyses)
     history_by_id = snapshot_positions(analyses)
     st.markdown("<div class='section-space compact-space'></div><h2>Vos dossiers</h2>", unsafe_allow_html=True)
