@@ -3,7 +3,9 @@
 import streamlit as st
 
 from components.sidebar import go_to
+from data.database import DATABASE_PATH
 from services.alert_service import build_calculable_alerts
+from services.analysis_reopen_service import AnalysisReopenAccessError, prepare_reopen_draft
 from services.entitlements_service import can_use
 
 
@@ -27,6 +29,18 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
                 st.subheader(alert["title"])
                 st.write(alert["detail"])
                 st.caption(f"Dossier : {alert['property_name']} · instantané du {str(alert['created_at'])[:10]}")
+                user_id = user.get("id")
+                if isinstance(user_id, int):
+                    if st.button("Ouvrir et modifier ce dossier", key=f"alert_open_{alert['analysis_id']}"):
+                        try:
+                            st.session_state["analysis_reopen_pending"] = prepare_reopen_draft(
+                                user_id, int(alert["analysis_id"]), DATABASE_PATH,
+                            )
+                        except AnalysisReopenAccessError:
+                            st.error("Ce dossier n’est pas disponible dans votre espace.")
+                        else:
+                            go_to("Analyser")
+                            st.rerun()
         return
     # No message is produced unless a comparison or a source update is truly
     # available. This avoids turning examples into apparent real events.
