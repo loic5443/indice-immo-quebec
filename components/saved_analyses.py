@@ -10,6 +10,13 @@ from data.database import DATABASE_PATH, delete_analysis, list_analyses, toggle_
 from services.entitlements_service import can_use
 from services.property_comparison_service import ComparisonAccessError, compare_saved_analyses
 from services.analysis_reopen_service import AnalysisReopenAccessError, prepare_reopen_draft
+from services.dossier_tracking_service import (
+    DossierTrackingAccessError,
+    dossier_fingerprint,
+    filter_tracked_analyses,
+    set_dossier_tracking,
+    tracked_dossier_fingerprints,
+)
 from services.report_service import generate_comparison_report_pdf, generate_report_pdf
 from services.snapshot_history_service import snapshot_positions
 
@@ -176,6 +183,9 @@ def show_saved_analyses() -> None:
         return
 
     st.caption(f"{len(analyses)} analyse(s) sauvegardée(s) · Les favoris apparaissent en premier.")
+    tracked_fingerprints = tracked_dossier_fingerprints(user["id"], DATABASE_PATH)
+    tracked_analyses = filter_tracked_analyses(user["id"], analyses, DATABASE_PATH)
+    st.caption(f"{len({dossier_fingerprint(user['id'], item['property_name']) for item in tracked_analyses})} dossier(s) suivi(s) · aucun courriel n’est envoyé pendant la bêta.")
     _show_property_comparator(user, analyses)
     history_by_id = snapshot_positions(analyses)
     for analysis in analyses:
@@ -243,7 +253,7 @@ def show_saved_analyses() -> None:
                 file_name=f"immoradar-analyse-{analysis['id']}.pdf", mime="application/pdf",
                 key=f"pdf_{analysis['id']}", use_container_width=True,
             )
-            open_column, favorite_column, delete_column = st.columns(3)
+            open_column, follow_column, favorite_column, delete_column = st.columns(4)
             if open_column.button("Ouvrir et modifier", key=f"reopen_{analysis['id']}", use_container_width=True):
                 try:
                     st.session_state["analysis_reopen_pending"] = prepare_reopen_draft(
@@ -254,6 +264,19 @@ def show_saved_analyses() -> None:
                 else:
                     go_to("Analyser")
                     st.rerun()
+            fingerprint = dossier_fingerprint(user["id"], analysis["property_name"])
+            followed = fingerprint in tracked_fingerprints
+            if can_use(user, "alerts"):
+                follow_label = "Arrêter le suivi" if followed else "Suivre ce dossier"
+                if follow_column.button(follow_label, key=f"follow_{analysis['id']}", use_container_width=True):
+                    try:
+                        set_dossier_tracking(user["id"], int(analysis["id"]), not followed, DATABASE_PATH)
+                    except DossierTrackingAccessError:
+                        st.error("Ce dossier n’est pas disponible dans votre espace.")
+                    else:
+                        st.rerun()
+            else:
+                follow_column.button("Suivi Premium", key=f"follow_locked_{analysis['id']}", disabled=True, use_container_width=True)
             favorite_label = "Retirer des favoris" if analysis["is_favorite"] else "Ajouter aux favoris"
             if favorite_column.button(favorite_label, key=f"favorite_{analysis['id']}", use_container_width=True):
                 toggle_favorite(user["id"], analysis["id"], DATABASE_PATH)
@@ -261,4 +284,4 @@ def show_saved_analyses() -> None:
             if delete_column.button("Supprimer", key=f"delete_{analysis['id']}", use_container_width=True):
                 delete_analysis(user["id"], analysis["id"], DATABASE_PATH)
                 st.rerun()
-    show_alert_center(user, analyses)
+    show_alert_center(user, tracked_analyses, tracking_configured=True)

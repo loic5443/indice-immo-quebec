@@ -33,7 +33,7 @@ La [méthodologie ImmoValue](IMMOVALUE_METHODOLOGY.md), la [model card](MODEL_CA
 
 ## Alertes factuelles
 
-Le centre d’alertes Premium lit uniquement les instantanés déjà sauvegardés : variation d’ImmoValue avec confiance suffisante, variation du rôle municipal et perte de flux dans le test « Taux +1 point ». Il ne déclenche aucun appel externe ni courriel pendant la bêta.
+Le centre d’alertes Premium lit uniquement les instantanés déjà sauvegardés : variation d’ImmoValue avec confiance suffisante, variation du rôle municipal et perte de flux dans le test « Taux +1 point ». L’utilisateur active le suivi dossier par dossier dans **Mes propriétés**; le choix est local, isolé par compte et ne stocke qu’une empreinte du nom normalisé du dossier. Il ne déclenche aucun appel externe ni courriel pendant la bêta.
 
 ## Structure produit actuelle
 

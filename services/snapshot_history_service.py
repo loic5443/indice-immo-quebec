@@ -17,7 +17,7 @@ class SnapshotPosition:
     snapshots: tuple[dict[str, Any], ...]
 
 
-def _dossier_key(name: object) -> str:
+def canonical_dossier_key(name: object) -> str:
     """Group only deliberately identical dossier names, never guessed addresses."""
 
     text = unicodedata.normalize("NFKD", str(name or ""))
@@ -35,7 +35,7 @@ def snapshot_positions(analyses: list[dict[str, Any]]) -> dict[int, SnapshotPosi
     grouped: dict[str, list[dict[str, Any]]] = {}
     for analysis in analyses:
         identifier = analysis.get("id")
-        key = _dossier_key(analysis.get("property_name"))
+        key = canonical_dossier_key(analysis.get("property_name"))
         if not isinstance(identifier, int) or not key:
             continue
         grouped.setdefault(key, []).append(analysis)

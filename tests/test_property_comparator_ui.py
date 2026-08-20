@@ -60,6 +60,13 @@ page.show_saved_analyses()
         self.assertNotIn("Télécharger le rapport comparatif PDF", [item.label for item in free.download_button])
         self.assertIn("Télécharger le rapport comparatif PDF", [item.label for item in premium.download_button])
 
+    def test_premium_can_activate_local_follow_without_an_email(self):
+        app = self._app("premium")
+        follow = next(button for button in app.button if button.label == "Suivre ce dossier")
+        follow.click().run(timeout=20)
+        self.assertIn("Arrêter le suivi", [button.label for button in app.button])
+        self.assertTrue(any("dossier(s) suivi(s)" in item.value for item in app.caption))
+
 
 if __name__ == "__main__":
     unittest.main()

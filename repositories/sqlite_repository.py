@@ -122,3 +122,27 @@ class SQLiteRepository:
                 WHERE id = ? AND user_id = ?""", (analysis_id, user_id)
             )
         return cursor.rowcount == 1
+
+    def tracked_dossier_fingerprints(self, user_id: int) -> set[str]:
+        """Return follow selections for one account only."""
+
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT dossier_fingerprint FROM tracked_dossiers WHERE user_id = ?", (user_id,)
+            ).fetchall()
+        return {str(row["dossier_fingerprint"]) for row in rows}
+
+    def set_dossier_tracking(self, user_id: int, fingerprint: str, enabled: bool) -> None:
+        """Persist one owner-scoped follow choice without saving dossier content."""
+
+        with closing(self._connect()) as connection, connection:
+            if enabled:
+                connection.execute(
+                    "INSERT OR IGNORE INTO tracked_dossiers (user_id, dossier_fingerprint) VALUES (?, ?)",
+                    (user_id, fingerprint),
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM tracked_dossiers WHERE user_id = ? AND dossier_fingerprint = ?",
+                    (user_id, fingerprint),
+                )
