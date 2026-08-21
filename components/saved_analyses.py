@@ -6,6 +6,7 @@ import streamlit as st
 from components.account import current_user, is_authenticated
 from components.sidebar import go_to
 from components.alerts import show_alert_center
+from components.premium_teaser import show_premium_teaser
 from data.database import DATABASE_PATH, delete_analysis, list_analyses, toggle_favorite
 from services.alert_service import build_calculable_alerts
 from services.entitlements_service import can_use
@@ -225,11 +226,16 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
             st.caption(f"Analyse du {snapshot['date']} · {snapshot['property_type'] or 'Type non précisé'}")
 
     if not can_use(user, "advanced_comparisons"):
-        st.markdown("<section class='premium-notice'><p class='eyebrow'>APERÇU GRATUIT</p><h3>Les repères essentiels de vos deux dossiers</h3><p>Premium ajoute les indicateurs financiers, les scénarios et la lecture comparative expliquée.</p></section>", unsafe_allow_html=True)
+        st.markdown("<p class='eyebrow'>APERÇU GRATUIT</p><div class='notice-title' role='heading' aria-level='3'>Les repères essentiels de vos deux dossiers</div>", unsafe_allow_html=True)
         for item in comparison["indicators"]:
             if item["key"] in {"price", "cash_flow", "score", "confidence"}:
                 _show_comparison_metric(item["label"], _comparison_value(item["key"], item["a"]), _comparison_value(item["key"], item["b"]), item["relation"])
-        st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="comparison_premium")
+        show_premium_teaser(
+            feature="Lecture comparative détaillée",
+            title="Comparez ce qui change vraiment entre vos deux dossiers.",
+            detail="Premium affiche les dépenses, revenus, scénarios, taux de capitalisation et capacité à couvrir la dette à partir de vos instantanés sauvegardés.",
+            key="comparison_premium",
+        )
         return
 
     st.success("Comparaison complète basée sur les instantanés sauvegardés.")
@@ -401,8 +407,12 @@ def show_saved_analyses() -> None:
                     key=f"pdf_{analysis['id']}", use_container_width=True,
                 )
             else:
-                st.caption("Le rapport PDF complet est un aperçu Premium pendant la bêta privée.")
-                st.button("Découvrir Premium", key=f"report_premium_{analysis['id']}", on_click=go_to, args=("Premium",), use_container_width=True)
+                show_premium_teaser(
+                    feature="Rapport PDF complet",
+                    title="Gardez une lecture complète de votre dossier.",
+                    detail="Premium regroupe les calculs, scénarios, score, limites et sources déjà sauvegardés dans un rapport exportable.",
+                    key=f"report_premium_{analysis['id']}",
+                )
             open_column, follow_column, favorite_column, delete_column = st.columns(4)
             if open_column.button("Ouvrir et modifier", key=f"reopen_{analysis['id']}", use_container_width=True):
                 try:

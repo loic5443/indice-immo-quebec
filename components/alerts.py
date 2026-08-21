@@ -3,6 +3,7 @@
 import streamlit as st
 
 from components.sidebar import go_to
+from components.premium_teaser import show_premium_teaser
 from data.database import DATABASE_PATH
 from services.alert_service import build_calculable_alerts
 from services.analysis_reopen_service import AnalysisReopenAccessError, prepare_reopen_draft
@@ -12,8 +13,12 @@ from services.entitlements_service import can_use
 def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: bool = False) -> None:
     st.markdown("<div class='section-space compact-space'></div><h2>Centre d’alertes</h2>", unsafe_allow_html=True)
     if not can_use(user, "alerts"):
-        st.markdown("<section class='premium-notice'><p class='eyebrow'>APERÇU PREMIUM VERROUILLÉ</p><h3>Surveillez ce qui peut changer votre décision</h3><p>Alertes de variation de valeur, impact de taux, mise à jour du rôle municipal et détérioration de marge financière. Elles ne sont pas actives pour ce forfait.</p></section>", unsafe_allow_html=True)
-        st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="alerts_premium")
+        show_premium_teaser(
+            feature="Suivi des changements vérifiables",
+            title="Revenez au bon dossier au bon moment.",
+            detail="Premium ajoute le suivi local des variations de rôle municipal, d’ImmoValue, de sensibilité au taux et du renouvellement que vous avez saisi.",
+            key="alerts_premium",
+        )
         return
     if tracking_configured and not analyses:
         st.info("Aucun dossier suivi pour le moment. Activez le suivi d’un dossier dans Mes propriétés pour voir uniquement les changements vérifiables qui le concernent.")

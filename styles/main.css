@@ -102,6 +102,9 @@ p, li, label { color: var(--ink); }
 .premium-notice { margin-top: 2rem; padding: 1.35rem 1.5rem; border-left: 4px solid var(--blue); border-radius: 12px; background: #eaf1ff; }
 .premium-notice h3 { margin: 0 0 0.45rem !important; }
 .premium-notice p { color: var(--muted) !important; margin: 0; }
+.premium-conversion-card { margin-top: 1rem; padding: 1.25rem 1.35rem; border: 1px solid #b9d6ff; border-radius: 16px; background: linear-gradient(135deg, #f8fbff, #eef5ff); }
+.premium-conversion-card p { color: var(--muted) !important; margin: .5rem 0 0; line-height: 1.5; }
+.premium-conversion-card .premium-conversion-note { color: #4d6280 !important; font-size: .82rem; }
 .account-summary, .save-analysis-panel { margin: 1rem 0 1.5rem; padding: 1.45rem; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--shadow); }
 .account-summary h2 { margin: 0.75rem 0 0.2rem !important; }
 .account-summary p { color: var(--muted) !important; margin: 0.25rem 0; }

@@ -13,6 +13,7 @@ from calculations.real_estate import AnalysisResult, PropertyInputs, calculate_a
 from components.account import current_user, is_authenticated
 from components.live_text_input import live_text_input
 from components.immoengine import show_immoengine_result
+from components.premium_teaser import show_premium_teaser
 from components.scenarios import show_scenarios
 from components.sidebar import go_to
 from data.database import save_analysis
@@ -1798,7 +1799,12 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
                 st.success("Estimation ImmoValue produite.")
             else:
                 st.warning("Votre estimation gratuite du mois est utilisée. L’analyse financière reste disponible.")
-                st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="iv_premium")
+                show_premium_teaser(
+                    feature="Estimations ImmoValue sans limite",
+                    title="Continuez à évaluer les dossiers qui méritent votre attention.",
+                    detail="Premium permet de produire d’autres estimations lorsqu’elles sont calculables avec au moins trois comparables admissibles.",
+                    key="iv_premium",
+                )
 
     if estimate and estimate["available"]:
         st.subheader("Comparer les valeurs")
