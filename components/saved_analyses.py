@@ -23,6 +23,7 @@ from services.snapshot_history_service import snapshot_positions
 
 
 DELETE_CONFIRMATION_KEY = "pending_analysis_delete"
+ACTION_FEEDBACK_KEY = "saved_analysis_action_feedback"
 
 
 def _money(value: float) -> str:
@@ -137,6 +138,20 @@ def _request_analysis_deletion(user_id: int, analysis_id: int) -> None:
 
 def _cancel_analysis_deletion() -> None:
     st.session_state.pop(DELETE_CONFIRMATION_KEY, None)
+
+
+def _set_action_feedback(message: str) -> None:
+    """Persist a short confirmation through the intentional Streamlit rerun."""
+
+    st.session_state[ACTION_FEEDBACK_KEY] = message
+
+
+def _show_action_feedback() -> None:
+    """Display a one-time, local confirmation without retaining dossier data."""
+
+    message = st.session_state.pop(ACTION_FEEDBACK_KEY, None)
+    if isinstance(message, str) and message:
+        st.success(message)
 
 
 def _tracking_overview(analyses: list[dict]) -> dict[str, int]:
@@ -271,6 +286,7 @@ def show_saved_analyses() -> None:
         return
 
     user = current_user()
+    _show_action_feedback()
     analyses = list_analyses(user["id"], DATABASE_PATH)
     if not analyses:
         st.info("Aucune analyse sauvegardée pour le moment.")
@@ -408,12 +424,14 @@ def show_saved_analyses() -> None:
                     except DossierTrackingAccessError:
                         st.error("Ce dossier n’est pas disponible dans votre espace.")
                     else:
+                        _set_action_feedback("Suivi activé." if not followed else "Suivi arrêté.")
                         st.rerun()
             else:
                 follow_column.button("Suivi Premium", key=f"follow_locked_{analysis['id']}", disabled=True, use_container_width=True)
             favorite_label = "Retirer des favoris" if analysis["is_favorite"] else "Ajouter aux favoris"
             if favorite_column.button(favorite_label, key=f"favorite_{analysis['id']}", use_container_width=True):
                 toggle_favorite(user["id"], analysis["id"], DATABASE_PATH)
+                _set_action_feedback("Dossier ajouté aux favoris." if not analysis["is_favorite"] else "Dossier retiré des favoris.")
                 st.rerun()
             pending_deletion = st.session_state.get(DELETE_CONFIRMATION_KEY)
             deletion_requested = (
@@ -427,7 +445,7 @@ def show_saved_analyses() -> None:
                 if confirm.button("Confirmer", key=f"confirm_delete_{analysis['id']}", type="primary", use_container_width=True):
                     if delete_analysis(user["id"], analysis["id"], DATABASE_PATH):
                         _cancel_analysis_deletion()
-                        st.success("Dossier supprimé.")
+                        _set_action_feedback("Dossier supprimé.")
                         st.rerun()
                     else:
                         st.error("Ce dossier n’est plus disponible dans votre espace.")
