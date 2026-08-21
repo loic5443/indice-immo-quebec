@@ -68,6 +68,11 @@ class DatabaseTests(unittest.TestCase):
         errors = validate_registration("A", "invalide", "court", "different")
         self.assertGreaterEqual(len(errors), 3)
 
+    def test_registration_rejects_excessive_or_malformed_identity_fields(self):
+        errors = validate_registration("A" * 81, "personne @exemple.test", "motdepasse-solide", "motdepasse-solide")
+        self.assertIn("Le nom doit contenir au plus 80 caractères lisibles.", errors)
+        self.assertIn("Veuillez saisir une adresse courriel valide.", errors)
+
     def test_versioned_migrations_add_profile_and_engine_metadata(self):
         self.assertEqual(applied_migrations(self.database_path), ["0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022"])
         with closing(sqlite3.connect(self.database_path)) as connection:

@@ -12,6 +12,8 @@ from repositories.sqlite_repository import SQLiteRepository
 
 
 PASSWORD_ITERATIONS = 260_000
+MAX_NAME_LENGTH = 80
+MAX_EMAIL_LENGTH = 254
 
 
 def validate_login_submission(email: str, password: str) -> list[str]:
@@ -33,9 +35,19 @@ def _hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
 def validate_registration(name: str, email: str, password: str, confirmation: str, profile: UserProfile | None = None) -> list[str]:
     """Validate account and profile inputs before storing anything."""
     errors: list[str] = []
-    if len(name.strip()) < 2:
+    normalized_name = name.strip()
+    normalized_email = email.strip()
+    if len(normalized_name) < 2:
         errors.append("Veuillez saisir un nom d'au moins 2 caractères.")
-    if "@" not in email or email.startswith("@") or email.endswith("@"):
+    elif len(normalized_name) > MAX_NAME_LENGTH or any(ord(character) < 32 for character in normalized_name):
+        errors.append("Le nom doit contenir au plus 80 caractères lisibles.")
+    if (
+        len(normalized_email) > MAX_EMAIL_LENGTH
+        or normalized_email.count("@") != 1
+        or normalized_email.startswith("@")
+        or normalized_email.endswith("@")
+        or any(character.isspace() for character in normalized_email)
+    ):
         errors.append("Veuillez saisir une adresse courriel valide.")
     if len(password) < 12:
         errors.append("Le mot de passe doit contenir au moins 12 caractères.")
