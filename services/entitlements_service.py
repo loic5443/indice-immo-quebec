@@ -5,6 +5,15 @@ from zoneinfo import ZoneInfo
 from repositories.sqlite_repository import SQLiteRepository
 
 def can_use(user, feature): return user.get("role")=="admin" or user.get("plan")=="premium" or feature not in {"alerts","reports","unlimited_estimations","advanced_comparisons"}
+
+
+def quota_is_enforced(database_path) -> bool:
+ """Read the beta setting once; callers must never infer enforcement from usage."""
+ with closing(SQLiteRepository(database_path)._connect()) as connection:
+  row=connection.execute("SELECT quota_enforced FROM beta_settings WHERE id=1").fetchone()
+ return bool(row and row[0])
+
+
 def quota_status(user_id,user,database_path,now=None):
  if can_use(user,"unlimited_estimations"): return {"remaining":None,"label":"Illimité"}
  now=now or datetime.now(ZoneInfo("America/Toronto")); period=now.strftime("%Y-%m")

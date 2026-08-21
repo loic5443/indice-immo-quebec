@@ -3,6 +3,7 @@
 import streamlit as st
 
 from components.sidebar import go_to
+from components.premium_teaser import show_premium_teaser
 from data.database import authenticate_user, count_analyses, create_user, get_user, validate_registration
 from data.database import DATABASE_PATH
 from domain.models import UserProfile
@@ -10,7 +11,7 @@ from services.privacy_service import delete_account, export_user_data
 from services.onboarding_service import STEPS, complete, progress
 from services.beta_service import registration_allowed, consume_invitation
 from repositories.sqlite_repository import SQLiteRepository
-from services.entitlements_service import quota_status
+from services.entitlements_service import can_use, quota_is_enforced, quota_status
 from services.auth_service import validate_login_submission
 
 
@@ -67,7 +68,18 @@ def show_account() -> None:
         analyses, plan = st.columns(2)
         analyses.metric("Analyses sauvegardées", count_analyses(user["id"]))
         plan.metric("Statut du forfait", "Premium" if user["plan"] == "premium" else "Gratuit")
-        st.caption(quota_status(user["id"], user, DATABASE_PATH)["label"])
+        quota = quota_status(user["id"], user, DATABASE_PATH)
+        if quota_is_enforced(DATABASE_PATH):
+            st.caption(quota["label"])
+        else:
+            st.caption("Quota mensuel en aperçu pendant la bêta : aucune estimation n’est déduite automatiquement.")
+        if not can_use(user, "advanced_comparisons"):
+            show_premium_teaser(
+                feature="Dossiers suivis, comparaisons, scénarios et rapports",
+                title="Passez du calcul ponctuel au suivi de vos décisions.",
+                detail="Premium réunit les instantanés, les comparaisons détaillées, le rapport PDF et les changements vérifiables de vos dossiers sauvegardés.",
+                key="account_premium",
+            )
         view, sign_out, _ = st.columns([1, 1, 2])
         view.button("Voir mes analyses", type="primary", on_click=go_to, args=("Mes analyses",), use_container_width=True)
         sign_out.button("Se déconnecter", on_click=logout, use_container_width=True)

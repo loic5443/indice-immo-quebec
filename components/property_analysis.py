@@ -31,7 +31,7 @@ from services.comparable_workspace import (
     today_iso,
 )
 from services.analysis_workflow import STEPS, load_draft, save_draft, normalize_step, transition
-from services.entitlements_service import can_use, quota_status, consume_estimation
+from services.entitlements_service import can_use, quota_is_enforced, quota_status, consume_estimation
 from services.dossier_tracking_service import (
     DossierTrackingAccessError,
     dossier_fingerprint,
@@ -1786,12 +1786,12 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
     if is_authenticated():
         user = current_user()
         quota = quota_status(user["id"], user, DATABASE_PATH)
-        st.caption(quota["label"] + (" · Le quota est désactivé pendant la bêta." if not _quota_enforced() else ""))
+        st.caption(quota["label"] + (" · Le quota est désactivé pendant la bêta." if not quota_is_enforced(DATABASE_PATH) else ""))
     if estimate is None:
         if not candidate["available"]:
             st.info("Estimation non prête : ajoutez les renseignements manquants et au moins trois comparables admissibles. Cette étape ne consomme aucune estimation.")
         elif st.button("Produire l’estimation ImmoValue", type="primary", key="generate_immovalue"):
-            if not is_authenticated() or not _quota_enforced() or consume_estimation(current_user()["id"], current_user(), DATABASE_PATH, draft_key):
+            if not is_authenticated() or not quota_is_enforced(DATABASE_PATH) or consume_estimation(current_user()["id"], current_user(), DATABASE_PATH, draft_key):
                 st.session_state["immovalue_generated_result"] = candidate
                 st.session_state["immovalue_generated_key"] = draft_key
                 st.session_state["immovalue_generated_at"] = today_iso()
@@ -1848,9 +1848,4 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
     st.caption("ImmoValue est séparé d’ImmoScore : cette estimation n’influence pas le score financier et décisionnel.")
     return estimate
 
-
-def _quota_enforced() -> bool:
-    from repositories.sqlite_repository import SQLiteRepository
-    with SQLiteRepository(DATABASE_PATH)._connect() as connection:
-        row=connection.execute("SELECT quota_enforced FROM beta_settings WHERE id=1").fetchone()
-    return bool(row and row[0])
+# Quota configuration is read centrally in services.entitlements_service.
