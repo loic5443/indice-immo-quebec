@@ -37,6 +37,22 @@ def set_dossier_tracking(user_id: int, analysis_id: int, enabled: bool, database
     repository.set_dossier_tracking(user_id, dossier_fingerprint(user_id, analysis.get("property_name")), enabled)
 
 
+def clear_tracking_when_last_snapshot_is_removed(
+    user_id: int, property_name: object, database_path: Path | str,
+) -> bool:
+    """Remove a follow choice only when its last matching saved snapshot is gone."""
+
+    key = canonical_dossier_key(property_name)
+    if not key:
+        return False
+    repository = SQLiteRepository(database_path)
+    remaining = repository.list_analyses(user_id)
+    if any(canonical_dossier_key(item.get("property_name")) == key for item in remaining):
+        return False
+    repository.set_dossier_tracking(user_id, dossier_fingerprint(user_id, property_name), False)
+    return True
+
+
 def filter_tracked_analyses(user_id: int, analyses: list[dict[str, Any]], database_path: Path | str) -> list[dict[str, Any]]:
     """Filter an already owner-scoped snapshot list without exposing another account."""
 

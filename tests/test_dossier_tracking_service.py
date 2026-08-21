@@ -4,11 +4,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from data.database import authenticate_user, create_user, initialize_database, save_analysis
+from data.database import authenticate_user, create_user, delete_analysis, initialize_database, save_analysis
 from services.dossier_tracking_service import (
     DossierTrackingAccessError,
     filter_tracked_analyses,
     set_dossier_tracking,
+    tracked_dossier_fingerprints,
 )
 
 
@@ -49,6 +50,15 @@ class DossierTrackingServiceTests(unittest.TestCase):
     def test_cannot_change_another_accounts_follow_selection(self):
         with self.assertRaises(DossierTrackingAccessError):
             set_dossier_tracking(self.alice["id"], self.bob_analysis, True, self.database_path)
+
+    def test_deleting_last_snapshot_stops_local_tracking_without_touching_other_accounts(self):
+        set_dossier_tracking(self.alice["id"], self.alice_first, True, self.database_path)
+        self.assertTrue(tracked_dossier_fingerprints(self.alice["id"], self.database_path))
+        self.assertTrue(delete_analysis(self.alice["id"], self.alice_first, self.database_path))
+        self.assertTrue(tracked_dossier_fingerprints(self.alice["id"], self.database_path))
+        self.assertTrue(delete_analysis(self.alice["id"], self.alice_second, self.database_path))
+        self.assertEqual(tracked_dossier_fingerprints(self.alice["id"], self.database_path), set())
+        self.assertFalse(tracked_dossier_fingerprints(self.bob["id"], self.database_path))
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from typing import Any
 from providers.data_provenance import IMMOENGINE_METADATA
 from domain.immoengine import ImmoEngineResult
 from repositories.sqlite_repository import SQLiteRepository
+from services.dossier_tracking_service import clear_tracking_when_last_snapshot_is_removed
 
 
 def save_user_analysis(
@@ -61,7 +62,14 @@ def count_user_analyses(user_id: int, database_path: Path | str) -> int:
 
 
 def delete_user_analysis(user_id: int, analysis_id: int, database_path: Path | str) -> bool:
-    return SQLiteRepository(database_path).delete_analysis(user_id, analysis_id)
+    repository = SQLiteRepository(database_path)
+    analysis = repository.get_owned_analysis(user_id, analysis_id)
+    if analysis is None:
+        return False
+    deleted = repository.delete_analysis(user_id, analysis_id)
+    if deleted:
+        clear_tracking_when_last_snapshot_is_removed(user_id, analysis.get("property_name"), database_path)
+    return deleted
 
 
 def toggle_user_analysis_favorite(user_id: int, analysis_id: int, database_path: Path | str) -> bool:

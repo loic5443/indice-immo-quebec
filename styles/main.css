@@ -37,6 +37,12 @@ p, li, label { color: var(--ink); }
 .hero-proof span { color: #ffffff; background: rgba(255,255,255,0.13); border: 1px solid rgba(255,255,255,0.18); border-radius: 99px; padding: 0.38rem 0.7rem; font-size: 0.8rem; font-weight: 650; }
 .eyebrow { color: var(--blue) !important; font-weight: 800; letter-spacing: 0.12em; font-size: 0.74rem; margin-bottom: 0.6rem; }
 .section-intro { color: var(--muted) !important; line-height: 1.65; max-width: 720px; }
+.section-title { margin: 0.2rem 0 1rem; color: var(--ink); font-size: clamp(1.55rem, 2.5vw, 2.15rem); font-weight: 750; line-height: 1.18; letter-spacing: -0.03em; }
+.subsection-title, .card-title, .plan-title, .notice-title { color: var(--ink); font-size: 1.12rem; font-weight: 750; line-height: 1.25; letter-spacing: -0.02em; }
+.subsection-title { margin: 0 0 .85rem; }
+.card-title { margin: 1.1rem 0 .75rem; }
+.plan-title { margin: .3rem 0 .8rem; font-size: 1.55rem; }
+.notice-title { margin: 0 0 .45rem; }
 .section-space { height: 4.2rem; }
 .compact-space { height: 1.2rem; }
 
@@ -87,6 +93,12 @@ p, li, label { color: var(--ink); }
 .plan-feature span { color: var(--ink); margin-left: 0.3rem; }
 .plan-card { min-height: 470px; padding: 1.6rem; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
 .premium-card { border-color: #b9d6ff; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 42%); }
+.premium-hero { background-image: linear-gradient(105deg, rgba(7,23,45,.97), rgba(18,66,118,.78)); }
+.premium-benefit { min-height: 235px; }
+.premium-capability { min-height: 118px; margin-bottom: .7rem; padding: 1rem 1.1rem; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 5px 20px rgba(16,35,63,0.04); }
+.premium-capability p { color: var(--muted) !important; margin: .65rem 0 0 !important; font-size: .91rem; line-height: 1.5; }
+.premium-cta-link { display: block; margin-top: .8rem; padding: .72rem 1rem; border: 1px solid var(--blue); border-radius: 9px; color: var(--blue) !important; background: #fff; font-weight: 650; text-align: center; text-decoration: none; }
+.premium-cta-link:hover { background: #eaf1ff; color: var(--blue-dark) !important; }
 .premium-notice { margin-top: 2rem; padding: 1.35rem 1.5rem; border-left: 4px solid var(--blue); border-radius: 12px; background: #eaf1ff; }
 .premium-notice h3 { margin: 0 0 0.45rem !important; }
 .premium-notice p { color: var(--muted) !important; margin: 0; }
@@ -121,7 +133,7 @@ div.stButton > button[kind="secondary"] { background: white; color: var(--blue);
     .section-space { height: 2.8rem; }
     .compact-space { height: 1rem; }
     .stat-card, .step-card, .benefit-card { min-height: auto; margin-bottom: 0.75rem; }
-    .plan-card, .market-card { min-height: auto; margin-bottom: 0.9rem; }
+    .plan-card, .market-card, .premium-benefit { min-height: auto; margin-bottom: 0.9rem; }
     .final-cta { margin-top: 2.8rem; padding: 1.65rem; }
     [data-testid="stMetric"] { padding: 0.8rem; }
     .preview-grid { grid-template-columns: 1fr; }
