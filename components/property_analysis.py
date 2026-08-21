@@ -1524,17 +1524,23 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         st.write("ImmoValue est une fourchette expérimentale issue des comparables que vous fournissez. Le rôle municipal est une valeur fiscale officielle, distincte d’une valeur marchande. ImmoScore mesure l’adéquation de vos hypothèses à votre profil; il ne constitue pas une recommandation.")
         st.caption("Chaque renseignement officiel affiché indique sa provenance, son année et sa fraîcheur. Une donnée absente reste indisponible.")
 
-    st.markdown("<div class='save-analysis-panel'><h3>Enregistrer votre synthèse</h3><p>Sauvegardez ce dossier ou revenez aux chiffres saisis. Le suivi reste local : aucun courriel ni envoi automatique n’est activé pendant la bêta.</p>", unsafe_allow_html=True)
-    action_save, action_edit, action_premium = st.columns(3)
-    with action_edit:
-        st.button("Modifier les hypothèses", on_click=_return_to_summary_inputs, key="edit_analysis_hypotheses", use_container_width=True)
-    with action_premium:
-        st.button("Voir les alertes Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", use_container_width=True)
-    with action_save:
-        st.caption("Le rapport PDF complet est disponible dans Mes propriétés avec Premium ou un accès administrateur de bêta.")
+    st.markdown(
+        "<div class='save-analysis-panel'><h3>Votre prochaine étape</h3>"
+        "<p>Conservez ce dossier pour y revenir avec les mêmes chiffres. Premium ajoute ensuite le suivi, "
+        "les comparaisons et le rapport complet — sans paiement pendant la bêta privée.</p>",
+        unsafe_allow_html=True,
+    )
     if is_authenticated():
         property_name = st.text_input("Nom ou adresse de la propriété", key="saved_property_name", placeholder="Ex. Duplex - Montréal")
-        if st.button("Sauvegarder dans Mes propriétés", type="primary", key="save_analysis"):
+        st.caption("Votre dossier reste privé à votre compte. Le rapport PDF et le suivi des changements vérifiables font partie de l’accès Premium bêta.")
+        action_save, action_edit, action_premium = st.columns(3)
+        with action_save:
+            save_requested = st.button("Sauvegarder mon dossier", type="primary", key="save_analysis", use_container_width=True)
+        with action_edit:
+            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="edit_analysis_hypotheses", use_container_width=True)
+        with action_premium:
+            st.button("Découvrir le suivi Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", use_container_width=True)
+        if save_requested:
             if not property_name.strip():
                 st.error("Veuillez donner un nom ou une adresse à cette analyse.")
             else:
@@ -1589,8 +1595,15 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
             else:
                 st.caption("Le suivi des changements vérifiables est inclus dans l’aperçu Premium. Aucun courriel n’est activé pendant la bêta.")
     else:
-        st.write("Connectez-vous pour conserver cette analyse, ses scénarios et ses tests de résistance.")
-        st.button("Créer un compte ou se connecter", on_click=go_to, args=("Mon compte",), key="save_analysis_login")
+        st.info("Votre analyse reste disponible dans ce brouillon. Créez un espace gratuit pour la conserver, retrouver vos scénarios et y revenir plus tard.")
+        create_account, edit_inputs, premium = st.columns(3)
+        with create_account:
+            st.button("Créer mon espace gratuit", type="primary", on_click=go_to, args=("Mon compte",), key="save_analysis_login", use_container_width=True)
+        with edit_inputs:
+            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="guest_edit_analysis_hypotheses", use_container_width=True)
+        with premium:
+            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="guest_summary_premium", use_container_width=True)
+        st.caption("Premium est en préparation commerciale. Aucun paiement n’est demandé pendant la bêta privée.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 

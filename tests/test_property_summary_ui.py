@@ -10,6 +10,7 @@ class PropertySummaryUiTests(unittest.TestCase):
         app = AppTest.from_string(
             "import components.property_analysis as page\n"
             "from calculations.real_estate import PropertyInputs, calculate_analysis\n"
+            "page.is_authenticated = lambda: False\n"
             "inputs = PropertyInputs(price=500000, down_payment=100000, annual_interest_rate=5, amortization_years=25, municipal_taxes_annual=3600, school_taxes_annual=400, insurance_monthly=100, condo_fees_monthly=0, rental_income_monthly=3200, other_expenses_monthly=200)\n"
             "page._show_results(inputs, calculate_analysis(inputs), 'Investisseur locatif')\n"
         ).run(timeout=20)
@@ -18,12 +19,28 @@ class PropertySummaryUiTests(unittest.TestCase):
         labels = [metric.label for metric in app.metric]
         for label in ("ImmoScore", "Confiance", "Paiement hypothécaire", "Dépenses mensuelles", "Revenus locatifs", "Flux de trésorerie", "Taux de capitalisation", "Rendement sur mise", "Capacité à couvrir la dette (DSCR)"):
             self.assertIn(label, labels)
-        self.assertIn("Modifier les hypothèses", [button.label for button in app.button])
-        self.assertIn("Voir les alertes Premium", [button.label for button in app.button])
+        buttons = [button.label for button in app.button]
+        self.assertIn("Créer mon espace gratuit", buttons)
+        self.assertIn("Modifier mes chiffres", buttons)
+        self.assertIn("Découvrir Premium", buttons)
         self.assertEqual(
             [item.label for item in app.tabs],
             ["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"],
         )
+
+    def test_authenticated_summary_makes_saving_the_clear_primary_action(self):
+        app = AppTest.from_string(
+            "import components.property_analysis as page\n"
+            "from calculations.real_estate import PropertyInputs, calculate_analysis\n"
+            "page.is_authenticated = lambda: True\n"
+            "page.current_user = lambda: {'id': 1, 'plan': 'free', 'role': 'user'}\n"
+            "inputs = PropertyInputs(price=500000, down_payment=100000, annual_interest_rate=5, amortization_years=25, municipal_taxes_annual=3600, school_taxes_annual=400, insurance_monthly=100, condo_fees_monthly=0, rental_income_monthly=3200, other_expenses_monthly=200)\n"
+            "page._show_results(inputs, calculate_analysis(inputs), 'Investisseur locatif')\n"
+        ).run(timeout=20)
+        buttons = [button.label for button in app.button]
+        self.assertIn("Sauvegarder mon dossier", buttons)
+        self.assertIn("Découvrir le suivi Premium", buttons)
+        self.assertIn("Modifier mes chiffres", buttons)
 
     def test_non_rental_summary_does_not_present_zero_as_a_return(self):
         app = AppTest.from_string(
