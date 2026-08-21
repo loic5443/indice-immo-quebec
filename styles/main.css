@@ -27,6 +27,8 @@ h1 { font-size: clamp(2.1rem, 4vw, 3.55rem) !important; line-height: 1.08 !impor
 h2 { font-size: clamp(1.55rem, 2.5vw, 2.15rem) !important; line-height: 1.18 !important; }
 h3 { font-size: 1.12rem !important; }
 p, li, label { color: var(--ink); }
+/* Streamlit can retain a stale internal heading permalink after page navigation. */
+[data-testid="stHeaderActionElements"] { display: none !important; }
 
 .hero-image-panel { min-height: 430px; display: flex; align-items: center; padding: 3.8rem 3.6rem; border-radius: 24px; overflow: hidden; background-color: #10233f; background-size: cover; background-position: center; box-shadow: 0 18px 42px rgba(10, 27, 48, 0.17); }
 .hero-content { max-width: 650px; }

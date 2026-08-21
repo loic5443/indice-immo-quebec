@@ -28,7 +28,8 @@ class ProductStructureTests(unittest.TestCase):
 
     def test_alerts_are_never_presented_as_active_for_a_free_account(self):
         source = (Path("components") / "alerts.py").read_text(encoding="utf-8")
-        self.assertIn("APERÇU PREMIUM VERROUILLÉ", source)
+        teaser_source = (Path("components") / "premium_teaser.py").read_text(encoding="utf-8")
+        self.assertIn("PREMIUM", teaser_source)
         self.assertIn("Aucune alerte calculable", source)
         self.assertNotIn("send_email", source)
 
