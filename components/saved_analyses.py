@@ -22,6 +22,9 @@ from services.report_service import generate_comparison_report_pdf, generate_rep
 from services.snapshot_history_service import snapshot_positions
 
 
+DELETE_CONFIRMATION_KEY = "pending_analysis_delete"
+
+
 def _money(value: float) -> str:
     return f"{value:,.0f} $".replace(",", " ")
 
@@ -124,6 +127,16 @@ def _reset_saved_analysis_filters() -> None:
     st.session_state["saved_analysis_search"] = ""
     st.session_state["saved_analysis_scope"] = "Tous"
     st.session_state["saved_analysis_sort"] = "Favoris puis récents"
+
+
+def _request_analysis_deletion(user_id: int, analysis_id: int) -> None:
+    """Stage one owner-scoped deletion; the next explicit click confirms it."""
+
+    st.session_state[DELETE_CONFIRMATION_KEY] = {"owner_id": user_id, "analysis_id": analysis_id}
+
+
+def _cancel_analysis_deletion() -> None:
+    st.session_state.pop(DELETE_CONFIRMATION_KEY, None)
 
 
 def _tracking_overview(analyses: list[dict]) -> dict[str, int]:
@@ -402,7 +415,26 @@ def show_saved_analyses() -> None:
             if favorite_column.button(favorite_label, key=f"favorite_{analysis['id']}", use_container_width=True):
                 toggle_favorite(user["id"], analysis["id"], DATABASE_PATH)
                 st.rerun()
-            if delete_column.button("Supprimer", key=f"delete_{analysis['id']}", use_container_width=True):
-                delete_analysis(user["id"], analysis["id"], DATABASE_PATH)
+            pending_deletion = st.session_state.get(DELETE_CONFIRMATION_KEY)
+            deletion_requested = (
+                isinstance(pending_deletion, dict)
+                and pending_deletion.get("owner_id") == user["id"]
+                and pending_deletion.get("analysis_id") == analysis["id"]
+            )
+            if deletion_requested:
+                delete_column.warning("Confirmer la suppression de ce dossier et de son historique ?")
+                confirm, cancel = delete_column.columns(2)
+                if confirm.button("Confirmer", key=f"confirm_delete_{analysis['id']}", type="primary", use_container_width=True):
+                    if delete_analysis(user["id"], analysis["id"], DATABASE_PATH):
+                        _cancel_analysis_deletion()
+                        st.success("Dossier supprimé.")
+                        st.rerun()
+                    else:
+                        st.error("Ce dossier n’est plus disponible dans votre espace.")
+                if cancel.button("Annuler", key=f"cancel_delete_{analysis['id']}", use_container_width=True):
+                    _cancel_analysis_deletion()
+                    st.rerun()
+            elif delete_column.button("Supprimer", key=f"delete_{analysis['id']}", use_container_width=True):
+                _request_analysis_deletion(user["id"], analysis["id"])
                 st.rerun()
     show_alert_center(user, tracked_analyses, tracking_configured=True)

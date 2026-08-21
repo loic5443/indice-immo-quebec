@@ -74,6 +74,14 @@ page.show_saved_analyses()
         self.assertIn("Arrêter le suivi", [button.label for button in app.button])
         self.assertTrue(any("dossier(s) suivi(s)" in item.value for item in app.caption))
 
+    def test_deletion_requires_a_second_explicit_confirmation(self):
+        app = self._app("premium")
+        app.button(key="delete_1").click().run(timeout=20)
+        self.assertIn("Confirmer", [button.label for button in app.button])
+        self.assertIn("Annuler", [button.label for button in app.button])
+        app.button(key="cancel_delete_1").click().run(timeout=20)
+        self.assertIn("Supprimer", [button.label for button in app.button])
+
 
 if __name__ == "__main__":
     unittest.main()
