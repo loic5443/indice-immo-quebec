@@ -10,7 +10,7 @@ import unicodedata
 import streamlit as st
 
 from calculations.real_estate import AnalysisResult, PropertyInputs, calculate_analysis, validate_inputs
-from components.account import current_user, is_authenticated
+from components.account import RETURN_TO_ANALYSIS_KEY, current_user, is_authenticated
 from components.live_text_input import live_text_input
 from components.immoengine import show_immoengine_result
 from components.premium_teaser import show_premium_teaser
@@ -128,6 +128,13 @@ def reset_analysis() -> None:
     st.session_state.pop("analysis_calculation_signature", None)
     st.session_state.pop("analysis_calculation_requested", None)
     st.session_state.pop("analysis_calculation_errors", None)
+
+
+def _open_account_to_keep_analysis() -> None:
+    """Keep the active draft in session while a guest creates an account."""
+
+    st.session_state[RETURN_TO_ANALYSIS_KEY] = True
+    go_to("Mon compte")
 
 
 def _apply_reopen_draft() -> str | None:
@@ -1598,7 +1605,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         st.info("Votre analyse reste disponible dans ce brouillon. Créez un espace gratuit pour la conserver, retrouver vos scénarios et y revenir plus tard.")
         create_account, edit_inputs, premium = st.columns(3)
         with create_account:
-            st.button("Créer mon espace gratuit", type="primary", on_click=go_to, args=("Mon compte",), key="save_analysis_login", use_container_width=True)
+            st.button("Créer mon espace gratuit", type="primary", on_click=_open_account_to_keep_analysis, key="save_analysis_login", use_container_width=True)
         with edit_inputs:
             st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="guest_edit_analysis_hypotheses", use_container_width=True)
         with premium:

@@ -17,6 +17,9 @@ from services.entitlements_service import can_use, quota_is_enforced, quota_stat
 from services.auth_service import validate_login_submission
 
 
+RETURN_TO_ANALYSIS_KEY = "return_to_analysis_after_auth"
+
+
 def is_authenticated() -> bool:
     return _active_user() is not None
 
@@ -52,6 +55,19 @@ def logout() -> None:
     go_to("Accueil")
 
 
+def _resume_analysis_after_authentication() -> bool:
+    """Return to the in-session draft only after a valid account journey.
+
+    The destination is deliberately fixed instead of accepting arbitrary page
+    names: a registration flow must never become an open redirect.
+    """
+
+    if not st.session_state.pop(RETURN_TO_ANALYSIS_KEY, False):
+        return False
+    go_to("Analyser")
+    return True
+
+
 def show_account() -> None:
     """Show account credentials forms or the signed-in account summary."""
     st.markdown("<p class='eyebrow'>ESPACE PERSONNEL</p>", unsafe_allow_html=True)
@@ -61,6 +77,8 @@ def show_account() -> None:
         if not user.get("onboarding_completed"):
             _show_onboarding(user)
             return
+        if _resume_analysis_after_authentication():
+            st.rerun()
         safe_name = escape(str(user.get("name") or ""))
         safe_email = escape(str(user.get("email") or ""))
         safe_profile = escape(str(user.get("user_type") or ""))
@@ -146,7 +164,17 @@ def show_account() -> None:
                 if created:
                     if invitation_code and not consume_invitation(invitation_code, DATABASE_PATH):
                         st.error("Compte créé, mais le code n'a pas pu être consommé. Contactez l'administrateur.")
-                    else: st.success(message)
+                    else:
+                        # The user has just proven control of the chosen password.
+                        # Start the local session directly; the mandatory onboarding
+                        # is still shown before any personal area is available.
+                        user = authenticate_user(email, password)
+                        if user is None:
+                            st.error("Compte créé, mais la connexion locale n’a pas pu démarrer. Connectez-vous avec vos identifiants.")
+                        else:
+                            st.session_state["current_user"] = user
+                            st.session_state["account_creation_notice"] = message
+                            st.rerun()
                 else:
                     st.error(message)
 
@@ -154,6 +182,9 @@ def show_account() -> None:
 def _show_onboarding(user: dict) -> None:
     step = int(user.get("onboarding_step") or 1)
     st.markdown("<p class='eyebrow'>DÉMARRAGE</p><h1>Bienvenue dans ImmoRadar</h1>", unsafe_allow_html=True)
+    creation_notice = st.session_state.pop("account_creation_notice", None)
+    if isinstance(creation_notice, str) and creation_notice:
+        st.success(creation_notice)
     st.progress(step / len(STEPS), text=f"Étape {step} sur {len(STEPS)} — {STEPS[step-1]}")
     if step == 1: st.write("Analysez vos hypothèses avec plus de clarté, avant d'en discuter avec un professionnel.")
     elif step == 2: progress(user["id"], DATABASE_PATH, user_type=st.selectbox("Votre profil", ["Premier acheteur", "Investisseur locatif", "Propriétaire", "Courtier ou analyste"], index=1 if user["user_type"] == "Investisseur locatif" else 0))
@@ -174,5 +205,8 @@ def _show_onboarding(user: dict) -> None:
             elif step==3 and not SQLiteRepository(DATABASE_PATH).get_user_by_id(user["id"])["user_objective"]: st.error("Objectif requis.")
             else: progress(user["id"], DATABASE_PATH, onboarding_step=step+1); st.rerun()
     elif right.button("Terminer"):
-        if complete(user["id"], DATABASE_PATH): st.success("Onboarding terminé."); st.rerun()
+        if complete(user["id"], DATABASE_PATH):
+            st.success("Onboarding terminé.")
+            _resume_analysis_after_authentication()
+            st.rerun()
         else: st.error("Profil, objectif et reconnaissance des limites requis.")
