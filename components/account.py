@@ -17,6 +17,9 @@ from domain.objectives import ANALYSIS_OBJECTIVES
 
 
 RETURN_TO_ANALYSIS_KEY = "return_to_analysis_after_auth"
+PROFILE_OPTIONS = ["", "Premier acheteur", "Investisseur locatif", "Propriétaire", "Courtier ou analyste"]
+HORIZON_OPTIONS = ["", "Moins de 2 ans", "2 à 5 ans", "5 à 10 ans", "Plus de 10 ans"]
+RISK_OPTIONS = ["", "Prudent", "Modéré", "Élevé"]
 
 
 def is_authenticated() -> bool:
@@ -82,6 +85,15 @@ def _start_new_account_session(email: str, password: str) -> dict | None:
     return user
 
 
+def _objective_options(saved_objective: str = "") -> list[str]:
+    """Keep an older custom objective readable without using it as a default."""
+
+    options = ["", *ANALYSIS_OBJECTIVES]
+    if saved_objective and saved_objective not in options:
+        options.append(saved_objective)
+    return options
+
+
 def show_account() -> None:
     """Show account credentials forms or the signed-in account summary."""
     st.markdown("<p class='eyebrow'>ESPACE PERSONNEL</p>", unsafe_allow_html=True)
@@ -120,6 +132,52 @@ def show_account() -> None:
             st.info("Votre espace est prêt. Commencez par analyser une propriété : vous pourrez ensuite conserver votre dossier et vos scénarios ici.")
             primary.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), use_container_width=True)
         sign_out.button("Se déconnecter", on_click=logout, use_container_width=True)
+        with st.expander("Préférences pour mes nouvelles analyses", expanded=False):
+            st.caption("Ces choix personnalisent vos prochains dossiers. Ils ne modifient jamais les analyses déjà sauvegardées.")
+            objective_options = _objective_options(str(user.get("user_objective") or ""))
+            profile = st.selectbox(
+                "Profil", PROFILE_OPTIONS,
+                index=PROFILE_OPTIONS.index(user.get("user_type")) if user.get("user_type") in PROFILE_OPTIONS else 0,
+                key="account_profile",
+                format_func=lambda value: value or "Choisissez votre profil",
+            )
+            objective = st.selectbox(
+                "Objectif principal", objective_options,
+                index=objective_options.index(str(user.get("user_objective") or "")) if str(user.get("user_objective") or "") in objective_options else 0,
+                key="account_objective",
+                format_func=lambda value: value or "Choisissez votre objectif",
+            )
+            horizon = st.selectbox(
+                "Horizon (facultatif)", HORIZON_OPTIONS,
+                index=HORIZON_OPTIONS.index(user.get("investment_horizon")) if user.get("investment_horizon") in HORIZON_OPTIONS else 0,
+                key="account_horizon",
+            )
+            risk = st.selectbox(
+                "Tolérance au risque (facultatif)", RISK_OPTIONS,
+                index=RISK_OPTIONS.index(user.get("risk_tolerance")) if user.get("risk_tolerance") in RISK_OPTIONS else 0,
+                key="account_risk",
+            )
+            analytics_consent = st.checkbox(
+                "Autoriser les mesures d’utilisation anonymisées", value=bool(user.get("analytics_consent")), key="account_analytics_consent",
+            )
+            marketing_consent = st.checkbox(
+                "Accepter les communications liées à ImmoRadar", value=bool(user.get("marketing_consent")), key="account_marketing_consent",
+            )
+            if st.button("Enregistrer mes préférences", key="save_account_preferences", type="primary"):
+                if not profile or not objective:
+                    st.error("Choisissez un profil et un objectif principal.")
+                else:
+                    progress(
+                        user["id"], DATABASE_PATH, user_type=profile, user_objective=objective,
+                        investment_horizon=horizon, risk_tolerance=risk,
+                        analytics_consent=int(analytics_consent), marketing_consent=int(marketing_consent),
+                    )
+                    st.session_state["current_user"] = {
+                        **user, "user_type": profile, "user_objective": objective,
+                        "investment_horizon": horizon, "risk_tolerance": risk,
+                        "analytics_consent": int(analytics_consent), "marketing_consent": int(marketing_consent),
+                    }
+                    st.success("Préférences enregistrées pour vos nouvelles analyses.")
         if not can_use(user, "advanced_comparisons"):
             show_premium_teaser(
                 feature="Dossiers suivis, comparaisons, scénarios et rapports",
@@ -204,34 +262,29 @@ def _show_onboarding(user: dict) -> None:
     if isinstance(creation_notice, str) and creation_notice:
         st.success(creation_notice)
     st.progress(step / len(STEPS), text=f"Étape {step} sur {len(STEPS)} — {STEPS[step-1]}")
-    profile_options = ["", "Premier acheteur", "Investisseur locatif", "Propriétaire", "Courtier ou analyste"]
-    horizon_options = ["", "Moins de 2 ans", "2 à 5 ans", "5 à 10 ans", "Plus de 10 ans"]
-    risk_options = ["", "Prudent", "Modéré", "Élevé"]
-    selected_profile = user.get("user_type") if user.get("user_type") in profile_options else ""
-    selected_horizon = user.get("investment_horizon") if user.get("investment_horizon") in horizon_options else ""
-    selected_risk = user.get("risk_tolerance") if user.get("risk_tolerance") in risk_options else ""
+    selected_profile = user.get("user_type") if user.get("user_type") in PROFILE_OPTIONS else ""
+    selected_horizon = user.get("investment_horizon") if user.get("investment_horizon") in HORIZON_OPTIONS else ""
+    selected_risk = user.get("risk_tolerance") if user.get("risk_tolerance") in RISK_OPTIONS else ""
     if step == 1:
         st.write("Analysez vos hypothèses avec plus de clarté, avant d’en discuter avec un professionnel.")
     elif step == 2:
         selected_profile = st.selectbox(
-            "Votre profil", profile_options,
-            index=profile_options.index(selected_profile) if selected_profile else 0,
+            "Votre profil", PROFILE_OPTIONS,
+            index=PROFILE_OPTIONS.index(selected_profile) if selected_profile else 0,
             format_func=lambda value: value or "Choisissez votre profil",
         )
     elif step == 3:
         saved_objective = str(user.get("user_objective") or "")
-        objective_options = ["", *ANALYSIS_OBJECTIVES]
-        if saved_objective and saved_objective not in objective_options:
-            objective_options.append(saved_objective)
+        objective_options = _objective_options(saved_objective)
         objective = st.selectbox(
             "Votre objectif principal", objective_options,
             index=objective_options.index(saved_objective) if saved_objective in objective_options else 0,
             format_func=lambda value: value or "Choisissez ce que vous voulez faire",
         )
     elif step == 4:
-        selected_horizon = st.selectbox("Horizon (facultatif)", horizon_options, index=horizon_options.index(selected_horizon))
+        selected_horizon = st.selectbox("Horizon (facultatif)", HORIZON_OPTIONS, index=HORIZON_OPTIONS.index(selected_horizon))
     elif step == 5:
-        selected_risk = st.selectbox("Tolérance au risque (facultatif)", risk_options, index=risk_options.index(selected_risk))
+        selected_risk = st.selectbox("Tolérance au risque (facultatif)", RISK_OPTIONS, index=RISK_OPTIONS.index(selected_risk))
     elif step == 6:
         st.info("ImmoValue propose une fourchette expérimentale à partir des comparables que vous fournissez.")
     elif step == 7:
