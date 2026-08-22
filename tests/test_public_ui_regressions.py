@@ -85,15 +85,28 @@ class PublicUiRegressionTests(unittest.TestCase):
         home.run(timeout=20)
         self.assertEqual(sum("Gardez une longueur" in item.value for item in home.get("markdown")), 1)
         self.assertTrue(any("repère fiscal" in item.value and "pas un prix de vente" in item.value for item in home.caption))
-        feedback = self._component("components.feedback", "show_feedback")
+        feedback = AppTest.from_string(
+            "import components.feedback as page\n"
+            "original_is_authenticated = page.is_authenticated\n"
+            "try:\n"
+            "    page.is_authenticated = lambda: False\n"
+            "    page.show_feedback()\n"
+            "finally:\n"
+            "    page.is_authenticated = original_is_authenticated\n"
+        )
         feedback.run(timeout=20)
         self.assertEqual(sum(item.label == "Accéder à Mon compte" for item in feedback.button), 1)
 
     def test_empty_login_shows_required_fields_without_changing_invalid_login_message(self):
         account = AppTest.from_string(
             "import components.account as page\n"
-            "page.authenticate_user = lambda email, password: None\n"
-            "page.show_account()\n"
+            "original_authenticated, original_authenticate = page.is_authenticated, page.authenticate_user\n"
+            "try:\n"
+            "    page.is_authenticated = lambda: False\n"
+            "    page.authenticate_user = lambda email, password: None\n"
+            "    page.show_account()\n"
+            "finally:\n"
+            "    page.is_authenticated, page.authenticate_user = original_authenticated, original_authenticate\n"
         )
         account.run(timeout=20)
         self._button(account, "Se connecter").click().run(timeout=20)
