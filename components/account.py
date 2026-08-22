@@ -13,6 +13,7 @@ from services.onboarding_service import STEPS, complete, progress
 from services.beta_service import registration_allowed, consume_invitation
 from services.entitlements_service import can_use, quota_is_enforced, quota_status
 from services.auth_service import validate_login_submission
+from domain.objectives import ANALYSIS_OBJECTIVES
 
 
 RETURN_TO_ANALYSIS_KEY = "return_to_analysis_after_auth"
@@ -218,7 +219,15 @@ def _show_onboarding(user: dict) -> None:
             format_func=lambda value: value or "Choisissez votre profil",
         )
     elif step == 3:
-        objective = st.text_input("Votre objectif principal", value=user.get("user_objective") or "")
+        saved_objective = str(user.get("user_objective") or "")
+        objective_options = ["", *ANALYSIS_OBJECTIVES]
+        if saved_objective and saved_objective not in objective_options:
+            objective_options.append(saved_objective)
+        objective = st.selectbox(
+            "Votre objectif principal", objective_options,
+            index=objective_options.index(saved_objective) if saved_objective in objective_options else 0,
+            format_func=lambda value: value or "Choisissez ce que vous voulez faire",
+        )
     elif step == 4:
         selected_horizon = st.selectbox("Horizon (facultatif)", horizon_options, index=horizon_options.index(selected_horizon))
     elif step == 5:

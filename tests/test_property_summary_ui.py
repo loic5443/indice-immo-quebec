@@ -34,6 +34,8 @@ class PropertySummaryUiTests(unittest.TestCase):
             "from calculations.real_estate import PropertyInputs, calculate_analysis\n"
             "page.is_authenticated = lambda: True\n"
             "page.current_user = lambda: {'id': 1, 'plan': 'free', 'role': 'user'}\n"
+            "page.quota_status = lambda *_args: {'label': '1 estimation complète restante ce mois-ci'}\n"
+            "page.quota_is_enforced = lambda *_args: False\n"
             "inputs = PropertyInputs(price=500000, down_payment=100000, annual_interest_rate=5, amortization_years=25, municipal_taxes_annual=3600, school_taxes_annual=400, insurance_monthly=100, condo_fees_monthly=0, rental_income_monthly=3200, other_expenses_monthly=200)\n"
             "page._show_results(inputs, calculate_analysis(inputs), 'Investisseur locatif')\n"
         ).run(timeout=20)
@@ -46,6 +48,7 @@ class PropertySummaryUiTests(unittest.TestCase):
         app = AppTest.from_string(
             "import components.property_analysis as page\n"
             "from calculations.real_estate import PropertyInputs, calculate_analysis\n"
+            "page.is_authenticated = lambda: False\n"
             "inputs = PropertyInputs(price=500000, down_payment=100000, annual_interest_rate=5, amortization_years=25, municipal_taxes_annual=3600, school_taxes_annual=400, insurance_monthly=100, condo_fees_monthly=0, rental_income_monthly=0, other_expenses_monthly=0)\n"
             "page._show_results(inputs, calculate_analysis(inputs), 'Premier acheteur')\n"
         ).run(timeout=20)

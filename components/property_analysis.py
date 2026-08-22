@@ -22,6 +22,7 @@ from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 from domain.scenarios import build_resilience_tests, build_standard_scenarios
 from services.market_data_service import market_context_snapshot
 from domain.immovalue import SubjectProperty, estimate_immovalue
+from domain.objectives import ANALYSIS_OBJECTIVES
 from services.comparable_csv import csv_template, validate_csv_rows
 from services.comparable_workspace import (
     PROPERTY_TYPES,
@@ -72,13 +73,6 @@ DEFAULTS = {
     "utilities": 0.0, "capital_reserve": 0.0, "initial_repairs": 0.0,
     "acquisition_costs": 0.0, "other_income": 0.0, "rent_growth": 0.0,
     "expense_growth": 0.0, "holding_period": 5, "mortgage_renewal_date": None,
-}
-
-ANALYSIS_OBJECTIVES = {
-    "Acheter pour y habiter": "Premier acheteur",
-    "Investir et louer": "Investisseur locatif",
-    "Connaître la valeur de ma propriété": "Propriétaire",
-    "Préparer une vente": "Propriétaire",
 }
 
 VISIBLE_ANALYSIS_STAGES = (
@@ -858,9 +852,12 @@ def _ensure_workflow_state() -> tuple[int, set[int]]:
     st.session_state["analysis_step"] = step
     st.session_state["analysis_completed_steps"] = completed
     st.session_state["analysis_step_selector"] = step
+    account_objective = current_user().get("user_objective") if is_authenticated() else ""
+    default_objective = account_objective if account_objective in ANALYSIS_OBJECTIVES else ""
     default_profile = (current_user().get("user_type") or "Investisseur locatif") if is_authenticated() else "Investisseur locatif"
     st.session_state.setdefault("workflow_profile", default_profile)
-    st.session_state.setdefault("workflow_objective", "")
+    st.session_state.setdefault("workflow_objective", default_objective)
+    st.session_state.setdefault("workflow_objective_choice", default_objective)
     st.session_state.setdefault("workflow_property_name", "")
     st.session_state.setdefault("workflow_property_type", "")
     return step, completed

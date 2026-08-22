@@ -35,9 +35,26 @@ class OnboardingTests(unittest.TestCase):
  def test_objective_is_saved_only_when_the_user_continues(self):
   progress(1,self.db,onboarding_step=3,user_objective="")
   app=self._onboarding_app()
-  app.text_input[0].set_value("Préparer un achat").run(timeout=20)
+  app.selectbox[0].set_value("Préparer une vente").run(timeout=20)
   self.assertEqual(SQLiteRepository(self.db).get_user_by_id(1)["user_objective"],"")
   app.button[2].click().run(timeout=20)
   user=SQLiteRepository(self.db).get_user_by_id(1)
-  self.assertEqual(user["user_objective"],"Préparer un achat")
+  self.assertEqual(user["user_objective"],"Préparer une vente")
   self.assertEqual(user["onboarding_step"],4)
+
+ def test_saved_onboarding_objective_prepares_the_new_dossier(self):
+  app=AppTest.from_string(
+   "import streamlit as st\n"
+   "import components.property_analysis as page\n"
+   "original_is_authenticated = page.is_authenticated\n"
+   "original_current_user = page.current_user\n"
+   "page.is_authenticated = lambda: True\n"
+   "page.current_user = lambda: {'id': 1, 'user_type': 'Propriétaire', 'user_objective': 'Connaître la valeur de ma propriété'}\n"
+   "st.session_state['workflow_owner'] = 1\n"
+   "page._ensure_workflow_state()\n"
+   "page.is_authenticated = original_is_authenticated\n"
+   "page.current_user = original_current_user\n"
+  ).run(timeout=20)
+  self.assertEqual(app.session_state["workflow_objective"],"Connaître la valeur de ma propriété")
+  self.assertEqual(app.session_state["workflow_objective_choice"],"Connaître la valeur de ma propriété")
+  self.assertEqual(app.session_state["workflow_profile"],"Propriétaire")
