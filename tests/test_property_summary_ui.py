@@ -6,6 +6,21 @@ from streamlit.testing.v1 import AppTest
 
 
 class PropertySummaryUiTests(unittest.TestCase):
+    def setUp(self):
+        import components.property_analysis as page
+
+        self.page = page
+        self.originals = {
+            "is_authenticated": page.is_authenticated,
+            "current_user": page.current_user,
+            "quota_status": page.quota_status,
+            "quota_is_enforced": page.quota_is_enforced,
+        }
+
+    def tearDown(self):
+        for name, value in self.originals.items():
+            setattr(self.page, name, value)
+
     def test_summary_prioritizes_known_results_and_keeps_details_secondary(self):
         app = AppTest.from_string(
             "import components.property_analysis as page\n"
@@ -43,6 +58,28 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertIn("Sauvegarder mon dossier", buttons)
         self.assertIn("Découvrir le suivi Premium", buttons)
         self.assertIn("Modifier mes chiffres", buttons)
+
+    def test_selected_address_prefills_save_name_without_replacing_a_custom_name(self):
+        app = AppTest.from_string(
+            "import components.property_analysis as page\n"
+            "from calculations.real_estate import PropertyInputs, calculate_analysis\n"
+            "original_authenticated, original_user = page.is_authenticated, page.current_user\n"
+            "original_quota_status, original_quota_enforced = page.quota_status, page.quota_is_enforced\n"
+            "try:\n"
+            "    page.is_authenticated = lambda: True\n"
+            "    page.current_user = lambda: {'id': 1, 'plan': 'free', 'role': 'user'}\n"
+            "    page.quota_status = lambda *_args: {'label': '1 estimation complète restante ce mois-ci'}\n"
+            "    page.quota_is_enforced = lambda *_args: False\n"
+            "    page.st.session_state[page.ADDRESS_STATE_KEY] = page.prepare_address_submission('123 rue Exemple', 'Montréal', 'H2Z1A4', consent=True)\n"
+            "    inputs = PropertyInputs(price=500000, down_payment=100000, annual_interest_rate=5, amortization_years=25, municipal_taxes_annual=3600, school_taxes_annual=400, insurance_monthly=100, condo_fees_monthly=0, rental_income_monthly=3200, other_expenses_monthly=200)\n"
+            "    page._show_results(inputs, calculate_analysis(inputs), 'Investisseur locatif')\n"
+            "finally:\n"
+            "    page.is_authenticated, page.current_user = original_authenticated, original_user\n"
+            "    page.quota_status, page.quota_is_enforced = original_quota_status, original_quota_enforced\n"
+        ).run(timeout=20)
+        field = app.text_input(key="saved_property_name")
+        self.assertEqual(field.value, "123 rue Exemple, Montréal")
+        self.assertIn("facultatif si une adresse est sélectionnée", field.label)
 
     def test_non_rental_summary_does_not_present_zero_as_a_return(self):
         app = AppTest.from_string(

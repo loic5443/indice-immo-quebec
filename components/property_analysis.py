@@ -1367,6 +1367,20 @@ def _summary_dossier_label() -> tuple[str, str]:
     return st.session_state.get("workflow_property_name") or "Dossier immobilier", st.session_state.get("workflow_property_type", "")
 
 
+def _prepare_saved_property_name() -> None:
+    """Suggest the selected public address without replacing a custom dossier name."""
+
+    current = st.session_state.get("saved_property_name")
+    if isinstance(current, str) and current.strip():
+        return
+    state = st.session_state.get(ADDRESS_STATE_KEY)
+    if isinstance(state, AddressFormState) and state.address:
+        address = state.address
+        st.session_state["saved_property_name"] = ", ".join(
+            part for part in (address.street, address.city) if part
+        )
+
+
 def _generated_immovalue() -> dict | None:
     """Only an explicit ImmoValue action can populate the main synthesis."""
 
@@ -1535,7 +1549,11 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         unsafe_allow_html=True,
     )
     if is_authenticated():
-        property_name = st.text_input("Nom ou adresse de la propriété", key="saved_property_name", placeholder="Ex. Duplex - Montréal")
+        _prepare_saved_property_name()
+        property_name = st.text_input(
+            "Nom court du dossier (facultatif si une adresse est sélectionnée)",
+            key="saved_property_name", placeholder="Ex. Projet résidentiel",
+        )
         st.caption("Votre dossier reste privé à votre compte. Le rapport PDF et le suivi des changements vérifiables font partie de l’accès Premium bêta.")
         action_save, action_edit, action_premium = st.columns(3)
         with action_save:
@@ -1546,7 +1564,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
             st.button("Découvrir le suivi Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", use_container_width=True)
         if save_requested:
             if not property_name.strip():
-                st.error("Veuillez donner un nom ou une adresse à cette analyse.")
+                st.error("Ajoutez un nom de dossier ou sélectionnez une adresse.")
             else:
                 analysis_id = save_analysis(current_user()["id"], property_name, {
                     "price": inputs.price, "down_payment": inputs.down_payment,
