@@ -12,6 +12,7 @@ from services.privacy_service import delete_account, export_user_data
 from services.onboarding_service import STEPS, complete, progress
 from services.beta_service import registration_allowed, consume_invitation
 from services.entitlements_service import can_use, quota_is_enforced, quota_status
+from services.alert_email_service import alert_email_readiness, set_alert_email_consent
 from services.auth_service import validate_login_submission
 from domain.objectives import ANALYSIS_OBJECTIVES
 
@@ -163,6 +164,16 @@ def show_account() -> None:
             marketing_consent = st.checkbox(
                 "Accepter les communications liées à ImmoRadar", value=bool(user.get("marketing_consent")), key="account_marketing_consent",
             )
+            email_alerts_available = can_use(user, "alerts")
+            alert_email_consent = st.checkbox(
+                "Recevoir les alertes de mes dossiers par courriel (Premium)",
+                value=bool(user.get("alert_email_consent")), key="account_alert_email_consent",
+                disabled=not email_alerts_available,
+            )
+            if not email_alerts_available:
+                st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
+            elif alert_email_readiness() != "ready":
+                st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas encore activée pendant la bêta.")
             if st.button("Enregistrer mes préférences", key="save_account_preferences", type="primary"):
                 if not profile or not objective:
                     st.error("Choisissez un profil et un objectif principal.")
@@ -172,10 +183,14 @@ def show_account() -> None:
                         investment_horizon=horizon, risk_tolerance=risk,
                         analytics_consent=int(analytics_consent), marketing_consent=int(marketing_consent),
                     )
+                    alert_email_saved = set_alert_email_consent(
+                        user["id"], bool(alert_email_consent) if email_alerts_available else False, DATABASE_PATH,
+                    )
                     st.session_state["current_user"] = {
                         **user, "user_type": profile, "user_objective": objective,
                         "investment_horizon": horizon, "risk_tolerance": risk,
                         "analytics_consent": int(analytics_consent), "marketing_consent": int(marketing_consent),
+                        "alert_email_consent": int(bool(alert_email_consent) if email_alerts_available and alert_email_saved else False),
                     }
                     st.success("Préférences enregistrées pour vos nouvelles analyses.")
         if not can_use(user, "advanced_comparisons"):
