@@ -27,7 +27,11 @@ def show_markets():
  st.button("Réinitialiser la comparaison",on_click=_reset_municipal_selection)
  result=comparison(DATABASE_PATH,selected)
  if not result["available"]:
-  st.info("Sélectionnez au moins deux municipalités couvertes par la même année. Les données manquantes restent indiquées comme indisponibles et ne sont jamais remplacées par zéro.")
+  missing=result.get("missing",[])
+  if missing and len(selected)>=2:
+   st.info("Les données officielles sont incomplètes pour : "+", ".join(missing)+". Choisissez des municipalités couvertes par les mêmes indicateurs et la même année; aucune valeur manquante n’est remplacée par zéro.")
+  else:
+   st.info("Sélectionnez au moins deux municipalités couvertes par la même année. Les données manquantes restent indiquées comme indisponibles et ne sont jamais remplacées par zéro.")
   return
  st.caption(f"Données officielles disponibles · année commune : {result['year']} · Source : MAMH, Profil financier des municipalités locales, CC-BY 4.0 · données récupérées localement.")
  by_code={}

@@ -12,6 +12,12 @@ class MunicipalComparisonTests(unittest.TestCase):
  def test_import_and_common_year(self):
   second=ROW.replace('00001,Alpha','00002,Beta');r=import_profile(1,self.db,(HEADER+ROW+second).encode());self.assertEqual(r['municipalities'],2);self.assertTrue(comparison(self.db,['Alpha','Beta'])['available'])
  def test_missing_municipality_is_not_zero(self):self.assertFalse(comparison(self.db,['Alpha','Missing'])['available'])
+ def test_partial_official_profile_is_not_presented_as_a_complete_comparison(self):
+  columns=HEADER.rstrip('\n').split(',');values=ROW.rstrip('\n').replace('00001,Alpha','00002,Beta').split(',')
+  values[columns.index('FIALX02011')]='';second=','.join(values)+'\n'
+  import_profile(1,self.db,(HEADER+ROW+second).encode())
+  result=comparison(self.db,['Alpha','Beta'])
+  self.assertFalse(result['available']);self.assertEqual(result['missing'],['Beta'])
  def test_search_options_keep_existing_selection_and_allow_voluntary_removal(self):
   selected=['Montréal'];self.assertEqual(selection_options(selected,['Québec']),['Montréal','Québec'])
   selected=normalize_selection(selected+['Québec','Québec']);self.assertEqual(selected,['Montréal','Québec'])

@@ -43,14 +43,19 @@ def import_profile(actor,database_path,content=None):
  return {"municipalities":len({r[0] for r in inserted}),"indicators":len(inserted),"year":max(r[2] for r in inserted),"invalid":invalid}
 def comparison(database_path,names,year=None):
  names=normalize_selection(names)
- if len(names)<2:return {"year":None,"rows":[],"available":False}
+ if len(names)<2:return {"year":None,"rows":[],"available":False,"missing":[]}
  with closing(sqlite3.connect(database_path)) as c:
   c.row_factory=sqlite3.Row
   if year is None:
    common=c.execute("SELECT year FROM municipal_indicators WHERE municipality_name IN (%s) GROUP BY year HAVING COUNT(DISTINCT municipality_name)=? ORDER BY year DESC LIMIT 1" % ",".join("?"*len(names)),names+[len(names)]).fetchone()
-   if not common:return {"year":None,"rows":[],"available":False}
+   if not common:return {"year":None,"rows":[],"available":False,"missing":names}
    year=common[0]
   rows=c.execute("SELECT * FROM municipal_indicators WHERE year=? AND municipality_name IN (%s) ORDER BY municipality_name,indicator_code" % ",".join("?"*len(names)),[year]+names).fetchall()
- return {"year":year,"rows":[dict(r) for r in rows],"available":len(rows)>0}
+ rows=[dict(row) for row in rows]
+ expected=set(INDICATORS.values())
+ expected_codes={code for code,_unit in expected}
+ present={name:{row["indicator_code"] for row in rows if row["municipality_name"]==name} for name in names}
+ missing=[name for name in names if present.get(name,set())!=expected_codes]
+ return {"year":year,"rows":rows,"available":not missing,"missing":missing}
 def municipalities(database_path,query=""):
  with closing(sqlite3.connect(database_path)) as c:return [r[0] for r in c.execute("SELECT DISTINCT municipality_name FROM municipal_indicators WHERE municipality_name LIKE ? ORDER BY municipality_name",(f"%{query}%",)).fetchall()]
