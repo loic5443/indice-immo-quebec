@@ -8,7 +8,6 @@ from components.sidebar import go_to
 from components.premium_teaser import show_premium_teaser
 from data.database import authenticate_user, count_analyses, create_user, get_user, validate_registration
 from data.database import DATABASE_PATH
-from domain.models import UserProfile
 from services.privacy_service import delete_account, export_user_data
 from services.onboarding_service import STEPS, complete, progress
 from services.beta_service import registration_allowed, consume_invitation
@@ -144,13 +143,11 @@ def show_account() -> None:
             password = st.text_input("Mot de passe", type="password", key="register_password")
             confirmation = st.text_input("Confirmer le mot de passe", type="password")
             invitation_code = st.text_input("Code d'invitation bêta (si requis)")
-            user_type = st.selectbox("Type d'utilisateur", ["Premier acheteur", "Investisseur locatif", "Propriétaire", "Courtier ou analyste"])
-            investment_horizon = st.selectbox("Horizon d'investissement", ["Moins de 2 ans", "2 à 5 ans", "Plus de 5 ans"])
-            risk_tolerance = st.selectbox("Tolérance au risque", ["Prudent", "Modéré", "Élevé"], index=1)
+            st.caption("Vous choisirez votre profil et vos préférences dans le court démarrage suivant."
+                       " Ces choix peuvent être modifiés plus tard dans Mon compte.")
             submitted = st.form_submit_button("Créer mon compte", type="primary", use_container_width=True)
         if submitted:
-            profile = UserProfile(user_type, investment_horizon, risk_tolerance)
-            errors = validate_registration(name, email, password, confirmation, profile)
+            errors = validate_registration(name, email, password, confirmation)
             if errors:
                 for error in errors:
                     st.error(error)
@@ -159,7 +156,7 @@ def show_account() -> None:
                 if not allowed:
                     st.error(beta_message)
                     return
-                created, message = create_user(name, email, password, profile=profile)
+                created, message = create_user(name, email, password)
                 if created:
                     if invitation_code and not consume_invitation(invitation_code, DATABASE_PATH):
                         st.error("Compte créé, mais le code n'a pas pu être consommé. Contactez l'administrateur.")
@@ -171,6 +168,10 @@ def show_account() -> None:
                         if user is None:
                             st.error("Compte créé, mais la connexion locale n’a pas pu démarrer. Connectez-vous avec vos identifiants.")
                         else:
+                            # New accounts select their actual profile in onboarding.
+                            # Existing users keep their saved preferences unchanged.
+                            progress(user["id"], DATABASE_PATH, user_type="", investment_horizon="", risk_tolerance="", onboarding_step=1)
+                            user = authenticate_user(email, password)
                             st.session_state["current_user"] = user
                             st.session_state["account_creation_notice"] = message
                             st.rerun()
@@ -187,7 +188,7 @@ def _show_onboarding(user: dict) -> None:
     if isinstance(creation_notice, str) and creation_notice:
         st.success(creation_notice)
     st.progress(step / len(STEPS), text=f"Étape {step} sur {len(STEPS)} — {STEPS[step-1]}")
-    profile_options = ["Premier acheteur", "Investisseur locatif", "Propriétaire", "Courtier ou analyste"]
+    profile_options = ["", "Premier acheteur", "Investisseur locatif", "Propriétaire", "Courtier ou analyste"]
     horizon_options = ["", "Moins de 2 ans", "2 à 5 ans", "5 à 10 ans", "Plus de 10 ans"]
     risk_options = ["", "Prudent", "Modéré", "Élevé"]
     selected_profile = user.get("user_type") if user.get("user_type") in profile_options else ""
@@ -196,7 +197,11 @@ def _show_onboarding(user: dict) -> None:
     if step == 1:
         st.write("Analysez vos hypothèses avec plus de clarté, avant d’en discuter avec un professionnel.")
     elif step == 2:
-        selected_profile = st.selectbox("Votre profil", profile_options, index=profile_options.index(selected_profile) if selected_profile else 0)
+        selected_profile = st.selectbox(
+            "Votre profil", profile_options,
+            index=profile_options.index(selected_profile) if selected_profile else 0,
+            format_func=lambda value: value or "Choisissez votre profil",
+        )
     elif step == 3:
         objective = st.text_input("Votre objectif principal", value=user.get("user_objective") or "")
     elif step == 4:

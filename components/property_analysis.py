@@ -858,7 +858,7 @@ def _ensure_workflow_state() -> tuple[int, set[int]]:
     st.session_state["analysis_step"] = step
     st.session_state["analysis_completed_steps"] = completed
     st.session_state["analysis_step_selector"] = step
-    default_profile = current_user()["user_type"] if is_authenticated() else "Investisseur locatif"
+    default_profile = (current_user().get("user_type") or "Investisseur locatif") if is_authenticated() else "Investisseur locatif"
     st.session_state.setdefault("workflow_profile", default_profile)
     st.session_state.setdefault("workflow_objective", "")
     st.session_state.setdefault("workflow_property_name", "")
