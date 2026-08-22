@@ -66,6 +66,21 @@ def _resume_analysis_after_authentication() -> bool:
     return True
 
 
+def _start_new_account_session(email: str, password: str) -> dict | None:
+    """Authenticate a new local account and defer preferences to onboarding."""
+
+    user = authenticate_user(email, password)
+    if user is None:
+        return None
+    # New accounts select their actual profile in onboarding. Existing users
+    # are never passed through this path, so their saved choices stay intact.
+    progress(user["id"], DATABASE_PATH, user_type="", investment_horizon="", risk_tolerance="", onboarding_step=1)
+    user = authenticate_user(email, password)
+    if user is not None:
+        st.session_state["current_user"] = user
+    return user
+
+
 def show_account() -> None:
     """Show account credentials forms or the signed-in account summary."""
     st.markdown("<p class='eyebrow'>ESPACE PERSONNEL</p>", unsafe_allow_html=True)
@@ -88,14 +103,22 @@ def show_account() -> None:
             f"<p>Profil : <b>{safe_profile}</b> · {safe_horizon} · risque {safe_risk}</p></div>",
             unsafe_allow_html=True,
         )
+        analysis_count = count_analyses(user["id"])
         analyses, plan = st.columns(2)
-        analyses.metric("Analyses sauvegardées", count_analyses(user["id"]))
+        analyses.metric("Analyses sauvegardées", analysis_count)
         plan.metric("Statut du forfait", "Premium" if user["plan"] == "premium" else "Gratuit")
         quota = quota_status(user["id"], user, DATABASE_PATH)
         if quota_is_enforced(DATABASE_PATH):
             st.caption(quota["label"])
         else:
             st.caption("Quota mensuel en aperçu pendant la bêta : aucune estimation n’est déduite automatiquement.")
+        primary, sign_out, _ = st.columns([1, 1, 2])
+        if analysis_count:
+            primary.button("Voir mes propriétés", type="primary", on_click=go_to, args=("Mes propriétés",), use_container_width=True)
+        else:
+            st.info("Votre espace est prêt. Commencez par analyser une propriété : vous pourrez ensuite conserver votre dossier et vos scénarios ici.")
+            primary.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), use_container_width=True)
+        sign_out.button("Se déconnecter", on_click=logout, use_container_width=True)
         if not can_use(user, "advanced_comparisons"):
             show_premium_teaser(
                 feature="Dossiers suivis, comparaisons, scénarios et rapports",
@@ -103,9 +126,6 @@ def show_account() -> None:
                 detail="Premium réunit les instantanés, les comparaisons détaillées, le rapport PDF et les changements vérifiables de vos dossiers sauvegardés.",
                 key="account_premium",
             )
-        view, sign_out, _ = st.columns([1, 1, 2])
-        view.button("Voir mes analyses", type="primary", on_click=go_to, args=("Mes analyses",), use_container_width=True)
-        sign_out.button("Se déconnecter", on_click=logout, use_container_width=True)
         st.divider()
         st.subheader("Vie privée et contrôle")
         st.download_button("Télécharger mes données", export_user_data(user["id"], DATABASE_PATH), "immoradar-mes-donnees.json", "application/json")
@@ -164,15 +184,10 @@ def show_account() -> None:
                         # The user has just proven control of the chosen password.
                         # Start the local session directly; the mandatory onboarding
                         # is still shown before any personal area is available.
-                        user = authenticate_user(email, password)
+                        user = _start_new_account_session(email, password)
                         if user is None:
                             st.error("Compte créé, mais la connexion locale n’a pas pu démarrer. Connectez-vous avec vos identifiants.")
                         else:
-                            # New accounts select their actual profile in onboarding.
-                            # Existing users keep their saved preferences unchanged.
-                            progress(user["id"], DATABASE_PATH, user_type="", investment_horizon="", risk_tolerance="", onboarding_step=1)
-                            user = authenticate_user(email, password)
-                            st.session_state["current_user"] = user
                             st.session_state["account_creation_notice"] = message
                             st.rerun()
                 else:

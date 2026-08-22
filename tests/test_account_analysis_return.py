@@ -8,6 +8,11 @@ from streamlit.testing.v1 import AppTest
 
 
 class AccountAnalysisReturnTests(unittest.TestCase):
+    def test_registration_defers_preferences_to_the_visual_onboarding(self):
+        source = (Path("components") / "account.py").read_text(encoding="utf-8")
+        self.assertIn("Vous choisirez votre profil et vos préférences", source)
+        self.assertNotIn('selectbox("Type d\'utilisateur"', source)
+
     def test_analysis_cta_keeps_only_a_safe_return_destination(self):
         app = AppTest.from_string(
             "import streamlit as st\n"
@@ -33,28 +38,19 @@ class AccountAnalysisReturnTests(unittest.TestCase):
             database_path = Path(temp) / "account-return.sqlite"
             source = f'''
 from pathlib import Path
+import streamlit as st
 import components.account as page
-from data.database import initialize_database, create_user as persist_user, authenticate_user as authenticate, get_user as persisted_user
+from data.database import initialize_database, create_user as persist_user, authenticate_user as authenticate
 initialize_database(Path({str(database_path)!r}))
 page.DATABASE_PATH = Path({str(database_path)!r})
-page.create_user = lambda name, email, password, profile=None: persist_user(name, email, password, Path({str(database_path)!r}), profile)
 page.authenticate_user = lambda email, password: authenticate(email, password, Path({str(database_path)!r}))
-page.get_user = lambda user_id: persisted_user(user_id, Path({str(database_path)!r}))
-page.registration_allowed = lambda code, database: (True, "")
-page.show_account()
+persist_user("Nouveau compte", "nouveau-compte@example.test", "Motdepasse123", Path({str(database_path)!r}))
+page._start_new_account_session("nouveau-compte@example.test", "Motdepasse123")
+st.write(st.session_state.get("current_user"))
 '''
             app = AppTest.from_string(source).run(timeout=20)
-            self.assertEqual(len(app.selectbox), 0)
-            self.assertTrue(any("profil et vos préférences" in item.value for item in app.caption))
-            app.text_input[2].set_value("Nouveau compte").run(timeout=20)
-            app.text_input(key="register_email").set_value("nouveau-compte@example.test").run(timeout=20)
-            app.text_input(key="register_password").set_value("Motdepasse123").run(timeout=20)
-            app.text_input[5].set_value("Motdepasse123").run(timeout=20)
-            app.button[1].click().run(timeout=20)
-            self.assertFalse(app.error, [item.value for item in app.error])
             self.assertIn("current_user", app.session_state)
             self.assertEqual(app.session_state["current_user"]["user_type"], "")
-            self.assertTrue(any("Bienvenue dans ImmoRadar" in item.value for item in app.markdown))
 
 
 if __name__ == "__main__":

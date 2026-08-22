@@ -28,6 +28,7 @@ page.show_account()
         self.assertIn("Quota mensuel en aperçu", text)
         self.assertIn("Passez du calcul ponctuel", text)
         self.assertIn("Découvrir Premium", [button.label for button in app.button])
+        self.assertIn("Voir mes propriétés", [button.label for button in app.button])
 
     def test_account_summary_escapes_user_text_before_html_rendering(self):
         from streamlit.testing.v1 import AppTest
@@ -52,6 +53,8 @@ page.show_account()
         markup = " ".join(item.value for item in app.markdown)
         self.assertIn("&lt;script&gt;unsafe&lt;/script&gt;", markup)
         self.assertIn("&lt;b&gt;courriel@example.test&lt;/b&gt;", markup)
+        self.assertIn("Analyser une propriété", [button.label for button in app.button])
+        self.assertTrue(any("Votre espace est prêt" in item.value for item in app.info))
 
 
 if __name__ == "__main__":
