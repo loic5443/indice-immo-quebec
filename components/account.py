@@ -12,7 +12,7 @@ from services.privacy_service import delete_account, export_user_data
 from services.onboarding_service import STEPS, complete, progress
 from services.beta_service import registration_allowed, consume_invitation
 from services.entitlements_service import can_use, quota_is_enforced, quota_status
-from services.alert_email_service import alert_email_readiness, set_alert_email_consent
+from services.alert_email_service import alert_email_readiness, send_test_alert_email, set_alert_email_consent
 from services.auth_service import validate_login_submission
 from domain.objectives import ANALYSIS_OBJECTIVES
 
@@ -193,6 +193,21 @@ def show_account() -> None:
                         "alert_email_consent": int(bool(alert_email_consent) if email_alerts_available and alert_email_saved else False),
                     }
                     st.success("Préférences enregistrées pour vos nouvelles analyses.")
+        # A test is intentionally separate from saving preferences. It is an
+        # explicit one-time action for an eligible account with saved consent.
+        if email_alerts_available and bool(st.session_state.get("current_user", user).get("alert_email_consent")):
+            if alert_email_readiness() == "ready":
+                st.success("La livraison des alertes par courriel est prête.")
+                with st.expander("Tester la livraison par courriel", expanded=False):
+                    st.caption("Un seul courriel de test sera envoyé à l’adresse de votre compte. Il ne contient aucune adresse de propriété ni donnée financière.")
+                    if st.button("Envoyer un courriel test", key="send_alert_email_test"):
+                        outcome = send_test_alert_email(int(user["id"]), DATABASE_PATH)
+                        if outcome == "sent":
+                            st.success("Courriel de test envoyé. Vérifiez votre boîte de réception et les indésirables.")
+                        elif outcome == "already_sent":
+                            st.info("Un courriel de test a déjà été envoyé pour ce compte.")
+                        else:
+                            st.error("Le courriel de test n’a pas pu être envoyé. Vérifiez la configuration Brevo et réessayez plus tard.")
         if not can_use(user, "advanced_comparisons"):
             show_premium_teaser(
                 feature="Dossiers suivis, comparaisons, scénarios et rapports",

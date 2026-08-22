@@ -17,7 +17,9 @@ class BrevoUnavailable(RuntimeError):
 def delivery_status(environment: dict[str, str] | None = None) -> str:
     """Return a non-sensitive status; never expose configuration values."""
 
-    environment = environment or os.environ
+    # An explicit empty mapping is meaningful in tests and must never fall
+    # back to the local process environment (which may contain real keys).
+    environment = environment if environment is not None else os.environ
     if environment.get("IMMORADAR_ALERT_DELIVERY_ENABLED", "").strip().lower() != "true":
         return "disabled"
     if not environment.get("BREVO_API_KEY", "").strip() or not environment.get("BREVO_SENDER_EMAIL", "").strip():
@@ -28,7 +30,7 @@ def delivery_status(environment: dict[str, str] | None = None) -> str:
 def send_email(recipient: str, subject: str, html_content: str, *, environment: dict[str, str] | None = None, opener=urlopen) -> None:
     """Send one explicitly consented email; callers must never log its inputs."""
 
-    environment = environment or os.environ
+    environment = environment if environment is not None else os.environ
     if delivery_status(environment) != "ready":
         raise BrevoUnavailable("La livraison courriel n’est pas configurée localement.")
     payload = json.dumps({

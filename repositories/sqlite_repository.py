@@ -46,6 +46,16 @@ class SQLiteRepository:
             row = connection.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         return dict(row) if row else None
 
+    def update_user_password(self, email: str, password_hash: str, password_salt: str) -> bool:
+        """Replace only one account's credentials using fresh password material."""
+
+        with closing(self._connect()) as connection, connection:
+            result = connection.execute(
+                "UPDATE users SET password_hash = ?, password_salt = ? WHERE email = ?",
+                (password_hash, password_salt, email),
+            )
+        return result.rowcount == 1
+
     def count_analyses(self, user_id: int) -> int:
         with closing(self._connect()) as connection:
             row = connection.execute("SELECT COUNT(*) FROM analyses WHERE user_id = ?", (user_id,)).fetchone()
