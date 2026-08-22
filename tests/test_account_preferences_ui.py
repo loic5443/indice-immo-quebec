@@ -72,6 +72,12 @@ finally:
         self.assertIn("Choisissez un profil et un objectif principal.", [item.value for item in app.error])
         self.assertNotIn("account_preference_capture", app.session_state)
 
+    def test_alert_email_choice_is_visible_separately_from_analysis_preferences(self):
+        app = self._app()
+        labels = [item.label for item in app.checkbox]
+        self.assertIn("Recevoir les alertes de mes dossiers par courriel (Premium)", labels)
+        self.assertIn("Enregistrer mon choix d’alerte", [item.label for item in app.button])
+
 
 if __name__ == "__main__":
     unittest.main()

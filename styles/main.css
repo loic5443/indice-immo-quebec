@@ -127,6 +127,9 @@ div.stButton > button, div.stDownloadButton > button { border-radius: 9px; paddi
 div.stButton > button[kind="primary"] { background: var(--blue); color: white; }
 div.stButton > button[kind="primary"]:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
 div.stButton > button[kind="secondary"] { background: white; color: var(--blue); }
+/* The sidebar's general light-text rule must not hide secondary button labels. */
+[data-testid="stSidebar"] div.stButton > button[kind="secondary"] { color: #123765 !important; background: #ffffff; }
+[data-testid="stSidebar"] div.stButton > button[kind="primary"] { color: #ffffff !important; }
 [data-testid="stAlert"] { border-radius: 12px; }
 
 @media (max-width: 700px) {

@@ -164,16 +164,6 @@ def show_account() -> None:
             marketing_consent = st.checkbox(
                 "Accepter les communications liées à ImmoRadar", value=bool(user.get("marketing_consent")), key="account_marketing_consent",
             )
-            email_alerts_available = can_use(user, "alerts")
-            alert_email_consent = st.checkbox(
-                "Recevoir les alertes de mes dossiers par courriel (Premium)",
-                value=bool(user.get("alert_email_consent")), key="account_alert_email_consent",
-                disabled=not email_alerts_available,
-            )
-            if not email_alerts_available:
-                st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
-            elif alert_email_readiness() != "ready":
-                st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas encore activée pendant la bêta.")
             if st.button("Enregistrer mes préférences", key="save_account_preferences", type="primary"):
                 if not profile or not objective:
                     st.error("Choisissez un profil et un objectif principal.")
@@ -183,20 +173,44 @@ def show_account() -> None:
                         investment_horizon=horizon, risk_tolerance=risk,
                         analytics_consent=int(analytics_consent), marketing_consent=int(marketing_consent),
                     )
-                    alert_email_saved = set_alert_email_consent(
-                        user["id"], bool(alert_email_consent) if email_alerts_available else False, DATABASE_PATH,
-                    )
                     st.session_state["current_user"] = {
                         **user, "user_type": profile, "user_objective": objective,
                         "investment_horizon": horizon, "risk_tolerance": risk,
                         "analytics_consent": int(analytics_consent), "marketing_consent": int(marketing_consent),
-                        "alert_email_consent": int(bool(alert_email_consent) if email_alerts_available and alert_email_saved else False),
+                        "alert_email_consent": int(bool(user.get("alert_email_consent"))),
                     }
                     st.success("Préférences enregistrées pour vos nouvelles analyses.")
-        # A test is intentionally separate from saving preferences. It is an
-        # explicit one-time action for an eligible account with saved consent.
-        if email_alerts_available and bool(st.session_state.get("current_user", user).get("alert_email_consent")):
-            if alert_email_readiness() == "ready":
+        # Alert delivery is deliberately separate from profile preferences: it
+        # is a distinct consent and should never be hidden among analysis fields.
+        email_alerts_available = can_use(user, "alerts")
+        with st.container(border=True):
+            st.subheader("Alertes par courriel")
+            st.write("Choisissez séparément si les alertes vérifiables de vos dossiers peuvent vous être envoyées par courriel.")
+            alert_email_consent = st.checkbox(
+                "Recevoir les alertes de mes dossiers par courriel (Premium)",
+                value=bool(st.session_state.get("current_user", user).get("alert_email_consent")),
+                key="account_alert_email_consent",
+                disabled=not email_alerts_available,
+            )
+            if not email_alerts_available:
+                st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
+            elif alert_email_readiness() != "ready":
+                st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas encore activée pendant la bêta.")
+            if email_alerts_available and st.button("Enregistrer mon choix d’alerte", key="save_alert_email_preference", type="primary"):
+                saved = set_alert_email_consent(user["id"], bool(alert_email_consent), DATABASE_PATH)
+                if saved:
+                    st.session_state["current_user"] = {
+                        **st.session_state.get("current_user", user),
+                        "alert_email_consent": int(bool(alert_email_consent)),
+                    }
+                    st.success("Votre choix d’alerte par courriel est enregistré.")
+                else:
+                    st.error("Votre choix n’a pas pu être enregistré. Réessayez plus tard.")
+
+            # A test is intentionally separate from saving consent. It is an
+            # explicit one-time action for an eligible account.
+            current_consent = bool(st.session_state.get("current_user", user).get("alert_email_consent"))
+            if email_alerts_available and current_consent and alert_email_readiness() == "ready":
                 st.success("La livraison des alertes par courriel est prête.")
                 with st.expander("Tester la livraison par courriel", expanded=False):
                     st.caption("Un seul courriel de test sera envoyé à l’adresse de votre compte. Il ne contient aucune adresse de propriété ni donnée financière.")
