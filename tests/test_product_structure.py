@@ -30,7 +30,7 @@ class ProductStructureTests(unittest.TestCase):
         source = (Path("components") / "alerts.py").read_text(encoding="utf-8")
         teaser_source = (Path("components") / "premium_teaser.py").read_text(encoding="utf-8")
         self.assertIn("PREMIUM", teaser_source)
-        self.assertIn("Aucune alerte calculable", source)
+        self.assertIn("aucun changement vérifiable", source)
         self.assertNotIn("send_email", source)
 
     def test_dynamic_page_titles_do_not_reuse_the_home_heading_anchor(self):

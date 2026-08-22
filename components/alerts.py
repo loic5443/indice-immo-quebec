@@ -22,6 +22,13 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
         return
     if tracking_configured and not analyses:
         st.info("Aucun dossier suivi pour le moment. Activez le suivi d’un dossier dans Mes propriétés pour voir uniquement les changements vérifiables qui le concernent.")
+        st.markdown(
+            "<div class='data-card'><div><span class='data-pill simulated'>PROCHAINE ÉTAPE</span>"
+            "<h3>Choisissez un dossier à suivre</h3><p>Le suivi compare uniquement ses instantanés sauvegardés. "
+            "Aucune donnée n’est devinée et aucune alerte n’est créée avant qu’un changement puisse être établi.</p>"
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
         st.caption("Aucun courriel n’est envoyé pendant la bêta privée.")
         return
     alerts = build_calculable_alerts(analyses)
@@ -49,5 +56,14 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
         return
     # No message is produced unless a comparison or a source update is truly
     # available. This avoids turning examples into apparent real events.
-    st.info("Aucune alerte calculable pour le moment. Le suivi s’activera seulement lorsqu’un changement vérifiable est disponible dans vos dossiers ou vos sources autorisées.")
+    st.success("Vos dossiers suivis ne signalent aucun changement vérifiable pour le moment.")
+    st.markdown(
+        "<div class='data-card'><div><span class='data-pill real'>SUIVI LOCAL ACTIF</span>"
+        "<h3>Ce qu’ImmoRadar peut vous signaler</h3><p>Une variation entre deux valeurs municipales ou deux ImmoValue fiables, "
+        "une sensibilité au taux devenue négative, ou un rappel de renouvellement que vous avez vous-même saisi.</p>"
+        "</div><div><span class='data-pill simulated'>PAS UNE PRÉVISION</span>"
+        "<h3>Ce qui reste indisponible</h3><p>Sans nouvel instantané, source autorisée ou date fournie, aucun changement n’est affiché. "
+        "ImmoRadar ne crée pas de notification à partir d’une supposition.</p></div></div>",
+        unsafe_allow_html=True,
+    )
     st.caption("Aucun courriel n’est envoyé pendant la bêta privée.")

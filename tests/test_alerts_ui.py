@@ -29,7 +29,7 @@ class AlertsUiTests(unittest.TestCase):
     def test_free_account_keeps_alerts_locked(self):
         app = self._app("free")
         text = " ".join(item.value for item in app.markdown)
-        self.assertIn("APERÇU PREMIUM", text)
+        self.assertIn("Suivi des changements vérifiables", text)
         self.assertNotIn("fragilise le flux", text)
 
     def test_premium_account_sees_calculable_alert_without_email(self):
@@ -37,6 +37,24 @@ class AlertsUiTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertIn("Une hausse de taux fragilise le flux mensuel", [item.value for item in app.subheader])
         self.assertTrue(any("Aucun courriel" in item.value for item in app.caption))
+
+    def test_empty_premium_tracking_explains_what_is_and_is_not_monitored(self):
+        app = AppTest.from_string(
+            "import components.alerts as page\n"
+            "page.show_alert_center({'plan': 'premium', 'role': 'user'}, [], tracking_configured=True)"
+        ).run(timeout=20)
+        text = " ".join(item.value for item in app.markdown) + " ".join(item.value for item in app.info)
+        self.assertIn("Choisissez un dossier à suivre", text)
+        self.assertIn("Aucune donnée n’est devinée", text)
+
+    def test_clean_premium_tracking_never_looks_like_a_fake_alert(self):
+        app = AppTest.from_string(
+            "import components.alerts as page\n"
+            "page.show_alert_center({'plan': 'premium', 'role': 'user'}, [])"
+        ).run(timeout=20)
+        text = " ".join(item.value for item in app.markdown) + " ".join(item.value for item in app.success)
+        self.assertIn("aucun changement vérifiable", text)
+        self.assertIn("ImmoRadar ne crée pas de notification", text)
 
     def test_alert_can_reopen_only_its_own_saved_dossier(self):
         with tempfile.TemporaryDirectory() as directory:
