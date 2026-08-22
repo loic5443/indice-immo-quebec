@@ -45,6 +45,8 @@ page.show_saved_analyses()
         self.assertIn("APERÇU GRATUIT", text)
         self.assertIn("Flux de trésorerie", text)
         self.assertNotIn("Paiement hypothécaire mensuel", text)
+        self.assertIn("Dossiers sauvegardés", [metric.label for metric in app.metric])
+        self.assertIn("Créer un nouveau dossier", [button.label for button in app.button])
 
     def test_premium_account_sees_complete_comparison(self):
         app = self._app("premium")

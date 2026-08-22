@@ -295,15 +295,30 @@ def show_saved_analyses() -> None:
     _show_action_feedback()
     analyses = list_analyses(user["id"], DATABASE_PATH)
     if not analyses:
-        st.info("Aucune analyse sauvegardée pour le moment.")
-        st.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",))
+        st.markdown(
+            "<div class='account-summary'><p class='eyebrow'>VOTRE PREMIER DOSSIER</p>"
+            "<div class='notice-title' role='heading' aria-level='2'>Vous n’avez encore aucun dossier sauvegardé.</div>"
+            "<p>Commencez par une propriété, ajoutez seulement les chiffres que vous connaissez, puis sauvegardez "
+            "la synthèse pour y revenir, la comparer ou la suivre.</p></div>",
+            unsafe_allow_html=True,
+        )
+        st.button("Créer mon premier dossier", type="primary", on_click=go_to, args=("Analyser",), use_container_width=True)
         show_alert_center(user, analyses)
         return
 
-    st.caption(f"{len(analyses)} analyse(s) sauvegardée(s) · Les favoris apparaissent en premier.")
     tracked_fingerprints = tracked_dossier_fingerprints(user["id"], DATABASE_PATH)
     tracked_analyses = filter_tracked_analyses(user["id"], analyses, DATABASE_PATH)
-    st.caption(f"{len({dossier_fingerprint(user['id'], item['property_name']) for item in tracked_analyses})} dossier(s) suivi(s) · aucun courriel n’est envoyé pendant la bêta.")
+    favorite_count = sum(bool(item.get("is_favorite")) for item in analyses)
+    followed_count = len({dossier_fingerprint(user["id"], item["property_name"]) for item in tracked_analyses})
+    st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>VOTRE ESPACE</p><div class='section-title' role='heading' aria-level='2'>Vos dossiers en un coup d’œil.</div>", unsafe_allow_html=True)
+    saved_column, favorite_column, followed_column, action_column = st.columns([1, 1, 1, 1.3])
+    saved_column.metric("Dossiers sauvegardés", len(analyses))
+    favorite_column.metric("Favoris", favorite_count)
+    followed_column.metric("Suivis", followed_count)
+    with action_column:
+        st.write("")
+        st.button("Créer un nouveau dossier", type="primary", on_click=go_to, args=("Analyser",), key="saved_new_analysis", use_container_width=True)
+    st.caption(f"{followed_count} dossier(s) suivi(s) · Les favoris apparaissent en premier. Le suivi lit uniquement les instantanés sauvegardés et n’envoie aucun courriel pendant la bêta.")
     if can_use(user, "alerts"):
         overview = _tracking_overview(tracked_analyses)
         st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>SUIVI ACTIF</p><h2>Ce qui mérite votre attention</h2>", unsafe_allow_html=True)
