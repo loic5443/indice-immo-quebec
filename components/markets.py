@@ -10,16 +10,24 @@ def _reset_municipal_selection():
 def show_markets():
  st.markdown("<p class='eyebrow'>MARCHÉ</p>",unsafe_allow_html=True)
  st.title("Comparer les municipalités")
- st.markdown("<p class='section-intro'>Des repères municipaux officiels, sans prix de vente, rendement ou risque inventés.</p>",unsafe_allow_html=True)
- st.info("Données officielles disponibles : les indicateurs affichés ci-dessous. Indicateurs indisponibles : prix de vente, rendement locatif et niveau de risque, faute de source autorisée dans ce dossier.")
- query=st.text_input("Rechercher une municipalité",key="municipal_search")
+ st.markdown("<p class='section-intro'>Des repères municipaux officiels pour situer un territoire, sans prix de vente, rendement ou risque inventés.</p>",unsafe_allow_html=True)
+ all_municipalities=municipalities(DATABASE_PATH)
+ if not all_municipalities:
+  st.warning("Aucune donnée municipale officielle n’est encore chargée dans cet environnement. Un administrateur peut importer une source MAMH autorisée; aucune valeur de remplacement n’est affichée.")
+  return
+ st.info("Ces repères officiels ne sont pas des prix de vente. Les prix de vente, rendements locatifs et niveaux de risque restent indisponibles sans source autorisée.")
+ available, selected_count, limit = st.columns(3)
+ available.metric("Municipalités disponibles", len(all_municipalities))
+ selected_count.metric("Municipalités sélectionnées", f"{len(st.session_state.get('municipal_selected', []))} / 4")
+ limit.metric("Comparaison utile", "2 à 4 villes")
+ query=st.text_input("Rechercher et ajouter une municipalité",key="municipal_search",placeholder="Ex. Montréal")
  current=st.session_state.get("municipal_selected",[])
  choices=selection_options(current,municipalities(DATABASE_PATH,query))
- selected=st.multiselect("Sélectionnez de deux à quatre municipalités",choices,max_selections=4,key="municipal_selected",placeholder="Choisir des municipalités")
+ selected=st.multiselect("Sélectionnez de deux à quatre municipalités",choices,max_selections=4,key="municipal_selected",placeholder="Choisir des municipalités",help="Une recherche ne retire jamais les municipalités que vous avez déjà choisies.")
  st.button("Réinitialiser la comparaison",on_click=_reset_municipal_selection)
  result=comparison(DATABASE_PATH,selected)
  if not result["available"]:
-  st.info("Sélectionnez au moins deux municipalités couvertes par la même année. Les données manquantes restent indisponibles et ne sont jamais remplacées par zéro.")
+  st.info("Sélectionnez au moins deux municipalités couvertes par la même année. Les données manquantes restent indiquées comme indisponibles et ne sont jamais remplacées par zéro.")
   return
  st.caption(f"Données officielles disponibles · année commune : {result['year']} · Source : MAMH, Profil financier des municipalités locales, CC-BY 4.0 · données récupérées localement.")
  by_code={}
