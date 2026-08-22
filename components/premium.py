@@ -128,15 +128,17 @@ def show_premium() -> None:
         unsafe_allow_html=True,
     )
 
-    st.markdown("<div class='section-space compact-space'></div><div class='section-title' role='heading' aria-level='2'>M’avertir au lancement</div>", unsafe_allow_html=True)
+    st.markdown("<div id='m-avertir-au-lancement' class='section-space compact-space'></div><div class='section-title' role='heading' aria-level='2'>M’avertir au lancement</div>", unsafe_allow_html=True)
     st.caption("Votre intérêt reste enregistré uniquement dans ImmoRadar. Aucun service externe n’est contacté.")
     if not is_authenticated():
         st.info("Connectez-vous pour gérer localement votre intérêt pour Premium.")
-        st.button("Ouvrir Mon compte", type="primary", on_click=go_to, args=("Mon compte",), key="premium_open_account")
+        st.button("Créer mon espace pour être averti", type="primary", on_click=go_to, args=("Mon compte",), key="premium_open_account")
         return
 
     user = current_user()
     interest = has_premium_interest(user["id"], DATABASE_PATH)
+    if interest:
+        st.success("Votre intérêt pour Premium est enregistré localement. Aucun avis externe n’est envoyé pendant la bêta.")
     consent = st.checkbox(
         "Je souhaite être avisé localement du lancement Premium",
         value=interest,

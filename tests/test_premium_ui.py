@@ -37,7 +37,7 @@ page.show_premium()
         text = " ".join(item.value for item in app.markdown) + " ".join(item.value for item in app.info)
         self.assertIn("Le dossier ne s’arrête pas au premier calcul", text)
         self.assertIn("Aucun paiement n’est demandé", text)
-        self.assertIn("Ouvrir Mon compte", [button.label for button in app.button])
+        self.assertIn("Créer mon espace pour être averti", [button.label for button in app.button])
 
     def test_premium_beta_account_sees_its_current_access(self):
         app = self._app(True, "premium")
