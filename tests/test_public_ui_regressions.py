@@ -84,6 +84,7 @@ class PublicUiRegressionTests(unittest.TestCase):
         home = self._component("components.home", "show_home")
         home.run(timeout=20)
         self.assertEqual(sum("Gardez une longueur" in item.value for item in home.get("markdown")), 1)
+        self.assertTrue(any("repère fiscal" in item.value and "pas un prix de vente" in item.value for item in home.caption))
         feedback = self._component("components.feedback", "show_feedback")
         feedback.run(timeout=20)
         self.assertEqual(sum(item.label == "Accéder à Mon compte" for item in feedback.button), 1)

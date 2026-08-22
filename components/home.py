@@ -45,6 +45,11 @@ def show_home() -> None:
         with premium:
             st.write("")
             st.button("Découvrir Premium", on_click=go_to, args=("Premium",), use_container_width=True)
+    st.caption(
+        "Lorsqu’elle est disponible, la première valeur révélée est celle du rôle municipal officiel : un repère fiscal, "
+        "pas un prix de vente. Elle peut différer du marché selon l’année du rôle et le secteur. ImmoValue est distincte "
+        "et n’est produite qu’avec au moins trois comparables admissibles."
+    )
 
     st.markdown("<div class='section-space'></div><p class='eyebrow'>UN SEUL DOSSIER</p><h2>De l’adresse à une décision plus lisible.</h2>", unsafe_allow_html=True)
     for column, number, title, copy in zip(
