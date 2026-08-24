@@ -2,8 +2,9 @@
 
 import unittest
 
-from components.saved_analyses import _filter_saved_analyses, _saved_official_role, _snapshot_history_rows, _tracking_overview
+from components.saved_analyses import _filter_saved_analyses, _saved_immovalue, _saved_official_role, _snapshot_history_rows, _tracking_overview
 from services.dossier_tracking_service import dossier_fingerprint
+from streamlit.testing.v1 import AppTest
 
 
 class SavedAnalysisFiltersTests(unittest.TestCase):
@@ -40,6 +41,28 @@ class SavedAnalysisFiltersTests(unittest.TestCase):
         })
         self.assertEqual(snapshot["total_value"], 404_100)
         self.assertIsNone(_saved_official_role({"official_role_snapshot_json": "{}"}))
+
+    def test_saved_immovalue_reads_only_a_real_completed_snapshot(self):
+        value = _saved_immovalue({
+            "immovalue_json": '{"available": true, "estimated_value": 425000, "low": 400000, "high": 450000, "confidence": 62}',
+        })
+        self.assertEqual(value["estimated_value"], 425_000)
+        self.assertEqual(value["low"], 400_000)
+        self.assertEqual(value["high"], 450_000)
+        self.assertEqual(value["confidence"], 62)
+        self.assertIsNone(_saved_immovalue({"immovalue_json": '{"available": false}'}))
+        self.assertIsNone(_saved_immovalue({"immovalue_json": '{"estimated_value": 425000}'}))
+
+    def test_saved_dossier_shows_three_value_references_without_confusing_them(self):
+        app = AppTest.from_string(
+            "import components.saved_analyses as page\n"
+            "page._show_saved_value_context({'immovalue_json': '{\\\"available\\\": true, \\\"estimated_value\\\": 425000, \\\"low\\\": 400000, \\\"high\\\": 450000, \\\"confidence\\\": 62, \\\"subject\\\": {\\\"asking_price\\\": 440000}}', 'official_role_snapshot_json': '{\\\"total_value\\\": 404100, \\\"role_year\\\": 2026}'})\n"
+        ).run(timeout=20)
+        labels = [metric.label for metric in app.metric]
+        self.assertEqual(labels, ["Valeur au rôle municipal", "Estimation ImmoValue", "Prix demandé déclaré"])
+        text = "\n".join(item.value for item in app.caption)
+        self.assertIn("Repère fiscal officiel", text)
+        self.assertIn("estimation expérimentale", text)
 
     def test_snapshot_history_uses_only_saved_values_and_marks_absences(self):
         rows = _snapshot_history_rows((

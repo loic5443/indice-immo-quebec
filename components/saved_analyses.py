@@ -60,6 +60,26 @@ def _saved_asking_price(analysis: dict) -> float | None:
         return None
 
 
+def _saved_immovalue(analysis: dict) -> dict | None:
+    """Return an actual saved ImmoValue result, never a reconstructed one."""
+
+    try:
+        payload = json.loads(analysis.get("immovalue_json") or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or not payload.get("available"):
+        return None
+    estimated = payload.get("estimated_value")
+    if not isinstance(estimated, (int, float)) or isinstance(estimated, bool):
+        return None
+    return {
+        "estimated_value": float(estimated),
+        "low": payload.get("low") if isinstance(payload.get("low"), (int, float)) else None,
+        "high": payload.get("high") if isinstance(payload.get("high"), (int, float)) else None,
+        "confidence": payload.get("confidence") if isinstance(payload.get("confidence"), (int, float)) else None,
+    }
+
+
 def _saved_official_role(analysis: dict) -> dict | None:
     """Read a public fiscal snapshot without treating it as market value."""
 
@@ -87,6 +107,39 @@ def _snapshot_history_rows(snapshots: tuple[dict, ...]) -> list[dict[str, str]]:
             "Rôle municipal": _money(role["total_value"]) if role else "Non disponible",
         })
     return rows
+
+
+def _show_saved_value_context(analysis: dict) -> None:
+    """Put saved fiscal, market and declared values side by side honestly."""
+
+    official_role = _saved_official_role(analysis)
+    immovalue = _saved_immovalue(analysis)
+    asking_price = _saved_asking_price(analysis)
+    st.markdown("**Repères de valeur**")
+    official, market, asking = st.columns(3)
+    with official:
+        st.metric(
+            "Valeur au rôle municipal",
+            _money(official_role["total_value"]) if official_role else "Non disponible",
+        )
+        if official_role:
+            st.caption(f"Repère fiscal officiel · rôle {official_role.get('role_year') or 'année non publiée'}")
+        else:
+            st.caption("Aucune valeur officielle n’a été sauvegardée.")
+    with market:
+        st.metric(
+            "Estimation ImmoValue",
+            _money(immovalue["estimated_value"]) if immovalue else "Non produite",
+        )
+        if immovalue and immovalue["low"] is not None and immovalue["high"] is not None:
+            confidence = f" · confiance {immovalue['confidence']:.0f} / 100" if immovalue["confidence"] is not None else ""
+            st.caption(f"Fourchette : {_money(immovalue['low'])} à {_money(immovalue['high'])}{confidence}")
+        else:
+            st.caption("Disponible seulement après trois comparables admissibles.")
+    with asking:
+        st.metric("Prix demandé déclaré", _money(asking_price) if asking_price is not None else "Non ajouté")
+        st.caption("Montant saisi par vous, distinct des deux autres repères.")
+    st.caption("La valeur au rôle municipal est un repère fiscal; ImmoValue est une estimation expérimentale. Aucun des deux ne devient automatiquement votre prix retenu.")
 
 
 def _filter_saved_analyses(
@@ -359,8 +412,9 @@ def show_saved_analyses() -> None:
                     st.markdown("**Historique des instantanés**")
                     st.dataframe(_snapshot_history_rows(history.snapshots), hide_index=True, width="stretch")
                     st.caption("Les montants et scores sont ceux sauvegardés à chaque date. Une donnée absente reste non disponible.")
+            _show_saved_value_context(analysis)
             first, second, third = st.columns(3)
-            first.metric("Prix analysé", _money(analysis["price"]))
+            first.metric("Prix retenu pour les calculs", _money(analysis["price"]))
             second.metric("Flux mensuel", _money(analysis["cash_flow"]))
             third.metric("Score ImmoRadar", f"{analysis['immo_score']:.0f} / 100" if analysis["immo_score"] is not None else "Indisponible")
             st.markdown(
@@ -372,16 +426,13 @@ def show_saved_analyses() -> None:
                 f"**Moteur :** {analysis['engine_version']}  \n"
                 f"**Provenance :** {analysis['data_provenance']}"
             )
-            asking_price = _saved_asking_price(analysis)
-            if asking_price is not None:
-                st.caption(f"Prix demandé déclaré : {_money(asking_price)} · distinct de la valeur municipale et d’ImmoValue.")
             official_role = _saved_official_role(analysis)
             if official_role:
                 reference = official_role.get("reference_date") or "date de référence non publiée"
                 st.caption(
-                    f"Valeur au rôle municipal sauvegardée : {_money(official_role['total_value'])} · "
-                    f"rôle {official_role.get('role_year') or 'année non publiée'} · {reference}. "
-                    "Repère fiscal officiel, distinct d’une valeur marchande."
+                    f"Source de la valeur au rôle : MAMH / Données Québec · "
+                    f"rôle {official_role.get('role_year') or 'année non publiée'} · date de référence {reference} · "
+                    "licence CC BY 4.0."
                 )
             if analysis["immo_score"] is not None:
                 st.markdown(
