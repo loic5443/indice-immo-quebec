@@ -17,6 +17,8 @@ La fondation de données officielles est décrite dans [ADR-008](ADR-008_Sprint4
 
 Les suggestions consenties du géocodeur officiel sont décrites dans [SOURCE_ADRESSES_QUEBEC_GEOCODEUR.md](SOURCE_ADRESSES_QUEBEC_GEOCODEUR.md). Elles n’enregistrent pas une adresse automatiquement et restent indépendantes d’ImmoValue et d’ImmoScore.
 
+La vue aérienne officielle facultative, son attribution et ses protections de confidentialité sont expliquées dans [IMAGERIE_AERIENNE.md](IMAGERIE_AERIENNE.md).
+
 ## Sprint 6
 
 - [Rapport de clôture](SPRINT6_COMPLETION_REPORT.md)

@@ -61,6 +61,7 @@ from services.quebec_address_geocoder import (
     suggest_addresses,
     useful_query,
 )
+from services.quebec_aerial_imagery import SOURCE_LABEL as AERIAL_SOURCE_LABEL, fetch_aerial_image
 from domain.address import normalize_canadian_postal_code
 from services.diagnostics_service import source_enabled
 
@@ -106,6 +107,7 @@ ADDRESS_RESOLUTION_SELECTION_KEY = "address_form_resolution_selection"
 ADDRESS_LOCAL_SELECTED_KEY = "address_form_local_selected"
 ADDRESS_AUTO_SYNC_PENDING_KEY = "address_form_auto_sync_pending"
 ADDRESS_AUTO_SYNC_STATUS_KEY = "address_form_auto_sync_status"
+ADDRESS_AERIAL_IMAGE_KEY = "address_form_aerial_image"
 ANALYSIS_REOPEN_PENDING_KEY = "analysis_reopen_pending"
 LAST_SAVED_ANALYSIS_KEY = "last_saved_analysis"
 MAX_ADDRESS_SUGGESTIONS = 6
@@ -208,6 +210,7 @@ def _address_state_for_current_user() -> AddressFormState:
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
         st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
         st.session_state.pop(ADDRESS_RESOLUTION_KEY, None)
+        st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
         _clear_address_suggestions()
     # Anonymous sessions use ``None`` as their owner id.  Test key presence,
     # not only equality, or a fresh anonymous session would skip its first
@@ -236,6 +239,7 @@ def _address_state_for_current_user() -> AddressFormState:
         st.session_state[ADDRESS_STATE_KEY] = state
         st.session_state[ADDRESS_HYDRATE_KEY] = True
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+        st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
         _clear_address_suggestions()
     state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
     # The Accueil hand-off must work even when this anonymous session already
@@ -249,6 +253,7 @@ def _address_state_for_current_user() -> AddressFormState:
         st.session_state[ADDRESS_STATE_KEY] = state
         st.session_state[ADDRESS_HYDRATE_KEY] = True
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+        st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
         _clear_address_suggestions()
     if st.session_state.pop(ADDRESS_HYDRATE_KEY, False):
         _hydrate_address_widgets(state)
@@ -336,6 +341,7 @@ def _edit_address_field(field: str) -> None:
     st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     st.session_state.pop(ADDRESS_AUTO_SYNC_PENDING_KEY, None)
+    st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
 
 
 def _set_address_editor_street(value: str) -> None:
@@ -367,6 +373,7 @@ def _set_address_editor_street(value: str) -> None:
     st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     st.session_state.pop(ADDRESS_AUTO_SYNC_PENDING_KEY, None)
+    st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
 
 
 def _street_query_matches_selection(query: str, selected: str) -> bool:
@@ -458,10 +465,12 @@ def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: l
         current = merged[position]
         # A role unit is directly linked to its municipal values. Preserve that
         # link while adding an official postal code exposed by MRNF's label.
-        if current.source == "role" and suggestion.source != "role" and not current.postal_code:
+        if current.source == "role" and suggestion.source != "role":
             postal_match = re.search(r"\b[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d\b", suggestion.label, re.I)
-            postal = normalize_canadian_postal_code(postal_match.group(0)) if postal_match else ""
-            if postal:
+            postal = current.postal_code or (normalize_canadian_postal_code(postal_match.group(0)) if postal_match else "")
+            longitude = suggestion.longitude if suggestion.longitude is not None else current.longitude
+            latitude = suggestion.latitude if suggestion.latitude is not None else current.latitude
+            if postal != current.postal_code or longitude != current.longitude or latitude != current.latitude:
                 merged[position] = AddressSuggestion(
                     street=current.street,
                     city=current.city,
@@ -469,6 +478,8 @@ def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: l
                     unit=current.unit,
                     label=" · ".join(part for part in (current.street, current.city, postal) if part),
                     source="role",
+                    longitude=longitude,
+                    latitude=latitude,
                 )
     return merged[:MAX_ADDRESS_SUGGESTIONS]
 
@@ -522,6 +533,27 @@ def _enrich_local_suggestion(selected: AddressSuggestion, consent: bool) -> Addr
         if _same_public_address(selected, candidate):
             return candidate
     return None
+
+
+def _remember_aerial_image(selected: AddressSuggestion, consent: bool) -> None:
+    """Fetch a selected point's official aerial image only into this session.
+
+    The selected address is already covered by the public-search consent.  No
+    location is saved in Streamlit state: only a small image response and its
+    public attribution remain available for the current session.
+    """
+
+    if selected.longitude is None or selected.latitude is None:
+        st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+        return
+    response = fetch_aerial_image(selected.longitude, selected.latitude, consent)
+    st.session_state[ADDRESS_AERIAL_IMAGE_KEY] = {
+        "status": response.status,
+        "image_bytes": response.image_bytes,
+        "mime_type": response.mime_type,
+        "acquisition_year": response.acquisition_year,
+        "message": response.message,
+    }
 
 
 def _on_address_city_change() -> None:
@@ -595,6 +627,8 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         label=suggestion.get("label", ""),
         lookup_key=suggestion.get("lookup_key", ""),
         source=suggestion.get("source", "external"),
+        longitude=suggestion.get("longitude") if isinstance(suggestion.get("longitude"), (int, float)) else None,
+        latitude=suggestion.get("latitude") if isinstance(suggestion.get("latitude"), (int, float)) else None,
     )
     if selected.source == "empty":
         return
@@ -666,6 +700,7 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     if selected_state.valid:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(selected_state)
         _queue_auto_role_sync(selected_state)
+        _remember_aerial_image(resolved, consent)
     _persist_address_draft(selected_state)
     _clear_address_suggestions()
 
@@ -699,6 +734,7 @@ def _select_resolved_address() -> None:
     if selected_state.valid:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(selected_state)
         _queue_auto_role_sync(selected_state)
+        _remember_aerial_image(candidate, bool(values.get("consent")))
         _persist_address_draft(selected_state)
 
 
@@ -710,6 +746,7 @@ def _submit_address_lookup() -> None:
     consent = bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False))
     current_state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
     local_selection = bool(current_state.metadata.get("official_source") == "role")
+    aerial_candidate: AddressSuggestion | None = None
     st.session_state.pop(ADDRESS_RESOLUTION_KEY, None)
     # A copied address from Accueil often has no separate city/postal fields.
     # Resolve it only here, after an explicit consented action; ambiguity is
@@ -727,6 +764,7 @@ def _submit_address_lookup() -> None:
         st.session_state[ADDRESS_RESOLUTION_KEY] = resolution
         if resolution.status == "ok" and len(resolution.suggestions) == 1:
             candidate = resolution.suggestions[0]
+            aerial_candidate = candidate
             street = candidate.street or street
             city = candidate.city or city
             postal = candidate.postal_code or postal
@@ -748,6 +786,8 @@ def _submit_address_lookup() -> None:
     if state.valid:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(state)
         _queue_auto_role_sync(state)
+        if aerial_candidate is not None:
+            _remember_aerial_image(aerial_candidate, consent)
     else:
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     st.session_state[ADDRESS_HYDRATE_KEY] = True
@@ -1233,6 +1273,7 @@ def show_property_analysis() -> None:
     calculated = _analysis_is_calculated(inputs)
     _show_dossier_summary(address_state, address_lookup, inputs, profile)
     _show_role_overview(address_lookup)
+    _show_aerial_view(address_lookup)
     visible_stage = (
         1
         if st.session_state.get("analysis_reopen_show_property_stage")
@@ -1303,6 +1344,30 @@ def _official_role_snapshot(address_lookup: dict | None) -> dict:
         "source": "MAMH / Données Québec",
         "license": "CC BY 4.0",
     }
+
+
+def _show_aerial_view(address_lookup: dict | None) -> None:
+    """Render a transient official aerial context after a revealed lookup.
+
+    The image stays beside public-record data, never beside ImmoValue, so it
+    cannot be mistaken for a price calculation or appraisal input.
+    """
+
+    if not _has_revealed_public_information(address_lookup):
+        return
+    aerial = st.session_state.get(ADDRESS_AERIAL_IMAGE_KEY)
+    if not isinstance(aerial, dict):
+        return
+    if aerial.get("status") == "available" and isinstance(aerial.get("image_bytes"), bytes):
+        st.markdown("<div class='official-result-heading'><p class='eyebrow'>CONTEXTE VISUEL OFFICIEL</p><h2>Vue aérienne</h2></div>", unsafe_allow_html=True)
+        st.image(aerial["image_bytes"], caption="Image aérienne officielle — contexte visuel seulement", width="stretch")
+        year = aerial.get("acquisition_year")
+        st.caption(
+            f"Source : {AERIAL_SOURCE_LABEL} · licence CC BY 4.0 · acquisition {year if year else 'à confirmer selon la couverture'}. "
+            "Cette image ne sert pas à calculer ImmoValue, ImmoScore ou vos chiffres financiers."
+        )
+    elif aerial.get("status") == "unavailable":
+        st.caption(aerial.get("message") or "Vue aérienne officielle indisponible pour cette adresse. Vous pouvez continuer votre analyse.")
 
 
 def _show_role_overview(address_lookup: dict | None) -> None:

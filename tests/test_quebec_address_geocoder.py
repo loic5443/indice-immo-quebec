@@ -171,6 +171,8 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
                 "",
                 "123 Rue Exemple · Ville-exemple · H2X 1Y4",
                 "external",
+                longitude=-73.5,
+                latitude=45.5,
             ),
         )
         local = [AddressSuggestion("123 rue Exemple", "Ville-exemple", "", "", "123 rue Exemple · Ville-exemple", source="role") for _ in range(10)]
@@ -178,6 +180,7 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
         self.assertEqual(len(merged), 1)
         self.assertEqual(merged[0].source, "role")
         self.assertEqual(merged[0].postal_code, "H2X 1Y4")
+        self.assertEqual((merged[0].longitude, merged[0].latitude), (-73.5, 45.5))
 
 
 class QuebecAddressGeocoderUiTests(unittest.TestCase):
