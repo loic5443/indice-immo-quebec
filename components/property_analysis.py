@@ -1333,7 +1333,7 @@ def show_property_analysis() -> None:
                             key=f"address_suggestion_select_{index}",
                             on_click=_select_address_suggestion,
                             args=(suggestion.to_option(),),
-                            use_container_width=True,
+                            width="stretch",
                         )
         address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
         if not _has_revealed_public_information(address_lookup):
@@ -1727,11 +1727,11 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         st.caption("Votre dossier reste privé à votre compte. Le rapport PDF et le suivi des changements vérifiables font partie de l’accès Premium bêta.")
         action_save, action_edit, action_premium = st.columns(3)
         with action_save:
-            save_requested = st.button("Sauvegarder mon dossier", type="primary", key="save_analysis", use_container_width=True)
+            save_requested = st.button("Sauvegarder mon dossier", type="primary", key="save_analysis", width="stretch")
         with action_edit:
-            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="edit_analysis_hypotheses", use_container_width=True)
+            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="edit_analysis_hypotheses", width="stretch")
         with action_premium:
-            st.button("Découvrir le suivi Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", use_container_width=True)
+            st.button("Découvrir le suivi Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", width="stretch")
         if save_requested:
             if not property_name.strip():
                 st.error("Ajoutez un nom de dossier ou sélectionnez une adresse.")
@@ -1804,11 +1804,11 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         st.info("Votre analyse reste disponible dans ce brouillon. Créez un espace gratuit pour la conserver, retrouver vos scénarios et y revenir plus tard.")
         create_account, edit_inputs, premium = st.columns(3)
         with create_account:
-            st.button("Créer mon espace gratuit", type="primary", on_click=_open_account_to_keep_analysis, key="save_analysis_login", use_container_width=True)
+            st.button("Créer mon espace gratuit", type="primary", on_click=_open_account_to_keep_analysis, key="save_analysis_login", width="stretch")
         with edit_inputs:
-            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="guest_edit_analysis_hypotheses", use_container_width=True)
+            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="guest_edit_analysis_hypotheses", width="stretch")
         with premium:
-            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="guest_summary_premium", use_container_width=True)
+            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="guest_summary_premium", width="stretch")
         st.caption("Premium est en préparation commerciale. Aucun paiement n’est demandé pendant la bêta privée.")
     st.markdown("</div>", unsafe_allow_html=True)
 

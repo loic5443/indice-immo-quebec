@@ -78,7 +78,7 @@ def show_premium() -> None:
             "<span class='data-pill real'>Disponible</span></article>",
             unsafe_allow_html=True,
         )
-        st.button("Commencer une analyse", type="primary", on_click=go_to, args=("Analyser",), key="premium_start_analysis", use_container_width=True)
+        st.button("Commencer une analyse", type="primary", on_click=go_to, args=("Analyser",), key="premium_start_analysis", width="stretch")
     with premium:
         st.markdown(
             "<article class='plan-card premium-card'><p class='plan-label accent-label'>PREMIUM</p><div class='plan-title' role='heading' aria-level='3'>Suivre vos décisions</div>"

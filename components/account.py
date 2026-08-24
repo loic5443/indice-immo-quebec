@@ -128,11 +128,11 @@ def show_account() -> None:
             st.caption("Quota mensuel en aperçu pendant la bêta : aucune estimation n’est déduite automatiquement.")
         primary, sign_out, _ = st.columns([1, 1, 2])
         if analysis_count:
-            primary.button("Voir mes propriétés", type="primary", on_click=go_to, args=("Mes propriétés",), use_container_width=True)
+            primary.button("Voir mes propriétés", type="primary", on_click=go_to, args=("Mes propriétés",), width="stretch")
         else:
             st.info("Votre espace est prêt. Commencez par analyser une propriété : vous pourrez ensuite conserver votre dossier et vos scénarios ici.")
-            primary.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), use_container_width=True)
-        sign_out.button("Se déconnecter", on_click=logout, use_container_width=True)
+            primary.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
+        sign_out.button("Se déconnecter", on_click=logout, width="stretch")
         with st.expander("Préférences pour mes nouvelles analyses", expanded=False):
             st.caption("Ces choix personnalisent vos prochains dossiers. Ils ne modifient jamais les analyses déjà sauvegardées.")
             objective_options = _objective_options(str(user.get("user_objective") or ""))
@@ -247,7 +247,7 @@ def show_account() -> None:
         with st.form("login_form"):
             email = st.text_input("Adresse courriel", key="login_email")
             password = st.text_input("Mot de passe", type="password", key="login_password")
-            submitted = st.form_submit_button("Se connecter", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Se connecter", type="primary", width="stretch")
         if submitted:
             errors = validate_login_submission(email, password)
             if errors:
@@ -268,7 +268,7 @@ def show_account() -> None:
             invitation_code = st.text_input("Code d'invitation bêta (si requis)")
             st.caption("Vous choisirez votre profil et vos préférences dans le court démarrage suivant."
                        " Ces choix peuvent être modifiés plus tard dans Mon compte.")
-            submitted = st.form_submit_button("Créer mon compte", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Créer mon compte", type="primary", width="stretch")
         if submitted:
             errors = validate_registration(name, email, password, confirmation)
             if errors:

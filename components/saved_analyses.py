@@ -255,7 +255,7 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
         selected_b = st.selectbox("Propriété B", ids, index=1, format_func=labels.__getitem__, key="comparison_property_b")
     with reset:
         st.write("")
-        if st.button("Réinitialiser", key="comparison_reset", use_container_width=True):
+        if st.button("Réinitialiser", key="comparison_reset", width="stretch"):
             st.session_state.pop("comparison_property_a", None)
             st.session_state.pop("comparison_property_b", None)
             st.rerun()
@@ -295,7 +295,7 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
     st.download_button(
         "Télécharger le rapport comparatif PDF", generate_comparison_report_pdf(comparison),
         file_name="immoradar-comparaison.pdf", mime="application/pdf",
-        key="comparison_pdf", use_container_width=True,
+        key="comparison_pdf", width="stretch",
     )
     for item in comparison["indicators"]:
         value_a = _comparison_value(item["key"], item["a"])
@@ -355,7 +355,7 @@ def show_saved_analyses() -> None:
             "la synthèse pour y revenir, la comparer ou la suivre.</p></div>",
             unsafe_allow_html=True,
         )
-        st.button("Créer mon premier dossier", type="primary", on_click=go_to, args=("Analyser",), use_container_width=True)
+        st.button("Créer mon premier dossier", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
         show_alert_center(user, analyses)
         return
 
@@ -370,7 +370,7 @@ def show_saved_analyses() -> None:
     followed_column.metric("Suivis", followed_count)
     with action_column:
         st.write("")
-        st.button("Créer un nouveau dossier", type="primary", on_click=go_to, args=("Analyser",), key="saved_new_analysis", use_container_width=True)
+        st.button("Créer un nouveau dossier", type="primary", on_click=go_to, args=("Analyser",), key="saved_new_analysis", width="stretch")
     st.caption(f"{followed_count} dossier(s) suivi(s) · Les favoris apparaissent en premier. Le suivi lit uniquement les instantanés sauvegardés. Les courriels restent optionnels et exigent votre accord dans Mon compte.")
     if can_use(user, "alerts"):
         overview = _tracking_overview(tracked_analyses)
@@ -392,7 +392,7 @@ def show_saved_analyses() -> None:
         sort_by = st.selectbox("Trier", ["Favoris puis récents", "Plus récent", "Plus ancien", "Score le plus élevé"], key="saved_analysis_sort")
     with reset_column:
         st.write("")
-        st.button("Effacer", key="reset_saved_analysis_filters", on_click=_reset_saved_analysis_filters, use_container_width=True)
+        st.button("Effacer", key="reset_saved_analysis_filters", on_click=_reset_saved_analysis_filters, width="stretch")
     displayed_analyses = _filter_saved_analyses(analyses, query, scope, sort_by, tracked_fingerprints, user["id"])
     st.caption(f"{len(displayed_analyses)} dossier(s) affiché(s). La recherche reste dans cette session et n’est jamais envoyée à un service externe.")
     if not displayed_analyses:
@@ -470,7 +470,7 @@ def show_saved_analyses() -> None:
                 st.download_button(
                     "Télécharger le rapport PDF", generate_report_pdf(analysis),
                     file_name=f"immoradar-analyse-{analysis['id']}.pdf", mime="application/pdf",
-                    key=f"pdf_{analysis['id']}", use_container_width=True,
+                    key=f"pdf_{analysis['id']}", width="stretch",
                 )
             else:
                 show_premium_teaser(
@@ -480,7 +480,7 @@ def show_saved_analyses() -> None:
                     key=f"report_premium_{analysis['id']}",
                 )
             open_column, follow_column, favorite_column, delete_column = st.columns(4)
-            if open_column.button("Ouvrir et modifier", key=f"reopen_{analysis['id']}", use_container_width=True):
+            if open_column.button("Ouvrir et modifier", key=f"reopen_{analysis['id']}", width="stretch"):
                 try:
                     st.session_state["analysis_reopen_pending"] = prepare_reopen_draft(
                         user["id"], int(analysis["id"]), DATABASE_PATH,
@@ -494,7 +494,7 @@ def show_saved_analyses() -> None:
             followed = fingerprint in tracked_fingerprints
             if can_use(user, "alerts"):
                 follow_label = "Arrêter le suivi" if followed else "Suivre ce dossier"
-                if follow_column.button(follow_label, key=f"follow_{analysis['id']}", use_container_width=True):
+                if follow_column.button(follow_label, key=f"follow_{analysis['id']}", width="stretch"):
                     try:
                         set_dossier_tracking(user["id"], int(analysis["id"]), not followed, DATABASE_PATH)
                     except DossierTrackingAccessError:
@@ -503,9 +503,9 @@ def show_saved_analyses() -> None:
                         _set_action_feedback("Suivi activé." if not followed else "Suivi arrêté.")
                         st.rerun()
             else:
-                follow_column.button("Suivi Premium", key=f"follow_locked_{analysis['id']}", disabled=True, use_container_width=True)
+                follow_column.button("Suivi Premium", key=f"follow_locked_{analysis['id']}", disabled=True, width="stretch")
             favorite_label = "Retirer des favoris" if analysis["is_favorite"] else "Ajouter aux favoris"
-            if favorite_column.button(favorite_label, key=f"favorite_{analysis['id']}", use_container_width=True):
+            if favorite_column.button(favorite_label, key=f"favorite_{analysis['id']}", width="stretch"):
                 toggle_favorite(user["id"], analysis["id"], DATABASE_PATH)
                 _set_action_feedback("Dossier ajouté aux favoris." if not analysis["is_favorite"] else "Dossier retiré des favoris.")
                 st.rerun()
@@ -518,17 +518,17 @@ def show_saved_analyses() -> None:
             if deletion_requested:
                 delete_column.warning("Confirmer la suppression de ce dossier et de son historique ?")
                 confirm, cancel = delete_column.columns(2)
-                if confirm.button("Confirmer", key=f"confirm_delete_{analysis['id']}", type="primary", use_container_width=True):
+                if confirm.button("Confirmer", key=f"confirm_delete_{analysis['id']}", type="primary", width="stretch"):
                     if delete_analysis(user["id"], analysis["id"], DATABASE_PATH):
                         _cancel_analysis_deletion()
                         _set_action_feedback("Dossier supprimé.")
                         st.rerun()
                     else:
                         st.error("Ce dossier n’est plus disponible dans votre espace.")
-                if cancel.button("Annuler", key=f"cancel_delete_{analysis['id']}", use_container_width=True):
+                if cancel.button("Annuler", key=f"cancel_delete_{analysis['id']}", width="stretch"):
                     _cancel_analysis_deletion()
                     st.rerun()
-            elif delete_column.button("Supprimer", key=f"delete_{analysis['id']}", use_container_width=True):
+            elif delete_column.button("Supprimer", key=f"delete_{analysis['id']}", width="stretch"):
                 _request_analysis_deletion(user["id"], analysis["id"])
                 st.rerun()
     show_alert_center(user, tracked_analyses, tracking_configured=True)

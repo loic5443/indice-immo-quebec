@@ -50,17 +50,17 @@ def show_sidebar() -> str:
     st.sidebar.divider()
     st.sidebar.caption("Espace personnel")
     account_label = "Mon compte" if "current_user" in st.session_state else "Se connecter"
-    if st.sidebar.button(account_label, key="secondary_account", use_container_width=True):
+    if st.sidebar.button(account_label, key="secondary_account", width="stretch"):
         _secondary("Mon compte")
     with st.sidebar.expander("Informations et aide"):
-        if st.button("À propos", key="secondary_about", use_container_width=True):
+        if st.button("À propos", key="secondary_about", width="stretch"):
             _secondary("À propos")
-        if st.button("Confidentialité", key="secondary_privacy", use_container_width=True):
+        if st.button("Confidentialité", key="secondary_privacy", width="stretch"):
             _secondary("Confidentialité")
-        if st.button("Donner mon avis", key="secondary_feedback", use_container_width=True):
+        if st.button("Donner mon avis", key="secondary_feedback", width="stretch"):
             _secondary("Donner mon avis")
     if st.session_state.get("current_user", {}).get("role") == "admin":
-        if st.sidebar.button("Administration", key="secondary_admin", use_container_width=True):
+        if st.sidebar.button("Administration", key="secondary_admin", width="stretch"):
             _secondary("Administration")
     st.sidebar.caption("Bêta privée · Aucun paiement réel n’est activé.")
     return st.session_state.get("main_navigation", "Accueil")

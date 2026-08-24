@@ -24,7 +24,7 @@ def show_feedback() -> None:
         usefulness = st.slider("À quel point ImmoRadar vous a-t-il été utile?", 1, 5, 3, help="1 = peu utile · 5 = très utile")
         comment = st.text_area("Votre retour", placeholder="Expliquez ce que vous avez observé, sans renseignements sensibles.", max_chars=2000)
         contact = st.checkbox("Vous pouvez me contacter au sujet de ce retour")
-        sent = st.form_submit_button("Envoyer mon retour", type="primary", use_container_width=True)
+        sent = st.form_submit_button("Envoyer mon retour", type="primary", width="stretch")
     if sent:
         try:
             submit_feedback(current_user()["id"], page, category, usefulness, comment, contact, DATABASE_PATH)

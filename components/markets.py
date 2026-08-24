@@ -41,4 +41,4 @@ def show_markets():
   st.subheader(label); cols=st.columns(len(rows))
   for col,row in zip(cols,rows):col.metric(row['municipality_name'],f"{row['value']:,.0f} {unit}".replace(","," "))
   st.caption(help_text+" Donnée officielle, attribuée au MAMH/Données Québec.")
- st.dataframe([{**{"Indicateur":LABELS[r['indicator_code']][0],"Municipalité":r['municipality_name'],"Valeur":r['value'],"Unité":r['unit'],"Année":r['year']}} for r in result['rows']],hide_index=True,use_container_width=True)
+ st.dataframe([{**{"Indicateur":LABELS[r['indicator_code']][0],"Municipalité":r['municipality_name'],"Valeur":r['value'],"Unité":r['unit'],"Année":r['year']}} for r in result['rows']],hide_index=True,width="stretch")

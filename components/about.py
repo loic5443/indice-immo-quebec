@@ -50,6 +50,6 @@ def show_about() -> None:
 
     st.markdown("<div class='section-space compact-space'></div><div class='section-title' role='heading' aria-level='2'>Prêt à ouvrir votre dossier?</div><p class='section-intro'>Commencez par la propriété et les chiffres que vous connaissez déjà. Les étapes suivantes restent visibles et explicables.</p>", unsafe_allow_html=True)
     analyse, premium, _ = st.columns([1, 1, 2])
-    analyse.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), use_container_width=True)
-    premium.button("Découvrir Premium", on_click=go_to, args=("Premium",), use_container_width=True)
+    analyse.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
+    premium.button("Découvrir Premium", on_click=go_to, args=("Premium",), width="stretch")
     st.caption("ImmoRadar — bêta privée. Aucun paiement réel n’est demandé pendant cette période.")

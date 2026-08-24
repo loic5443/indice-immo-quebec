@@ -41,10 +41,10 @@ def show_home() -> None:
         spacer, action, premium, tail = st.columns([1.1, 1.35, 1.2, 1.1])
         with action:
             st.write("")
-            st.button("Révéler la valeur", type="primary", on_click=_start_from_home, use_container_width=True)
+            st.button("Révéler la valeur", type="primary", on_click=_start_from_home, width="stretch")
         with premium:
             st.write("")
-            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), use_container_width=True)
+            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), width="stretch")
     st.caption(
         "Lorsqu’elle est disponible, la première valeur révélée est celle du rôle municipal officiel : un repère fiscal, "
         "pas un prix de vente. Elle peut différer du marché selon l’année du rôle et le secteur. ImmoValue est distincte "
