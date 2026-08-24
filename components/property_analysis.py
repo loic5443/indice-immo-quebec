@@ -390,7 +390,14 @@ def _street_query_matches_selection(query: str, selected: str) -> bool:
 
 
 def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
-    """Return live MRNF options after debounce; never transmit without consent."""
+    """Return live options without making a local result wait on MRNF.
+
+    A synchronized municipal role is already an authorized official source and
+    can answer from SQLite immediately.  Calling MRNF first made the visible
+    list wait for two network timeouts even when those local suggestions were
+    available.  MRNF remains the fallback for other municipalities and can
+    still enrich a selected local result with a postal code after its click.
+    """
 
     query = useful_query(query)
     _set_address_editor_street(query)
@@ -405,10 +412,6 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
         # A local diagnostic-store problem must never prevent manual analysis
         # and must not generate an address-bearing diagnostic.
         enabled = False
-    external = (
-        suggest_addresses(query, True)
-        if enabled else SuggestionResponse("unavailable", message="La source publique d’adresses est désactivée.")
-    )
     local = [
         AddressSuggestion(
             street=row["street"], city=row["city"], postal_code=row["postal_code"],
@@ -416,7 +419,19 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
         )
         for row in suggest_role_units(DATABASE_PATH, query, limit=MAX_ADDRESS_SUGGESTIONS)
     ]
-    combined = _merge_address_suggestions(external.suggestions, local)
+    if local:
+        # Do not delay a real, local municipal-role match behind the external
+        # type-ahead service. Selection can still perform one consented MRNF
+        # enrichment only when its postal code is absent.
+        response = SuggestionResponse("ok", tuple(local[:MAX_ADDRESS_SUGGESTIONS]))
+        st.session_state[ADDRESS_SUGGESTIONS_KEY] = response
+        st.session_state[ADDRESS_SUGGESTION_QUERY_KEY] = query
+        return [(suggestion.label, suggestion.to_option()) for suggestion in response.suggestions]
+    external = (
+        suggest_addresses(query, True)
+        if enabled else SuggestionResponse("unavailable", message="La source publique d’adresses est désactivée.")
+    )
+    combined = _merge_address_suggestions(external.suggestions, [])
     if combined:
         response = SuggestionResponse("ok", tuple(combined))
     elif external.status == "ok":

@@ -166,14 +166,14 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertNotIn("address_form_resolution", app.session_state)
         self.assertEqual(list(app.exception), [])
 
-    def test_external_failure_uses_clickable_local_role_suggestion(self):
+    def test_local_role_suggestion_is_immediate_without_calling_external_provider(self):
         source = (
             "from pathlib import Path\n"
             "import streamlit as st\n"
             "import components.property_analysis as page\n"
             f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
             "original_suggest = page.suggest_addresses\n"
-            "page.suggest_addresses = lambda *_: page.SuggestionResponse('unavailable', message='source externe indisponible')\n"
+            "page.suggest_addresses = lambda *_: (_ for _ in ()).throw(AssertionError('local suggestions must not wait for MRNF'))\n"
             "st.session_state.setdefault('address_form_consent', True)\n"
             "st.session_state.setdefault('address_form_street_input', '123 rue Ex')\n"
             "try:\n"
@@ -216,7 +216,7 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertEqual(app.text_input(key="address_form_postal").value, "")
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
         self.assertEqual(list(app.error), [])
-        self.assertFalse(any("source externe indisponible" in item.value for item in app.info))
+        self.assertFalse(any("MRNF" in item.value for item in app.info))
         self.assertTrue(any("code postal n’est pas publié" in item.value for item in app.info))
         self.assertNotIn("address_lookup_submit", [button.key for button in app.button])
         app.session_state["repeat_public_address"] = True
