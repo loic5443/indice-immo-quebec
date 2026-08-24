@@ -44,6 +44,7 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
     checks = _json(analysis.get("recommended_checks_json"), [])
     market_context = _json(analysis.get("market_context_json"), [])
     immovalue = _json(analysis.get("immovalue_json"), {})
+    official_role = _json(analysis.get("official_role_snapshot_json"), {})
     story = []
 
     story += [Spacer(1, 1.4 * inch), Paragraph("IMMORADAR", styles["cover_brand"]),
@@ -51,7 +52,7 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
               Paragraph(escape(str(analysis.get("property_name", "Analyse immobilière"))), styles["cover_property"]),
               Spacer(1, 0.18 * inch), Paragraph(f"Analyse sauvegardée le {escape(str(analysis.get('created_at', '')))}", styles["center"]),
               Spacer(1, 1.45 * inch), Paragraph("Fondé exclusivement sur les hypothèses saisies et les calculs déterministes ImmoRadar.", styles["center"]),
-              Paragraph("Aucune valeur marchande, donnée de comparables ou donnée de ville simulée n'est utilisée dans ce rapport.", styles["center"]), PageBreak()]
+              Paragraph("Aucune donnée de ville simulée n'est utilisée dans ce rapport. Une estimation ImmoValue, lorsqu'elle est présente, provient uniquement des comparables déclarés dans le dossier.", styles["center"]), PageBreak()]
 
     story += _heading("1. Résumé exécutif", styles)
     summary = [
@@ -63,9 +64,12 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
     ]
     story += [_table(summary, styles, [1.75 * inch, 5.0 * inch]), Spacer(1, 0.18 * inch),
               Paragraph("La confiance mesure la complétude et la qualité des hypothèses, et non la probabilité qu'une propriété soit un bon achat.", styles["note"])]
-    story += _heading("2. Hypothèses", styles)
+    story += _heading("2. Repères de valeur", styles)
+    story += [_table(_value_reference_rows(official_role, immovalue), styles, [2.45 * inch, 4.3 * inch])]
+    story += [Paragraph(_value_reference_note(official_role, immovalue), styles["warning"])]
+    story += _heading("3. Hypothèses", styles)
     story += [_table(_input_rows(inputs), styles, [3.3 * inch, 3.45 * inch])]
-    story += _heading("3. Résultats financiers", styles)
+    story += _heading("4. Résultats financiers", styles)
     financial_rows = [
         ["Revenus locatifs bruts mensuels", _money(inputs.get("rental_income_monthly", analysis.get("rental_income", 0)) + inputs.get("other_income_monthly", 0))],
         ["Revenus effectifs mensuels", _effective_income(inputs)],
@@ -79,32 +83,25 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
     ]
     story += [_table(financial_rows, styles, [3.3 * inch, 3.45 * inch]), PageBreak()]
 
-    story += _heading("4. Score ImmoRadar et ImmoDNA", styles)
+    story += _heading("5. Score ImmoRadar et ImmoDNA", styles)
     story += [_table(_dimension_rows(dimensions), styles, [3.25 * inch, 0.95 * inch, 2.55 * inch])]
-    story += _heading("5. Facteurs et données manquantes", styles)
+    story += _heading("6. Facteurs et données manquantes", styles)
     story += _list_section("Facteurs positifs", positives, styles)
     story += _list_section("Points à surveiller", negatives, styles)
     story += _list_section("Données manquantes", missing, styles)
-    story += _heading("6. Scénarios « Et si? »", styles)
+    story += _heading("7. Scénarios « Et si? »", styles)
     story += [_table(_scenario_rows(scenarios), styles, [1.2 * inch, 1.0 * inch, 1.0 * inch, 1.0 * inch, 1.15 * inch, 1.4 * inch]), PageBreak()]
 
-    story += _heading("7. Tests de résistance", styles)
+    story += _heading("8. Tests de résistance", styles)
     story += [Paragraph("Seuils : résistant si chaque test garde un flux mensuel >= 0 $ et un DSCR >= 1,10x; sensible si le test combiné garde un flux >= 0 $ et un DSCR >= 1,00x; fragile autrement.", styles["note"]),
               _table(_resilience_rows(resilience), styles, [2.2 * inch, 1.4 * inch, 1.0 * inch, 2.15 * inch])]
-    story += _heading("8. Prochaines vérifications recommandées", styles)
+    story += _heading("9. Prochaines vérifications recommandées", styles)
     story += _list_section("À vérifier", checks, styles)
-    story += _heading("9. Méthodologie, sources et limites", styles)
+    story += _heading("10. Méthodologie, sources et limites", styles)
     story += [Paragraph("Les revenus effectifs appliquent le taux de vacance aux loyers; le RNE exclut le service de la dette; le paiement suit la convention hypothécaire canadienne de composition semestrielle. Les projections utilisent uniquement les taux de croissance saisis.", styles["body"]),
               Paragraph(f"Version du moteur : {escape(str(analysis.get('engine_version', 'Non renseignée')))}<br/>Provenance : {escape(str(analysis.get('data_provenance', 'Hypothèses utilisateur et calculs déterministes.')))}", styles["body"]),
               Paragraph(_market_context_text(market_context), styles["note"]),
               Spacer(1, 0.12 * inch), Paragraph("Avertissement : ce rapport est indicatif. Il ne constitue ni une évaluation officielle ni un conseil financier, juridique, fiscal ou immobilier. Faites vérifier les renseignements importants par des professionnels qualifiés avant une décision.", styles["warning"])]
-    if immovalue:
-        story += _heading("10. ImmoValue expérimental", styles)
-        if immovalue.get("available"):
-            story += [_table([["Valeur expérimentale", _money(immovalue.get("estimated_value", 0))], ["Fourchette", f"{_money(immovalue.get('low', 0))} à {_money(immovalue.get('high', 0))}"], ["Confiance", _score(immovalue.get("confidence"))]], styles, [2.2 * inch, 4.55 * inch])]
-        else:
-            story += [Paragraph("Aucune estimation ImmoValue disponible : au moins trois comparables admissibles sont requis.", styles["note"])]
-        story += [Paragraph("ImmoValue expérimental est fondé sur les comparables déclarés par l'utilisateur; il ne constitue pas une évaluation officielle.", styles["warning"])]
     document.build(story, onFirstPage=_footer, onLaterPages=_footer)
     return stream.getvalue()
 
@@ -230,6 +227,59 @@ def _input_rows(inputs):
     ]]
 
 
+def _value_reference_rows(official_role: dict[str, Any], immovalue: dict[str, Any]) -> list[list[str]]:
+    """Keep fiscal, experimental and declared values visibly distinct in PDFs.
+
+    This reads the saved snapshot only. It intentionally does not turn a
+    missing value into 0 $, recalculate ImmoValue or infer an asking price.
+    """
+    role_total = _optional_money(official_role.get("total_value"))
+    role_year = official_role.get("role_year")
+    role_reference = official_role.get("reference_date")
+    role_detail = "Non disponible"
+    if role_total:
+        role_detail = role_total
+        details = [f"Rôle {role_year}" if role_year else None, str(role_reference) if role_reference else None]
+        details = [detail for detail in details if detail]
+        if details:
+            role_detail += " — " + " · ".join(details)
+
+    estimate_available = bool(immovalue.get("available"))
+    estimate = _optional_money(immovalue.get("estimated_value")) if estimate_available else None
+    estimate_detail = "Données nécessaires : trois comparables admissibles."
+    if estimate:
+        low, high = _optional_money(immovalue.get("low")), _optional_money(immovalue.get("high"))
+        estimate_detail = estimate
+        if low and high:
+            estimate_detail += f" — fourchette {low} à {high}"
+        if isinstance(immovalue.get("confidence"), (int, float)):
+            estimate_detail += f" — confiance {_score(immovalue['confidence'])}"
+
+    subject = immovalue.get("subject") if isinstance(immovalue.get("subject"), dict) else {}
+    asking = _optional_money(subject.get("asking_price"))
+    return [
+        ["Valeur au rôle municipal (repère fiscal)", role_detail],
+        ["Estimation ImmoValue (expérimentale)", estimate_detail],
+        ["Prix demandé déclaré", asking or "Non ajouté"],
+    ]
+
+
+def _value_reference_note(official_role: dict[str, Any], immovalue: dict[str, Any]) -> str:
+    source = official_role.get("source")
+    source_text = f" Source du rôle : {source}." if isinstance(source, str) and source else ""
+    if immovalue.get("available"):
+        return (
+            "La valeur au rôle municipal est un repère fiscal : ce n'est pas une estimation de la valeur marchande. "
+            "ImmoValue est une estimation expérimentale fondée sur les comparables déclarés admissibles. "
+            "Le prix demandé est une donnée déclarée et ne modifie aucune autre valeur." + source_text
+        )
+    return (
+        "La valeur au rôle municipal est un repère fiscal : ce n'est pas une estimation de la valeur marchande. "
+        "ImmoValue reste à calculer seulement lorsque trois comparables admissibles sont disponibles. "
+        "Le prix demandé est une donnée déclarée et ne modifie aucune autre valeur." + source_text
+    )
+
+
 def _dimension_rows(dimensions):
     rows = [["Dimension", "Note", "État"]]
     for item in dimensions.values():
@@ -294,6 +344,10 @@ def _comparison_relation(relation: str | None) -> str:
         "égalité": "Équivalent",
         "non_comparable": "Non comparable",
     }.get(relation, "Non comparable")
+
+
+def _optional_money(value: Any) -> str | None:
+    return _money(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
 def _money(value): return f"{float(value):,.0f} $".replace(",", " ")

@@ -42,6 +42,14 @@ class ReportTests(unittest.TestCase):
             "negative_factors_json": __import__("json").dumps(engine.negative_factors, ensure_ascii=False),
             "missing_data_json": __import__("json").dumps(engine.missing_data, ensure_ascii=False),
             "recommended_checks_json": __import__("json").dumps(engine.recommended_checks, ensure_ascii=False),
+            "official_role_snapshot_json": __import__("json").dumps({
+                "total_value": 404_100, "role_year": 2026, "reference_date": "2025-07-01",
+                "source": "MAMH / Données Québec", "license": "CC BY 4.0",
+            }, ensure_ascii=False),
+            "immovalue_json": __import__("json").dumps({
+                "available": True, "estimated_value": 425_000, "low": 405_000, "high": 445_000,
+                "confidence": 62, "subject": {"asking_price": 440_000},
+            }, ensure_ascii=False),
         }
 
     def test_report_is_valid_french_pdf_with_required_sections(self):
@@ -58,6 +66,19 @@ class ReportTests(unittest.TestCase):
         self.assertIn("Exemple fictif", extracted)
         self.assertIn("Montréal", extracted)
         self.assertIn(str(round(self.analysis["immo_score"])), extracted)
+
+    def test_report_keeps_value_references_distinct(self):
+        content = generate_report_pdf(self.analysis)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rapport.pdf"
+            path.write_bytes(content)
+            extracted = "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
+        for label in ("Valeur au rôle municipal", "Estimation ImmoValue", "Prix demandé déclaré"):
+            self.assertIn(label, extracted)
+        for amount in ("404 100", "425 000", "440 000"):
+            self.assertIn(amount, extracted)
+        self.assertIn("repère fiscal", extracted)
+        self.assertIn("pas une estimation de la valeur marchande", extracted)
 
 
 if __name__ == "__main__":
