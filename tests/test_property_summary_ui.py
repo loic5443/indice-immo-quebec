@@ -117,6 +117,21 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertIn("trois comparables admissibles", messages)
         self.assertIn("n’est pas un prix de vente", messages)
 
+    def test_saved_immovalue_snapshot_keeps_declared_price_without_an_address(self):
+        app = AppTest.from_string(
+            "import json\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "page.st.session_state['iv_asking'] = 575000\n"
+            "page.st.session_state['workflow_property_type'] = 'Maison'\n"
+            "st.code(json.dumps(page._immovalue_snapshot_for_save({'available': True, 'estimated_value': 560000}), ensure_ascii=False))\n"
+        ).run(timeout=20)
+        payload = app.code[0].value
+        self.assertIn('"asking_price": 575000.0', payload)
+        self.assertIn('"property_type": "Maison"', payload)
+        self.assertNotIn("Adresse", payload)
+        self.assertNotIn('"street"', payload.casefold())
+
     def test_property_stage_collects_an_optional_asking_price_before_finances(self):
         app = AppTest.from_string(
             "import components.property_analysis as page\n"

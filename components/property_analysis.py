@@ -1539,6 +1539,25 @@ def _generated_immovalue() -> dict | None:
     return value if isinstance(value, dict) and value.get("available") else None
 
 
+def _immovalue_snapshot_for_save(immovalue: dict | None) -> dict:
+    """Keep the declared asking price with a saved result, never an address.
+
+    ImmoValue remains its own stored result.  The small subject snapshot lets a
+    reopened dossier compare the user's declared asking price without treating
+    the municipal role as a price or silently reconstructing the entry.
+    """
+
+    snapshot = dict(immovalue) if isinstance(immovalue, dict) else {}
+    asking = st.session_state.get("iv_asking")
+    asking_price = float(asking) if isinstance(asking, (int, float)) and asking > 0 else None
+    property_type = st.session_state.get("workflow_property_type")
+    snapshot["subject"] = {
+        "asking_price": asking_price,
+        "property_type": property_type if isinstance(property_type, str) else "",
+    }
+    return snapshot
+
+
 def _show_summary_financial_cards(inputs: PropertyInputs, result: AnalysisResult) -> None:
     """Present the seven useful indicators without presenting irrelevant zeros."""
 
@@ -1734,7 +1753,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                         ),
                     },
                     "market_context": market_context_snapshot(str(DATABASE_PATH)),
-                    "immovalue": immovalue,
+                    "immovalue": _immovalue_snapshot_for_save(immovalue),
                     "official_role_snapshot": _official_role_snapshot(address_lookup),
                 }, profile=engine_result.profile, engine_result=engine_result)
                 st.session_state[LAST_SAVED_ANALYSIS_KEY] = {
