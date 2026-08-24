@@ -101,10 +101,10 @@ def show_premium() -> None:
         st.markdown("<div class='subsection-title' role='heading' aria-level='3'>Disponible avec l’accès Premium bêta</div>", unsafe_allow_html=True)
         _status("Disponible", "Estimations ImmoValue illimitées lorsque trois comparables admissibles sont fournis.")
         _status("Disponible", "Comparaison de dossiers sauvegardés, scénarios et rapport PDF complet.")
-        _status("Disponible", "Suivi local de changements réellement calculables. Aucun courriel n’est envoyé pendant la bêta.")
+        _status("Disponible", "Suivi de changements réellement calculables. Les avis par courriel restent facultatifs et exigent un consentement séparé.")
     with future:
         st.markdown("<div class='subsection-title' role='heading' aria-level='3'>En préparation</div>", unsafe_allow_html=True)
-        _status("Bientôt disponible", "Alertes de suivi actives par courriel ou autre canal, seulement avec votre consentement.", "simulated")
+        _status("Disponible", "Avis générique par courriel pour les nouvelles alertes vérifiables, seulement avec votre consentement.")
         _status("Bientôt disponible", "Données enrichies et radar des occasions, après validation de chaque source.", "simulated")
         _status("Bientôt disponible", "Comparaisons municipales plus larges lorsque des données officielles comparables sont disponibles.", "simulated")
 

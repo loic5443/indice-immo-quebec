@@ -32,6 +32,7 @@ from services.comparable_workspace import (
     today_iso,
 )
 from services.analysis_workflow import STEPS, load_draft, save_draft, normalize_step, transition
+from services.alert_delivery_service import deliver_alerts_for_user
 from services.entitlements_service import can_use, quota_is_enforced, quota_status, consume_estimation
 from services.dossier_tracking_service import (
     DossierTrackingAccessError,
@@ -1069,7 +1070,7 @@ def _show_finance_stage() -> None:
             st.number_input("Croissance annuelle hypothétique des dépenses (%)", min_value=-25.0, max_value=25.0, step=0.25, key="expense_growth")
             st.number_input("Horizon de détention (années)", min_value=1, max_value=40, step=1, key="holding_period")
             st.date_input("Date de renouvellement hypothécaire (facultatif)", value=None, key="mortgage_renewal_date")
-            st.caption("Elle sert seulement à afficher un rappel local dans vos alertes suivies. Aucun courriel n’est envoyé.")
+            st.caption("Elle sert à afficher un rappel vérifiable dans vos alertes suivies. Vous pouvez autoriser les avis par courriel séparément dans Mon compte.")
             st.caption("Les projections utilisent uniquement les taux que vous saisissez. Elles ne prévoient pas le marché ni une valeur future.")
         st.button("Réinitialiser les chiffres", on_click=reset_analysis, type="secondary", key="reset_analysis")
 
@@ -1592,6 +1593,17 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                     "property_name": property_name.strip(),
                 }
                 st.success("Dossier, scénarios et tests de résistance sauvegardés dans Mes propriétés.")
+                # A previously followed dossier may gain a new factual alert
+                # when this immutable snapshot is saved. The service reloads
+                # ownership and consent from SQLite and is rerun-safe.
+                if can_use(current_user(), "alerts"):
+                    tracked = dossier_fingerprint(current_user()["id"], property_name) in tracked_dossier_fingerprints(
+                        current_user()["id"], DATABASE_PATH
+                    )
+                    if tracked:
+                        delivery = deliver_alerts_for_user(current_user()["id"], DATABASE_PATH)
+                        if delivery.status == "sent":
+                            st.info("Un avis générique par courriel a été envoyé. Le détail reste dans Mes propriétés.")
         saved = st.session_state.get(LAST_SAVED_ANALYSIS_KEY, {})
         if (
             isinstance(saved, dict)
@@ -1611,11 +1623,14 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                         st.error("Le dossier sauvegardé n’est plus disponible dans votre espace.")
                     else:
                         st.success("Suivi activé. Les alertes Premium liront seulement les changements vérifiables de ce dossier.")
+                        delivery = deliver_alerts_for_user(current_user()["id"], DATABASE_PATH)
+                        if delivery.status == "sent":
+                            st.info("Un avis générique par courriel a été envoyé. Le détail reste dans Mes propriétés.")
                         st.rerun()
                 if followed:
                     st.caption("Le suivi est actif. Vous pouvez le désactiver dans Mes propriétés.")
             else:
-                st.caption("Le suivi des changements vérifiables est inclus dans l’aperçu Premium. Aucun courriel n’est activé pendant la bêta.")
+                st.caption("Le suivi des changements vérifiables est inclus dans l’aperçu Premium. Les avis par courriel demandent un consentement séparé dans Mon compte.")
     else:
         st.info("Votre analyse reste disponible dans ce brouillon. Créez un espace gratuit pour la conserver, retrouver vos scénarios et y revenir plus tard.")
         create_account, edit_inputs, premium = st.columns(3)

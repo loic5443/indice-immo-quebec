@@ -32,11 +32,11 @@ class AlertsUiTests(unittest.TestCase):
         self.assertIn("Suivi des changements vérifiables", text)
         self.assertNotIn("fragilise le flux", text)
 
-    def test_premium_account_sees_calculable_alert_without_email(self):
+    def test_premium_account_sees_calculable_alert_with_clear_email_consent_copy(self):
         app = self._app("premium")
         self.assertFalse(app.exception)
         self.assertIn("Une hausse de taux fragilise le flux mensuel", [item.value for item in app.subheader])
-        self.assertTrue(any("Aucun courriel" in item.value for item in app.caption))
+        self.assertTrue(any("accord Premium" in item.value for item in app.caption))
 
     def test_empty_premium_tracking_explains_what_is_and_is_not_monitored(self):
         app = AppTest.from_string(

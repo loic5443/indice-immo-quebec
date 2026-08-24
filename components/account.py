@@ -195,7 +195,7 @@ def show_account() -> None:
             if not email_alerts_available:
                 st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
             elif alert_email_readiness() != "ready":
-                st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas encore activée pendant la bêta.")
+                st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas configurée sur ce serveur pour le moment.")
             if email_alerts_available and st.button("Enregistrer mon choix d’alerte", key="save_alert_email_preference", type="primary"):
                 saved = set_alert_email_consent(user["id"], bool(alert_email_consent), DATABASE_PATH)
                 if saved:

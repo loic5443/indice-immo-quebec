@@ -318,7 +318,7 @@ def show_saved_analyses() -> None:
     with action_column:
         st.write("")
         st.button("Créer un nouveau dossier", type="primary", on_click=go_to, args=("Analyser",), key="saved_new_analysis", use_container_width=True)
-    st.caption(f"{followed_count} dossier(s) suivi(s) · Les favoris apparaissent en premier. Le suivi lit uniquement les instantanés sauvegardés et n’envoie aucun courriel pendant la bêta.")
+    st.caption(f"{followed_count} dossier(s) suivi(s) · Les favoris apparaissent en premier. Le suivi lit uniquement les instantanés sauvegardés. Les courriels restent optionnels et exigent votre accord dans Mon compte.")
     if can_use(user, "alerts"):
         overview = _tracking_overview(tracked_analyses)
         st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>SUIVI ACTIF</p><h2>Ce qui mérite votre attention</h2>", unsafe_allow_html=True)
@@ -326,7 +326,7 @@ def show_saved_analyses() -> None:
         all_alerts.metric("Alertes calculables", overview["total"])
         important_alerts.metric("À vérifier", overview["important"])
         updates.metric("Mises à jour", overview["updates"])
-        st.caption("Ces compteurs lisent uniquement vos instantanés suivis. Ils ne prévoient rien et ne déclenchent aucun envoi.")
+        st.caption("Ces compteurs lisent uniquement vos instantanés suivis. Ils ne prévoient rien. Si vous avez activé le consentement courriel, les nouvelles alertes vérifiables peuvent déclencher un avis générique.")
     _show_property_comparator(user, analyses)
     history_by_id = snapshot_positions(analyses)
     st.markdown("<div class='section-space compact-space'></div><h2>Vos dossiers</h2>", unsafe_allow_html=True)

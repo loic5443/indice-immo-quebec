@@ -156,3 +156,17 @@ class SQLiteRepository:
                     "DELETE FROM tracked_dossiers WHERE user_id = ? AND dossier_fingerprint = ?",
                     (user_id, fingerprint),
                 )
+
+    def alert_delivery_user_ids(self) -> list[int]:
+        """Return only opted-in accounts for the local alert worker.
+
+        Email addresses are intentionally not selected here. The delivery
+        service retrieves one address only when an opted-in user's generic
+        notification is actually sent.
+        """
+
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT id FROM users WHERE alert_email_consent = 1 ORDER BY id"
+            ).fetchall()
+        return [int(row["id"]) for row in rows]

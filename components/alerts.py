@@ -5,6 +5,7 @@ import streamlit as st
 from components.sidebar import go_to
 from components.premium_teaser import show_premium_teaser
 from data.database import DATABASE_PATH
+from services.alert_delivery_service import deliver_alerts_for_user
 from services.alert_service import build_calculable_alerts
 from services.analysis_reopen_service import AnalysisReopenAccessError, prepare_reopen_draft
 from services.entitlements_service import can_use
@@ -29,11 +30,18 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
             "</div></div>",
             unsafe_allow_html=True,
         )
-        st.caption("Aucun courriel n’est envoyé pendant la bêta privée.")
+        st.caption("Activez les alertes par courriel dans Mon compte si vous souhaitez recevoir un avis lorsqu’une future alerte vérifiable apparaît.")
         return
     alerts = build_calculable_alerts(analyses)
+    user_id = user.get("id")
+    if isinstance(user_id, int):
+        delivery = deliver_alerts_for_user(user_id, DATABASE_PATH)
+        if delivery.status == "sent":
+            st.success("Un avis par courriel a été envoyé. Le détail reste visible uniquement dans votre espace ImmoRadar.")
+        elif delivery.status == "failed":
+            st.warning("Les alertes sont disponibles ici, mais le courriel n’a pas pu être livré pour le moment.")
     if alerts:
-        st.caption("Alertes calculées à partir de vos instantanés sauvegardés. Aucun courriel n’est envoyé pendant la bêta privée.")
+        st.caption("Alertes calculées à partir de vos instantanés sauvegardés. Avec votre accord Premium, ImmoRadar envoie un avis générique par courriel; les détails restent dans votre espace privé.")
         for alert in alerts:
             with st.container(border=True):
                 label = "À VÉRIFIER" if alert["severity"] == "important" else "MISE À JOUR DISPONIBLE"
@@ -66,4 +74,4 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
         "ImmoRadar ne crée pas de notification à partir d’une supposition.</p></div></div>",
         unsafe_allow_html=True,
     )
-    st.caption("Aucun courriel n’est envoyé pendant la bêta privée.")
+    st.caption("Activez les alertes par courriel dans Mon compte si vous souhaitez recevoir un avis lorsqu’une future alerte vérifiable apparaît.")

@@ -33,11 +33,11 @@ La [méthodologie ImmoValue](IMMOVALUE_METHODOLOGY.md), la [model card](MODEL_CA
 
 ## Alertes factuelles
 
-Le centre d’alertes Premium lit uniquement les instantanés déjà sauvegardés : variation d’ImmoValue avec confiance suffisante, variation du rôle municipal, perte de flux dans le test « Taux +1 point » et rappel de renouvellement hypothécaire lorsqu’une date a été fournie. L’utilisateur active le suivi dossier par dossier dans **Mes propriétés**, ou juste après la première sauvegarde; il peut aussi rouvrir le dossier concerné depuis une alerte. Le choix est local, isolé par compte et ne stocke qu’une empreinte du nom normalisé du dossier. Il ne déclenche aucun appel externe ni courriel pendant la bêta.
+Le centre d’alertes Premium lit uniquement les instantanés déjà sauvegardés : variation d’ImmoValue avec confiance suffisante, variation du rôle municipal, perte de flux dans le test « Taux +1 point » et rappel de renouvellement hypothécaire lorsqu’une date a été fournie. L’utilisateur active le suivi dossier par dossier dans **Mes propriétés**, ou juste après la première sauvegarde; il peut aussi rouvrir le dossier concerné depuis une alerte. Le choix est local, isolé par compte et ne stocke qu’une empreinte du nom normalisé du dossier. Avec un consentement distinct et une livraison Brevo configurée, un avis générique peut être envoyé par courriel sans adresse ni donnée financière. Voir [la politique d’alertes](ALERTES_EMAIL.md).
 
 ## Offre Premium
 
-La page **Premium** distingue le bénéfice immédiat du forfait Gratuit (une estimation ImmoValue complète mensuelle lorsqu’elle est calculable) du suivi continu proposé par Premium : dossiers et instantanés, comparaisons, scénarios, rapports PDF et alertes fondées sur des changements vérifiables. L’accès Premium demeure technique pendant la bêta : aucun paiement, changement de forfait automatique, courriel ou autre transmission externe n’est activé. La liste d’intérêt est une préférence locale, isolée par compte et révocable.
+La page **Premium** distingue le bénéfice immédiat du forfait Gratuit (une estimation ImmoValue complète mensuelle lorsqu’elle est calculable) du suivi continu proposé par Premium : dossiers et instantanés, comparaisons, scénarios, rapports PDF et alertes fondées sur des changements vérifiables. L’accès Premium demeure technique pendant la bêta : aucun paiement ni changement de forfait automatique n’est activé. Les avis par courriel sont optionnels, exigent un consentement séparé et ne contiennent aucune donnée de dossier. La liste d’intérêt est une préférence locale, isolée par compte et révocable.
 
 ## Structure produit actuelle
 
