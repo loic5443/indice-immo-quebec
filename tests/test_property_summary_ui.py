@@ -103,6 +103,20 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertIn("plus élevée ou plus basse", notices)
         self.assertIn("secteur", notices)
 
+    def test_revealed_role_gives_one_clear_next_step_without_calling_it_market_value(self):
+        app = AppTest.from_string(
+            "import components.property_analysis as page\n"
+            "from calculations.real_estate import PropertyInputs\n"
+            "state = page.prepare_address_submission('123 rue Exemple', 'Ville de test', 'H2Z1A4', consent=True)\n"
+            "lookup = {'consent': True, 'matches': [{'total_value': 400000, 'role_year': 2026}]}\n"
+            "inputs = PropertyInputs(price=0, down_payment=0, annual_interest_rate=0, amortization_years=25, municipal_taxes_annual=0, school_taxes_annual=0, insurance_monthly=0, condo_fees_monthly=0, rental_income_monthly=0, other_expenses_monthly=0)\n"
+            "page._show_dossier_summary(state, lookup, inputs, 'Premier acheteur')\n"
+        ).run(timeout=20)
+        messages = "\n".join([item.value for item in app.info] + [item.value for item in app.caption])
+        self.assertIn("Le rôle municipal est révélé", messages)
+        self.assertIn("trois comparables admissibles", messages)
+        self.assertIn("n’est pas un prix de vente", messages)
+
     def test_property_stage_collects_an_optional_asking_price_before_finances(self):
         app = AppTest.from_string(
             "import components.property_analysis as page\n"

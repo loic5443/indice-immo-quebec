@@ -1068,7 +1068,7 @@ def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict 
             if role_match:
                 st.metric("Valeur au rôle municipal", _money(role_match["total_value"] or 0))
                 st.caption(f"Rôle {role_match['role_year']} · MAMH / Données Québec")
-                st.caption("Repère fiscal officiel : il peut différer du prix du marché actuel.")
+                st.caption("Repère fiscal officiel — ce n’est pas un prix de vente ni une estimation marchande.")
             else:
                 st.metric("Valeur au rôle municipal", "Données nécessaires")
                 st.caption("Choisissez une adresse couverte ou poursuivez manuellement.")
@@ -1091,13 +1091,17 @@ def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict 
                 st.metric("Score ImmoRadar", "À calculer")
                 st.caption("Ajoutez les chiffres de votre projet puis lancez l’analyse.")
 
-    if role_match and calculated:
-        orientation = "La valeur municipale et votre analyse sont prêtes. Consultez ensuite les résultats et les vérifications."
-    elif role_match:
-        orientation = "La valeur municipale est disponible. Ajoutez vos chiffres pour comprendre les finances de votre projet."
-    else:
-        orientation = "Ajoutez ou choisissez une propriété pour révéler les renseignements publics disponibles, puis complétez vos chiffres."
-    st.info(orientation)
+    with st.container(border=True):
+        st.markdown("### La prochaine étape utile")
+        if role_match and calculated and immovalue:
+            st.success("Votre dossier contient maintenant un repère fiscal, une estimation ImmoValue et vos résultats financiers. Consultez la synthèse, puis sauvegardez-le si vous voulez y revenir.")
+        elif role_match and calculated:
+            st.info("Vos chiffres financiers sont calculés. Pour comparer un prix demandé à une estimation de marché, ajoutez ensuite trois ventes comparables dont vous confirmez la provenance.")
+        elif role_match:
+            st.info("Le rôle municipal est révélé. Ajoutez maintenant les chiffres que vous connaissez pour comprendre les finances de votre projet. ImmoValue restera distincte et ne sera proposée qu’avec trois comparables admissibles.")
+        else:
+            st.info("Choisissez une adresse couverte ou poursuivez manuellement. Vous pouvez ensuite ajouter vos chiffres pour calculer l’analyse financière.")
+        st.caption("Le prix demandé, si vous l’avez, sert seulement à comparer votre point de départ avec ImmoValue lorsqu’elle est produite. Il n’est jamais remplacé automatiquement par la valeur au rôle.")
 
 
 def _show_visible_stage_progress(active_stage: int) -> None:
