@@ -108,6 +108,7 @@ ADDRESS_LOCAL_SELECTED_KEY = "address_form_local_selected"
 ADDRESS_AUTO_SYNC_PENDING_KEY = "address_form_auto_sync_pending"
 ADDRESS_AUTO_SYNC_STATUS_KEY = "address_form_auto_sync_status"
 ADDRESS_AERIAL_IMAGE_KEY = "address_form_aerial_image"
+ADDRESS_ENRICHMENT_KEY = "address_form_official_enrichment"
 ANALYSIS_REOPEN_PENDING_KEY = "analysis_reopen_pending"
 LAST_SAVED_ANALYSIS_KEY = "last_saved_analysis"
 MAX_ADDRESS_SUGGESTIONS = 6
@@ -211,6 +212,7 @@ def _address_state_for_current_user() -> AddressFormState:
         st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
         st.session_state.pop(ADDRESS_RESOLUTION_KEY, None)
         st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+        st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
         _clear_address_suggestions()
     # Anonymous sessions use ``None`` as their owner id.  Test key presence,
     # not only equality, or a fresh anonymous session would skip its first
@@ -240,6 +242,7 @@ def _address_state_for_current_user() -> AddressFormState:
         st.session_state[ADDRESS_HYDRATE_KEY] = True
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
         st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+        st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
         _clear_address_suggestions()
     state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
     # The Accueil hand-off must work even when this anonymous session already
@@ -254,6 +257,7 @@ def _address_state_for_current_user() -> AddressFormState:
         st.session_state[ADDRESS_HYDRATE_KEY] = True
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
         st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+        st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
         _clear_address_suggestions()
     if st.session_state.pop(ADDRESS_HYDRATE_KEY, False):
         _hydrate_address_widgets(state)
@@ -342,6 +346,7 @@ def _edit_address_field(field: str) -> None:
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     st.session_state.pop(ADDRESS_AUTO_SYNC_PENDING_KEY, None)
     st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+    st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
 
 
 def _set_address_editor_street(value: str) -> None:
@@ -374,6 +379,7 @@ def _set_address_editor_street(value: str) -> None:
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     st.session_state.pop(ADDRESS_AUTO_SYNC_PENDING_KEY, None)
     st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+    st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
 
 
 def _street_query_matches_selection(query: str, selected: str) -> bool:
@@ -569,6 +575,64 @@ def _remember_aerial_image(selected: AddressSuggestion, consent: bool) -> None:
         "acquisition_year": response.acquisition_year,
         "message": response.message,
     }
+
+
+def _refresh_selected_local_enrichment() -> None:
+    """Complete one already-selected local role after an app reload.
+
+    A local role deliberately remains useful even if it has no postal code.
+    When the person already consented, make one idempotent MRNF enrichment
+    attempt so a server reload never forces them to type or select again.
+    """
+
+    state = st.session_state.get(ADDRESS_STATE_KEY)
+    if not isinstance(state, AddressFormState) or not state.valid or not state.address:
+        return
+    if state.metadata.get("official_source") != "role" or not state.values.get("consent"):
+        return
+    signature = (state.address.street, state.address.city, state.address.postal_code)
+    if st.session_state.get(ADDRESS_ENRICHMENT_KEY) == signature:
+        return
+    st.session_state[ADDRESS_ENRICHMENT_KEY] = signature
+    selected = AddressSuggestion(
+        street=state.address.street,
+        city=state.address.city,
+        postal_code=state.address.postal_code,
+        unit=state.address.unit,
+        label="",
+        source="role",
+    )
+    enriched = _enrich_local_suggestion(selected, True)
+    if enriched is None:
+        return
+    values = dict(state.values)
+    values.update(
+        {
+            "street": enriched.street or values["street"],
+            "city": enriched.city or values["city"],
+            "postal": enriched.postal_code or values["postal"],
+        }
+    )
+    updated = submit_address_form(
+        values["street"], values["city"], values["postal"], values["unit"], True,
+        allow_missing_postal=not bool(values["postal"]),
+        metadata={"official_source": "role", "postal_optional": not bool(values["postal"])},
+    )
+    if not updated.valid:
+        return
+    st.session_state[ADDRESS_STATE_KEY] = updated
+    st.session_state[ADDRESS_ENRICHMENT_KEY] = (
+        updated.address.street,
+        updated.address.city,
+        updated.address.postal_code,
+    )
+    st.session_state[ADDRESS_EDITOR_STREET_KEY] = updated.values["street"]
+    st.session_state[ADDRESS_STREET_INPUT_KEY] = updated.values["street"]
+    st.session_state[ADDRESS_WIDGET_KEYS["city"]] = updated.values["city"]
+    st.session_state[ADDRESS_WIDGET_KEYS["postal"]] = updated.values["postal"]
+    st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(updated)
+    _remember_aerial_image(enriched, True)
+    _persist_address_draft(updated)
 
 
 def _on_address_city_change() -> None:
@@ -1155,6 +1219,8 @@ def show_property_analysis() -> None:
     if reopen_notice:
         st.success(reopen_notice)
     address_state = _address_state_for_current_user()
+    _refresh_selected_local_enrichment()
+    address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)
     with st.expander("Commencer par une adresse", expanded=True):
         st.checkbox(
             "J’accepte qu’ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",

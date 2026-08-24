@@ -331,6 +331,28 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
         self.assertFalse(any("code postal n’est pas publié" in item.value for item in app.info))
 
+    def test_reloaded_local_selection_completes_postal_once_without_reselection(self):
+        """A consented role selection survives a reload and completes safely."""
+
+        source = (
+            "from pathlib import Path\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "from services.address_form_service import submit_address_form\n"
+            f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
+            "st.session_state.setdefault('address_form_owner', None)\n"
+            "st.session_state.setdefault('address_form_state', submit_address_form('123 rue Exemple', 'Ville-exemple', '', consent=True, allow_missing_postal=True, metadata={'official_source':'role','postal_optional':True}))\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "page._enrich_local_suggestion = lambda *_: page.AddressSuggestion('123 Rue Exemple', 'Ville-exemple', 'H2X 1Y4', '', '123 Rue Exemple · Ville-exemple · H2X 1Y4', longitude=-73.57, latitude=45.50)\n"
+            "page.fetch_aerial_image = lambda *_: type('Aerial', (), {'status':'unavailable','image_bytes':None,'mime_type':'image/png','acquisition_year':None,'message':''})()\n"
+            "page.show_property_analysis()\n"
+        )
+        app = AppTest.from_string(source).run(timeout=20)
+        self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        app.run(timeout=20)
+        self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
+
     def test_street_only_submission_keeps_city_postal_and_consent_canonical(self):
         app = self._app()
         app.session_state["address_form_editor_street"] = "123 rue Exemple"

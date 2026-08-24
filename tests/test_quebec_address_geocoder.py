@@ -48,6 +48,16 @@ MRNF_MAGIC_KEY_CANDIDATE_PAYLOAD = {
     ]
 }
 
+MRNF_COMPACT_POSTAL_FALLBACK_PAYLOAD = {
+    "candidates": [
+        {
+            "address": "21 rue Publique, Ville-exemple H2X1Y4",
+            "location": {"x": -73.57, "y": 45.50},
+            "attributes": {"ZIP": "H2X1Y4", "City": "Ville-exemple"},
+        }
+    ]
+}
+
 
 class QuebecAddressGeocoderTests(unittest.TestCase):
     def setUp(self):
@@ -141,6 +151,16 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
 
         self.assertIsNotNone(resolved)
         self.assertEqual((resolved.street, resolved.city, resolved.postal_code), ("123 rue Exemple", "Ville-exemple", "H2X 1Y4"))
+
+    def test_compact_postal_in_mrnf_display_address_does_not_leak_city_into_street(self):
+        """A compact official postal code must still strip the trailing city."""
+
+        selected = AddressSuggestion("", "", "", "", "21 rue Publique, Ville-exemple H2X1Y4", "opaque-key")
+        resolved = resolve_suggestion(selected, True, fetch_json=lambda _: MRNF_COMPACT_POSTAL_FALLBACK_PAYLOAD)
+
+        self.assertIsNotNone(resolved)
+        self.assertEqual((resolved.street, resolved.city, resolved.postal_code), ("21 rue Publique", "Ville-exemple", "H2X 1Y4"))
+        self.assertEqual((resolved.longitude, resolved.latitude), (-73.57, 45.50))
 
     def test_selected_option_is_not_resolved_without_consent(self):
         selected = AddressSuggestion("", "", "", "", "123 rue Exemple, Ville-exemple H2X1Y4", "opaque-key")

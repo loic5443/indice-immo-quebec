@@ -165,7 +165,12 @@ def _candidate_to_suggestion(candidate: Any) -> AddressSuggestion | None:
         street = _clean_text(candidate.get("address"))
         if city:
             city_tail = re.escape(city)
-            postal_tail = re.escape(postal_code) if postal_code else r"[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d"
+            # The display address may use a compact postal code while the
+            # validated attribute is normalized with a space (``A1A 1A1``).
+            # Match both forms before removing MRNF's trailing locality;
+            # otherwise a city leaks into ``street`` and the exact local
+            # selection can no longer be enriched safely.
+            postal_tail = r"[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d"
             street = re.sub(rf"\s*,\s*{city_tail}(?:\s+{postal_tail})?\s*$", "", street, flags=re.IGNORECASE)
         street = re.sub(r"\s+[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d\s*$", "", street, flags=re.IGNORECASE).strip(" ,")
     if not street:
