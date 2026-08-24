@@ -35,6 +35,32 @@ class MarketsUiTests(unittest.TestCase):
         text = " ".join(item.value for item in app.info)
         self.assertIn("ne sont pas des prix de vente", text)
 
+    def test_available_comparison_has_one_official_indicator_selector(self):
+        rows = [
+            {"indicator_code": code, "municipality_name": municipality, "value": value, "year": 2025}
+            for municipality, multiplier in (("Montréal", 2), ("Québec", 1))
+            for code, value in (
+                ("population", 100 * multiplier),
+                ("uniformized_residential_assessment_average", 200_000 * multiplier),
+                ("uniformized_property_wealth", 300_000 * multiplier),
+                ("uniformized_property_wealth_per_unit", 400_000 * multiplier),
+            )
+        ]
+        app = AppTest.from_string(
+            "import components.markets as page\n"
+            "original_municipalities, original_comparison = page.municipalities, page.comparison\n"
+            "try:\n"
+            "    page.municipalities = lambda _database, _query='': ['Montréal', 'Québec']\n"
+            f"    page.comparison = lambda *_args: {{'available': True, 'year': 2025, 'rows': {rows!r}, 'missing': []}}\n"
+            "    page.show_markets()\n"
+            "finally:\n"
+            "    page.municipalities, page.comparison = original_municipalities, original_comparison\n"
+        ).run(timeout=20)
+        app.multiselect(key="municipal_selected").set_value(["Montréal", "Québec"]).run(timeout=20)
+        self.assertEqual(app.selectbox(key="municipal_indicator_view").value, "population")
+        self.assertTrue(any("Visualisation des données officielles" in item.value for item in app.caption))
+        self.assertEqual(list(app.exception), [])
+
 
 if __name__ == "__main__":
     unittest.main()
