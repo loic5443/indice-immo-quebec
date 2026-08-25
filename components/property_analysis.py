@@ -46,6 +46,7 @@ from services.quebec_role_admin_service import territory_for_code, territory_for
 from services.quebec_role_auto_sync import (
     AutoSyncResult,
     municipal_coverage_status,
+    municipal_coverage_status_for_territory,
     synchronize_selected_municipality,
     synchronize_selected_territory,
 )
@@ -752,11 +753,17 @@ def _show_municipal_coverage_hint() -> None:
         return
     if st.session_state.get(ADDRESS_MANUAL_MODE_KEY, False):
         return
+    state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+    territory_code = str(state.metadata.get("territory_code") or "") if isinstance(state, AddressFormState) else ""
     city = useful_query(st.session_state.get(ADDRESS_WIDGET_KEYS["city"], ""))
-    if not city:
+    if not territory_code and not city:
         return
     try:
-        status = municipal_coverage_status(DATABASE_PATH, city)["status"]
+        coverage = (
+            municipal_coverage_status_for_territory(DATABASE_PATH, territory_code)
+            if territory_code else municipal_coverage_status(DATABASE_PATH, city)
+        )
+        status = coverage["status"]
     except Exception:
         # A local cache issue must never block the manual path or expose a
         # city name in a technical diagnostic.

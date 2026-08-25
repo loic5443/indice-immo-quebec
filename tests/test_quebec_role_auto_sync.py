@@ -12,6 +12,7 @@ from streamlit.testing.v1 import AppTest
 from services.quebec_role_auto_sync import (
     AutoSyncResult,
     municipal_coverage_status,
+    municipal_coverage_status_for_territory,
     resolve_official_territory,
     resolve_official_territory_code,
     synchronize_selected_municipality,
@@ -112,6 +113,8 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
         self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "sync_available")
         self.assertEqual(municipal_coverage_status(self.db, "Ville inconnue")["status"], "manual")
+        self.assertEqual(municipal_coverage_status_for_territory(self.db, "01023")["status"], "sync_available")
+        self.assertEqual(municipal_coverage_status_for_territory(self.db, "99999")["status"], "manual")
 
     def test_stale_official_index_is_replaced_before_resolving_a_new_municipality(self):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)

@@ -298,6 +298,19 @@ def municipal_coverage_status(database_path: Path | str, municipality: str) -> d
     """
 
     entry = _index_entry(database_path, municipality)
+    return _coverage_status_for_entry(database_path, entry)
+
+
+def municipal_coverage_status_for_territory(database_path: Path | str, territory_code: str) -> dict[str, str]:
+    """Describe one exact selected RQA territory without a network request."""
+
+    entry = _index_entry_for_territory(database_path, territory_code)
+    return _coverage_status_for_entry(database_path, entry)
+
+
+def _coverage_status_for_entry(database_path: Path | str, entry: dict | None) -> dict[str, str]:
+    """Return a categorical local coverage state for one official index entry."""
+
     if entry is None:
         return {"status": "manual", "territory_code": ""}
     territory = entry["territory_code"]
