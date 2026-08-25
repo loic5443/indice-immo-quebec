@@ -157,6 +157,7 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
             "page.show_property_analysis()\n"
         )
         with (
+            patch.object(page, "DATABASE_PATH", self.db),
             patch.object(page, "suggest_addresses", return_value=SuggestionResponse("ok", (suggestion,))),
             patch.object(page, "resolve_suggestion", side_effect=lambda item, _: item),
             patch.object(

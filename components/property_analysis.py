@@ -61,6 +61,11 @@ from services.quebec_address_geocoder import (
     suggest_addresses,
     useful_query,
 )
+from services.quebec_address_repository import (
+    SOURCE_ID as RQA_SOURCE_ID,
+    present_rqa_text,
+    suggest_rqa_addresses,
+)
 from services.quebec_aerial_imagery import SOURCE_LABEL as AERIAL_SOURCE_LABEL, fetch_aerial_image
 from domain.address import normalize_canadian_postal_code
 from services.diagnostics_service import source_enabled
@@ -265,7 +270,7 @@ def _address_state_for_current_user() -> AddressFormState:
     # public record. It never calls the external geocoder again.
     if (
         state.valid
-        and state.metadata.get("official_source") == "role"
+        and state.metadata.get("official_source") in {"role", "rqa"}
         and ADDRESS_LOOKUP_KEY not in st.session_state
     ):
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup_fields(
@@ -297,7 +302,7 @@ def _queue_auto_role_sync(state: AddressFormState) -> None:
     if not state.valid or not state.address or not state.values.get("consent"):
         return
     # An imported local-role match is already authoritative; never redownload it.
-    if state.metadata.get("official_source") == "role":
+    if state.metadata.get("official_source") in {"role", "rqa"}:
         return
     st.session_state[ADDRESS_AUTO_SYNC_PENDING_KEY] = {"street": state.address.street, "city": state.address.city}
 
@@ -361,7 +366,7 @@ def _set_address_editor_street(value: str) -> None:
     # the selected street, but still invalidate it for a genuinely different
     # address typed by the person.
     if (
-        state.metadata.get("official_source") in {"role", "external"}
+        state.metadata.get("official_source") in {"role", "rqa", "external"}
         and _street_query_matches_selection(value, current_street)
     ):
         st.session_state[ADDRESS_EDITOR_STREET_KEY] = current_street
@@ -418,17 +423,42 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
         # A local diagnostic-store problem must never prevent manual analysis
         # and must not generate an address-bearing diagnostic.
         enabled = False
-    local = [
+    role_suggestions = [
         AddressSuggestion(
             street=row["street"], city=row["city"], postal_code=row["postal_code"],
             unit=row["unit"], label=" · ".join(part for part in (row["street"], row["city"]) if part), source="role",
         )
         for row in suggest_role_units(DATABASE_PATH, query, limit=MAX_ADDRESS_SUGGESTIONS)
     ]
+    try:
+        rqa_enabled = source_enabled(RQA_SOURCE_ID, DATABASE_PATH)
+    except Exception:
+        rqa_enabled = False
+    rqa_suggestions = [
+        AddressSuggestion(
+            street=" ".join(part for part in (str(row.get("civic_number") or ""), present_rqa_text(row.get("street_name"))) if part),
+            city=present_rqa_text(row.get("municipality")),
+            postal_code=str(row.get("postal_code") or ""),
+            unit=str(row.get("unit") or ""),
+            label=" · ".join(
+                part for part in (
+                    " ".join(part for part in (str(row.get("civic_number") or ""), present_rqa_text(row.get("street_name"))) if part),
+                    f"Unité {str(row.get('unit') or '')}" if str(row.get("unit") or "") else "",
+                    present_rqa_text(row.get("municipality")),
+                    str(row.get("postal_code") or ""),
+                ) if part
+            ),
+            source="rqa",
+            longitude=row.get("longitude") if isinstance(row.get("longitude"), (int, float)) else None,
+            latitude=row.get("latitude") if isinstance(row.get("latitude"), (int, float)) else None,
+        )
+        for row in suggest_rqa_addresses(DATABASE_PATH, query, limit=MAX_ADDRESS_SUGGESTIONS)
+    ] if rqa_enabled else []
+    # Keep a municipal-role result linked to its public values, while an
+    # equivalent RQA entry can fill its official postal code and coordinates.
+    local = _merge_address_suggestions((), [*role_suggestions, *rqa_suggestions])
     if local:
-        # Do not delay a real, local municipal-role match behind the external
-        # type-ahead service. Selection can still perform one consented MRNF
-        # enrichment only when its postal code is absent.
+        # Do not delay a local official address behind the network type-ahead.
         response = SuggestionResponse("ok", tuple(local[:MAX_ADDRESS_SUGGESTIONS]))
         st.session_state[ADDRESS_SUGGESTIONS_KEY] = response
         st.session_state[ADDRESS_SUGGESTION_QUERY_KEY] = query
@@ -588,7 +618,7 @@ def _refresh_selected_local_enrichment() -> None:
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if not isinstance(state, AddressFormState) or not state.valid or not state.address:
         return
-    if state.metadata.get("official_source") != "role" or not state.values.get("consent"):
+    if state.metadata.get("official_source") not in {"role", "rqa"} or not state.values.get("consent"):
         return
     signature = (state.address.street, state.address.city, state.address.postal_code)
     if st.session_state.get(ADDRESS_ENRICHMENT_KEY) == signature:
@@ -600,7 +630,7 @@ def _refresh_selected_local_enrichment() -> None:
         postal_code=state.address.postal_code,
         unit=state.address.unit,
         label="",
-        source="role",
+        source=str(state.metadata.get("official_source")),
     )
     enriched = _enrich_local_suggestion(selected, True)
     if enriched is None:
@@ -616,7 +646,7 @@ def _refresh_selected_local_enrichment() -> None:
     updated = submit_address_form(
         values["street"], values["city"], values["postal"], values["unit"], True,
         allow_missing_postal=not bool(values["postal"]),
-        metadata={"official_source": "role", "postal_optional": not bool(values["postal"])},
+        metadata={"official_source": state.metadata.get("official_source"), "postal_optional": not bool(values["postal"])},
     )
     if not updated.valid:
         return
@@ -717,6 +747,11 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     # can enrich it with a postal code but failure must not remove the role.
     if selected.source == "role":
         resolved = _enrich_local_suggestion(selected, consent) or selected
+    elif selected.source == "rqa":
+        # RQA is already a structured official address. Keep it even when
+        # enrichment is unavailable, but use MRNF after a consented click if
+        # the official RQA row omitted its postal code.
+        resolved = _enrich_local_suggestion(selected, consent) or selected
     else:
         resolved = resolve_suggestion(selected, consent)
         if resolved is None:
@@ -751,7 +786,7 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     )
     metadata = {
         "official_source": selected.source,
-        "postal_optional": selected.source == "role" and not bool(resolved.postal_code),
+        "postal_optional": selected.source in {"role", "rqa"} and not bool(resolved.postal_code),
     }
     selected_state = submit_address_form(
         values["street"],
@@ -824,7 +859,7 @@ def _submit_address_lookup() -> None:
     postal = st.session_state.get(ADDRESS_WIDGET_KEYS["postal"], "")
     consent = bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False))
     current_state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
-    local_selection = bool(current_state.metadata.get("official_source") == "role")
+    local_selection = bool(current_state.metadata.get("official_source") in {"role", "rqa"})
     aerial_candidate: AddressSuggestion | None = None
     st.session_state.pop(ADDRESS_RESOLUTION_KEY, None)
     # A copied address from Accueil often has no separate city/postal fields.
@@ -1123,7 +1158,7 @@ def _hydrate_dossier_name_from_selected_address() -> None:
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if not isinstance(state, AddressFormState) or not state.address:
         return
-    if state.metadata.get("official_source") not in {"role", "external"}:
+    if state.metadata.get("official_source") not in {"role", "rqa", "external"}:
         return
     address = state.address
     st.session_state["workflow_property_name"] = ", ".join(part for part in (address.street, address.city) if part)
@@ -1266,7 +1301,7 @@ def show_property_analysis() -> None:
             st.caption("Mode manuel actif : aucune recherche externe n’est effectuée.")
         else:
             st.caption("Les suggestions apparaissent automatiquement pendant la saisie.")
-            st.caption("La couverture des rôles municipaux officiels n’est pas encore complète pour tout le Québec. Si aucun rôle n’est disponible, vous pouvez poursuivre manuellement.")
+            st.caption("Les suggestions d’adresses couvrent le Québec grâce au répertoire public local. La valeur au rôle municipal dépend toutefois de la disponibilité officielle de chaque municipalité; vous pouvez toujours poursuivre manuellement.")
         _show_municipal_coverage_hint()
         resolution = st.session_state.get(ADDRESS_RESOLUTION_KEY)
         if isinstance(resolution, SuggestionResponse):
@@ -1289,7 +1324,7 @@ def show_property_analysis() -> None:
         # that transient blank overwrite a verified public selection.
         if (
             current_state.valid
-            and current_state.metadata.get("official_source") in {"role", "external"}
+            and current_state.metadata.get("official_source") in {"role", "rqa", "external"}
             and not useful_query(editor_street)
         ):
             editor_street = selected_street
@@ -1298,7 +1333,7 @@ def show_property_analysis() -> None:
         current_query = useful_query(editor_street)
         if (
             current_state.valid
-            and current_state.metadata.get("official_source") in {"role", "external"}
+            and current_state.metadata.get("official_source") in {"role", "rqa", "external"}
             and useful_query(editor_street) == useful_query(selected_street)
         ):
             _clear_address_suggestions()
@@ -1316,8 +1351,10 @@ def show_property_analysis() -> None:
                 sources = {suggestion.source for suggestion in suggestion_response.suggestions}
                 if sources == {"role"}:
                     st.caption("Source : rôles municipaux officiels synchronisés · résultats publics, non enregistrés automatiquement.")
-                elif "role" in sources:
-                    st.caption(f"Sources : {SOURCE_LABEL} et rôles municipaux officiels synchronisés · résultats publics, non enregistrés automatiquement.")
+                elif sources == {"rqa"}:
+                    st.caption("Source : MRNF — Référentiel québécois des adresses · résultats publics, non enregistrés automatiquement.")
+                elif "role" in sources or "rqa" in sources:
+                    st.caption(f"Sources : {SOURCE_LABEL}, Référentiel québécois des adresses et rôles municipaux officiels synchronisés · résultats publics, non enregistrés automatiquement.")
                 else:
                     st.caption(f"Source : {SOURCE_LABEL} · résultats publics, non enregistrés automatiquement.")
                 # The live component opens a list while typing. Keep an

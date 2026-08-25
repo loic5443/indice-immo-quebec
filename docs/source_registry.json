@@ -22,7 +22,7 @@
       "source_id": "quebec_city_market_indicators",
       "name": "Indicateurs de marché par ville du Québec",
       "owner": "À confirmer",
-      "status": "deferred",
+      "status": "integrated",
       "classification": "observed",
       "geography": "Québec",
       "metrics": ["average_price", "annual_variation", "rental_yield"],
@@ -44,11 +44,11 @@
       "metrics": ["municipal_number", "unit", "street", "municipality", "postal_code", "latitude", "longitude"],
       "official_url": "https://www.donneesquebec.ca/recherche/dataset/referentiel-quebecois-des-adresses",
       "human_url": "https://www.donneesquebec.ca/recherche/dataset/referentiel-quebecois-des-adresses",
-      "license_summary": "CC BY 4.0 annoncée par la fiche officielle. Source candidate pour une validation provinciale d’adresse; aucun téléchargement n’est effectué dans cette version.",
+      "license_summary": "CC BY 4.0 annoncée par la fiche officielle. Attribution : MRNF / Données Québec — Référentiel québécois des adresses.",
       "refresh_frequency": "monthly",
-      "retention": "not_applicable",
-      "quality_rules": "À définir avant intégration; ne pas télécharger le jeu complet (environ 596 Mo) sans décision dédiée.",
-      "user_display": "Prévu — validation provinciale d’adresse"
+      "retention": "cache SQLite local public, remplacé atomiquement après une synchronisation explicitement confirmée; l’archive ZIP temporaire est supprimée; jamais suivi par Git.",
+      "quality_rules": "HTTPS sur l’hôte officiel diffusion.mern.gouv.qc.ca, archive maximale 900 Mo, CSV UTF-8 validé, liste blanche de champs d’adresse publics, taille décompressée maximale 6 Go, recherche SQLite limitée à 8 résultats. Aucun propriétaire, valeur d’évaluation, dossier utilisateur ni donnée de télémétrie.",
+      "user_display": "Suggestions publiques locales avec consentement — couverture provinciale des adresses; rôle municipal selon la disponibilité MAMH"
     },
     {
       "source_id": "mrnf_adresses_quebec_geocoder",
