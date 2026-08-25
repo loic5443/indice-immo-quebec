@@ -3,6 +3,7 @@
 import sqlite3
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -87,6 +88,24 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
         self._sync()
         result = self._sync(lambda _: (_ for _ in ()).throw(AssertionError("must use cached territory")))
         self.assertEqual(result.status, "available")
+        self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "available")
+
+    def test_newer_official_index_entry_refreshes_only_that_cached_territory(self):
+        self._sync()
+        with sqlite3.connect(self.db) as connection, connection:
+            connection.execute(
+                "UPDATE role_index_entries SET source_updated_at=? WHERE territory_code='01023'",
+                (datetime.now(timezone.utc).isoformat(),),
+            )
+        calls = []
+
+        def fetcher(_):
+            calls.append(1)
+            return XML
+
+        result = self._sync(fetcher)
+        self.assertEqual(result.status, "synchronized")
+        self.assertEqual(len(calls), 1)
         self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "available")
 
     def test_coverage_status_is_local_only_and_explains_possible_sync(self):

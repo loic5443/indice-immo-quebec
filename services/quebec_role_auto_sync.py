@@ -251,14 +251,36 @@ def resolve_official_territory_code(
 
 
 def _territory_is_available(database_path: Path | str, territory: str) -> bool:
+    """Return whether a local role is active and no older than MAMH's index.
+
+    A cached role remains useful after a failed refresh, but it must not stop
+    a later selected-address action from refreshing when the official index
+    advertises a newer territorial XML.  Missing or malformed index dates are
+    deliberately treated as "unknown, keep cache" rather than causing a
+    download loop.
+    """
+
     with closing(sqlite3.connect(database_path)) as connection:
         row = connection.execute(
-            """SELECT imported.territory_code FROM role_territory_imports imported
+            """SELECT imported.territory_code,imported.synced_at,role_index.source_updated_at
+            FROM role_territory_imports imported
+            JOIN role_index_entries role_index ON role_index.territory_code=imported.territory_code
             LEFT JOIN role_territory_settings settings ON settings.territory_code=imported.territory_code
             WHERE imported.territory_code=? AND COALESCE(settings.enabled,1)=1""",
             (territory,),
         ).fetchone()
-    return bool(row)
+    if not row:
+        return False
+    try:
+        imported_at = datetime.fromisoformat(str(row[1]).replace("Z", "+00:00").replace(" ", "T"))
+        updated_at = datetime.fromisoformat(str(row[2]).replace("Z", "+00:00").replace(" ", "T"))
+        if imported_at.tzinfo is None:
+            imported_at = imported_at.replace(tzinfo=timezone.utc)
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return True
+    return imported_at >= updated_at
 
 
 def _territory_is_disabled(database_path: Path | str, territory: str) -> bool:
