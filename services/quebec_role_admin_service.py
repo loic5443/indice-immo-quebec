@@ -4,7 +4,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from services.beta_service import _admin
-from services.quebec_role_sync import INDEX_URL, parse_index, validate_xml
+from services.quebec_role_sync import INDEX_URL, municipality_key, parse_index, validate_xml
 from services.quebec_role_importer import import_role_xml
 
 MAX_BYTES=20_000_000; TIMEOUT_SECONDS=45; _LOCK=threading.Lock()
@@ -68,8 +68,9 @@ def remove_local_cache(actor,database_path,territory_code):
   c.execute("DELETE FROM role_assessment_units WHERE territory_code=?",(territory_code,));c.execute("DELETE FROM role_territory_imports WHERE territory_code=?",(territory_code,));_log(c,territory_code,"cache_removed","success")
 def territory_for_municipality(database_path, municipality):
  with closing(sqlite3.connect(database_path)) as c:
-  row=c.execute("SELECT i.territory_code FROM role_index_entries i JOIN role_territory_imports r ON r.territory_code=i.territory_code LEFT JOIN role_territory_settings s ON s.territory_code=i.territory_code WHERE lower(i.municipality)=lower(?) AND COALESCE(s.enabled,1)=1",(municipality.strip(),)).fetchone()
- return row[0] if row else None
+  rows=c.execute("SELECT i.territory_code,i.municipality FROM role_index_entries i JOIN role_territory_imports r ON r.territory_code=i.territory_code LEFT JOIN role_territory_settings s ON s.territory_code=i.territory_code WHERE COALESCE(s.enabled,1)=1").fetchall()
+ matches=[row[0] for row in rows if municipality_key(row[1])==municipality_key(municipality)]
+ return matches[0] if len(matches)==1 else None
 def coverage_summary(actor,database_path):
  _admin(actor,database_path)
  with closing(sqlite3.connect(database_path)) as c:

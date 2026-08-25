@@ -14,7 +14,7 @@ class RoleAdminTests(unittest.TestCase):
  def tearDown(self):self.tmp.cleanup()
  def test_admin_refresh_import_and_disable(self):
   self.assertEqual(refresh_index(1,self.db,lambda _:INDEX)['territories'],1);self.assertEqual(territories(1,self.db)['total'],1)
-  self.assertEqual(import_territory(1,self.db,'01023',lambda _:XML)['imported_units'],1);self.assertEqual(territory_for_municipality(self.db,'Les Iles'),'01023')
+  self.assertEqual(import_territory(1,self.db,'01023',lambda _:XML)['imported_units'],1);self.assertEqual(territory_for_municipality(self.db,'Les Iles'),'01023');self.assertEqual(territory_for_municipality(self.db,'Les Îles'),'01023')
   set_territory_enabled(1,self.db,'01023',False);self.assertIsNone(territory_for_municipality(self.db,'Les Iles'))
  def test_structured_street_lookup_uses_safe_public_variants(self):
   refresh_index(1,self.db,lambda _:INDEX)

@@ -12,7 +12,6 @@ import re
 import sqlite3
 import tempfile
 import threading
-import unicodedata
 import urllib.error
 import urllib.request
 from contextlib import closing
@@ -23,7 +22,7 @@ from urllib.parse import urlparse
 
 from services.diagnostics_service import source_enabled
 from services.quebec_role_importer import SUPPORTED_XML_VERSIONS, import_role_xml
-from services.quebec_role_sync import INDEX_URL, parse_index, validate_xml
+from services.quebec_role_sync import INDEX_URL, municipality_key, parse_index, validate_xml
 
 
 SOURCE_ID = "mamh_quebec_assessment_rolls"
@@ -32,6 +31,7 @@ MAX_BYTES = 20_000_000
 TIMEOUT_SECONDS = 15
 COOLDOWN_SECONDS = 300
 LOCK_TTL_SECONDS = 300
+INDEX_REFRESH_MAX_AGE = timedelta(days=7)
 _PROCESS_LOCK = threading.Lock()
 
 
@@ -56,9 +56,7 @@ def _stamp() -> str:
 def _municipality_key(value: str) -> str:
     """Normalize typography only; an index match remains exact and deterministic."""
 
-    text = " ".join(str(value or "").split()).casefold()
-    text = unicodedata.normalize("NFD", text)
-    return "".join(char for char in text if not unicodedata.combining(char))
+    return municipality_key(value)
 
 
 def _canonical_mamh_url(url: str) -> str:
@@ -166,18 +164,47 @@ def _index_entry(database_path: Path | str, municipality: str) -> dict | None:
     return matches[0] if len(matches) == 1 else None
 
 
-def _refresh_index_if_empty(database_path: Path | str, index_fetcher) -> None:
+def _index_needs_refresh(database_path: Path | str) -> bool:
+    """Refresh the small official catalogue occasionally, never on rendering.
+
+    Role XML files are still requested only for the one municipality selected
+    by the person.  Refreshing this index lets new official territories become
+    eligible without an administrator having to rebuild the local catalogue.
+    """
+
     with closing(sqlite3.connect(database_path)) as connection:
-        existing = connection.execute("SELECT COUNT(*) FROM role_index_entries").fetchone()[0]
-    if existing:
+        count, latest = connection.execute(
+            "SELECT COUNT(*), MAX(index_synced_at) FROM role_index_entries"
+        ).fetchone()
+    if not count or not latest:
+        return True
+    try:
+        refreshed = datetime.fromisoformat(str(latest).replace("Z", "+00:00"))
+        if refreshed.tzinfo is None:
+            refreshed = refreshed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return True
+    return _now() - refreshed >= INDEX_REFRESH_MAX_AGE
+
+
+def _refresh_index_if_needed(database_path: Path | str, index_fetcher) -> None:
+    if not _index_needs_refresh(database_path):
         return
     rows = parse_index(index_fetcher(INDEX_URL))
+    if not rows:
+        raise ValueError("official_index_empty")
     now = _stamp()
     with closing(sqlite3.connect(database_path)) as connection, connection:
+        # Replace the catalogue atomically so a removed or changed official
+        # entry cannot survive as a stale eligible territory.
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("CREATE TEMP TABLE incoming_role_index AS SELECT * FROM role_index_entries WHERE 0")
         connection.executemany(
-            "INSERT OR REPLACE INTO role_index_entries(territory_code,municipality,source_url,source_updated_at,index_synced_at) VALUES(?,?,?,?,?)",
+            "INSERT INTO incoming_role_index(territory_code,municipality,source_url,source_updated_at,index_synced_at) VALUES(?,?,?,?,?)",
             [(row["territory_code"], row["municipality"], row["url"], row["updated_at"], now) for row in rows],
         )
+        connection.execute("DELETE FROM role_index_entries")
+        connection.execute("INSERT INTO role_index_entries SELECT * FROM incoming_role_index")
         _record_history(connection, "*", "public_index_refresh", "success", "official_index")
 
 
@@ -185,8 +212,8 @@ def resolve_official_territory(database_path: Path | str, municipality: str, *, 
     """Resolve one municipality only through an exact official-index entry."""
 
     entry = _index_entry(database_path, municipality)
-    if entry is None:
-        _refresh_index_if_empty(database_path, index_fetcher)
+    if entry is None or _index_needs_refresh(database_path):
+        _refresh_index_if_needed(database_path, index_fetcher)
         entry = _index_entry(database_path, municipality)
     return entry
 

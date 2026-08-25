@@ -20,6 +20,10 @@ INDEX = (
     "code géographique,nom du territoire,lien,date de modification\n"
     "01023,Ville test,https://mamh.gouv.qc.ca/role/RM01023.xml,2026-01-01\n"
 ).encode()
+REFRESHED_INDEX = (
+    "code géographique,nom du territoire,lien,date de modification\n"
+    "02048,Ville fraîche,https://mamh.gouv.qc.ca/role/RM02048.xml,2026-08-24\n"
+).encode()
 XML = (
     b'\xef\xbb\xbf<?xml version="1.0"?><RL><VERSION>2.9</VERSION><RLM01A>01023</RLM01A>'
     b'<RLM02A>2026</RLM02A><RLUEx><RL0101><RL0101Ax>12</RL0101Ax>'
@@ -62,6 +66,16 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
         self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "sync_available")
         self.assertEqual(municipal_coverage_status(self.db, "Ville inconnue")["status"], "manual")
+
+    def test_stale_official_index_is_replaced_before_resolving_a_new_municipality(self):
+        resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
+        with sqlite3.connect(self.db) as connection, connection:
+            connection.execute("UPDATE role_index_entries SET index_synced_at='2025-01-01T00:00:00+00:00'")
+        entry = resolve_official_territory(self.db, "Ville fraîche", index_fetcher=lambda _: REFRESHED_INDEX)
+        self.assertEqual(entry["territory_code"], "02048")
+        with sqlite3.connect(self.db) as connection:
+            codes = [row[0] for row in connection.execute("SELECT territory_code FROM role_index_entries")]
+        self.assertEqual(codes, ["02048"])
 
     def test_disabled_territory_is_never_reactivated_or_downloaded(self):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
