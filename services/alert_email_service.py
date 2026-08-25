@@ -44,6 +44,41 @@ def alert_email_readiness(environment: dict[str, str] | None = None) -> str:
     return delivery_status(environment)
 
 
+def alert_email_delivery_status(
+    user_id: int,
+    database_path: Path | str,
+    *,
+    environment: dict[str, str] | None = None,
+) -> dict[str, str | bool | None]:
+    """Return a safe, owner-scoped delivery summary for the account screen.
+
+    The summary deliberately exposes only the opt-in, a categorical provider
+    readiness value and the latest outcome timestamp.  It never returns an
+    email address, alert fingerprint, property, financial value or provider
+    configuration.
+    """
+
+    latest_outcome: str | None = None
+    latest_at: str | None = None
+    try:
+        with closing(SQLiteRepository(database_path)._connect()) as connection:
+            row = connection.execute(
+                """SELECT outcome,created_at FROM alert_delivery_log
+                WHERE user_id=? AND channel='email' ORDER BY id DESC LIMIT 1""",
+                (int(user_id),),
+            ).fetchone()
+    except sqlite3.OperationalError:
+        row = None
+    if row:
+        latest_outcome, latest_at = str(row[0]), str(row[1])
+    return {
+        "consent": has_alert_email_consent(int(user_id), database_path),
+        "readiness": alert_email_readiness(environment),
+        "latest_outcome": latest_outcome,
+        "latest_at": latest_at,
+    }
+
+
 def send_test_alert_email(
     user_id: int,
     database_path: Path | str,

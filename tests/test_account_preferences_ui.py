@@ -25,6 +25,7 @@ original_quota_is_enforced = page.quota_is_enforced
 original_quota_status = page.quota_status
 original_can_use = page.can_use
 original_export_user_data = page.export_user_data
+original_alert_email_delivery_status = page.alert_email_delivery_status
 try:
     page.is_authenticated = lambda: True
     page.current_user = lambda: user
@@ -33,6 +34,7 @@ try:
     page.quota_status = lambda *_args: {"label": "1 estimation complète restante ce mois-ci"}
     page.can_use = lambda *_args: True
     page.export_user_data = lambda *_args: b"{}"
+    page.alert_email_delivery_status = lambda *_args: {"consent": False, "readiness": "ready", "latest_outcome": None, "latest_at": None}
     page.progress = lambda _user_id, _database_path, **values: st.session_state.__setitem__("account_preference_capture", values)
     page.show_account()
 finally:
@@ -44,6 +46,7 @@ finally:
     page.quota_status = original_quota_status
     page.can_use = original_can_use
     page.export_user_data = original_export_user_data
+    page.alert_email_delivery_status = original_alert_email_delivery_status
 '''
         ).run(timeout=20)
 
@@ -77,6 +80,7 @@ finally:
         labels = [item.label for item in app.checkbox]
         self.assertIn("Recevoir les alertes de mes dossiers par courriel (Premium)", labels)
         self.assertIn("Enregistrer mon choix d’alerte", [item.label for item in app.button])
+        self.assertTrue(any("Livraison configurée" in item.value for item in app.caption))
 
 
 if __name__ == "__main__":

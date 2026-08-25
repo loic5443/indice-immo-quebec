@@ -12,7 +12,12 @@ from services.privacy_service import delete_account, export_user_data
 from services.onboarding_service import STEPS, complete, progress
 from services.beta_service import registration_allowed, consume_invitation
 from services.entitlements_service import can_use, quota_is_enforced, quota_status
-from services.alert_email_service import alert_email_readiness, send_test_alert_email, set_alert_email_consent
+from services.alert_email_service import (
+    alert_email_delivery_status,
+    alert_email_readiness,
+    send_test_alert_email,
+    set_alert_email_consent,
+)
 from services.auth_service import validate_login_submission
 from domain.objectives import ANALYSIS_OBJECTIVES
 
@@ -186,6 +191,7 @@ def show_account() -> None:
         with st.container(border=True):
             st.subheader("Alertes par courriel")
             st.write("Choisissez séparément si les alertes vérifiables de vos dossiers peuvent vous être envoyées par courriel.")
+            delivery = alert_email_delivery_status(user["id"], DATABASE_PATH)
             alert_email_consent = st.checkbox(
                 "Recevoir les alertes de mes dossiers par courriel (Premium)",
                 value=bool(st.session_state.get("current_user", user).get("alert_email_consent")),
@@ -194,8 +200,14 @@ def show_account() -> None:
             )
             if not email_alerts_available:
                 st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
-            elif alert_email_readiness() != "ready":
+            elif delivery["readiness"] != "ready":
                 st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas configurée sur ce serveur pour le moment.")
+            elif delivery["latest_outcome"] == "failed":
+                st.warning("Le dernier essai de livraison n’a pas abouti. Vos alertes restent visibles dans ImmoRadar; vous pouvez refaire un test ci-dessous.")
+            elif delivery["latest_outcome"] == "sent":
+                st.caption("Livraison configurée · le dernier essai ou avis a été envoyé avec succès.")
+            else:
+                st.caption("Livraison configurée · aucun avis n’a encore été nécessaire.")
             if email_alerts_available and st.button("Enregistrer mon choix d’alerte", key="save_alert_email_preference", type="primary"):
                 saved = set_alert_email_consent(user["id"], bool(alert_email_consent), DATABASE_PATH)
                 if saved:

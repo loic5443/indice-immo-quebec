@@ -7,7 +7,12 @@ from pathlib import Path
 
 from data.database import authenticate_user, create_user, initialize_database
 from providers.brevo_email import BrevoUnavailable, delivery_status, send_email
-from services.alert_email_service import has_alert_email_consent, send_test_alert_email, set_alert_email_consent
+from services.alert_email_service import (
+    alert_email_delivery_status,
+    has_alert_email_consent,
+    send_test_alert_email,
+    set_alert_email_consent,
+)
 
 
 class AlertEmailServiceTests(unittest.TestCase):
@@ -33,6 +38,24 @@ class AlertEmailServiceTests(unittest.TestCase):
         self.assertTrue(has_alert_email_consent(self.user["id"], self.database_path))
         self.assertTrue(set_alert_email_consent(self.user["id"], False, self.database_path))
         self.assertFalse(has_alert_email_consent(self.user["id"], self.database_path))
+
+    def test_delivery_status_is_owner_scoped_and_contains_no_sensitive_delivery_data(self):
+        environment = {
+            "IMMORADAR_ALERT_DELIVERY_ENABLED": "true",
+            "BREVO_API_KEY": "test-key",
+            "BREVO_SENDER_EMAIL": "sender@example.test",
+        }
+        self.assertTrue(set_alert_email_consent(self.user["id"], True, self.database_path))
+        with sqlite3.connect(self.database_path) as connection, connection:
+            connection.execute(
+                "INSERT INTO alert_delivery_log(user_id,alert_fingerprint,channel,outcome) VALUES(?,?,?,?)",
+                (self.user["id"], "technical-fingerprint", "email", "sent"),
+            )
+        status = alert_email_delivery_status(self.user["id"], self.database_path, environment=environment)
+        self.assertEqual(status["readiness"], "ready")
+        self.assertEqual(status["latest_outcome"], "sent")
+        self.assertTrue(status["consent"])
+        self.assertFalse({"email", "fingerprint", "property", "amount", "secret"} & set(status))
 
     def test_transport_is_inert_without_explicit_local_enablement(self):
         self.assertEqual(delivery_status({}), "disabled")
