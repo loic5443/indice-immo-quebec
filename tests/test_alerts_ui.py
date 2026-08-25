@@ -56,6 +56,12 @@ class AlertsUiTests(unittest.TestCase):
         self.assertIn("aucun changement vérifiable", text)
         self.assertIn("ImmoRadar ne crée pas de notification", text)
 
+    def test_premium_alert_center_links_directly_to_email_preferences(self):
+        app = self._app("premium")
+        self.assertIn("Gérer mes alertes par courriel", [button.label for button in app.button])
+        app.button(key="manage_email_alerts").click().run(timeout=20)
+        self.assertEqual(app.session_state["main_navigation"], "Mon compte")
+
     def test_alert_can_reopen_only_its_own_saved_dossier(self):
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "alerts.sqlite"

@@ -11,6 +11,17 @@ from services.analysis_reopen_service import AnalysisReopenAccessError, prepare_
 from services.entitlements_service import can_use
 
 
+def _show_email_alert_preferences_action(user: dict) -> None:
+    """Give a clear route to the separate, opt-in email preference."""
+
+    if bool(user.get("alert_email_consent")):
+        st.caption("Les avis par courriel sont autorisés pour ce compte. Vous pouvez modifier ce choix dans Mon compte.")
+    else:
+        st.caption("Les alertes restent visibles ici. Les avis par courriel exigent votre accord séparé et peuvent être activés dans Mon compte.")
+    if st.button("Gérer mes alertes par courriel", key="manage_email_alerts", width="stretch"):
+        go_to("Mon compte")
+
+
 def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: bool = False) -> None:
     st.markdown("<div class='section-space compact-space'></div><h2>Centre d’alertes</h2>", unsafe_allow_html=True)
     if not can_use(user, "alerts"):
@@ -30,7 +41,7 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
             "</div></div>",
             unsafe_allow_html=True,
         )
-        st.caption("Activez les alertes par courriel dans Mon compte si vous souhaitez recevoir un avis lorsqu’une future alerte vérifiable apparaît.")
+        _show_email_alert_preferences_action(user)
         return
     alerts = build_calculable_alerts(analyses)
     user_id = user.get("id")
@@ -42,6 +53,7 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
             st.warning("Les alertes sont disponibles ici, mais le courriel n’a pas pu être livré pour le moment.")
     if alerts:
         st.caption("Alertes calculées à partir de vos instantanés sauvegardés. Avec votre accord Premium, ImmoRadar envoie un avis générique par courriel; les détails restent dans votre espace privé.")
+        _show_email_alert_preferences_action(user)
         for alert in alerts:
             with st.container(border=True):
                 label = "À VÉRIFIER" if alert["severity"] == "important" else "MISE À JOUR DISPONIBLE"
@@ -74,4 +86,4 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
         "ImmoRadar ne crée pas de notification à partir d’une supposition.</p></div></div>",
         unsafe_allow_html=True,
     )
-    st.caption("Activez les alertes par courriel dans Mon compte si vous souhaitez recevoir un avis lorsqu’une future alerte vérifiable apparaît.")
+    _show_email_alert_preferences_action(user)
