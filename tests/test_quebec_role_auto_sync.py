@@ -12,7 +12,9 @@ from services.quebec_role_auto_sync import (
     AutoSyncResult,
     municipal_coverage_status,
     resolve_official_territory,
+    resolve_official_territory_code,
     synchronize_selected_municipality,
+    synchronize_selected_territory,
 )
 
 
@@ -55,6 +57,31 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM role_assessment_units WHERE territory_code='01023'").fetchone()[0], 1)
             history = connection.execute("SELECT detail FROM role_sync_history WHERE territory_code='01023'").fetchall()
         self.assertEqual(history[-1][0], "official_xml_validated")
+
+    def test_rqa_geographic_code_syncs_only_the_exact_official_territory(self):
+        result = synchronize_selected_territory(
+            self.db, "01023", True, fetcher=lambda _: XML,
+            index_fetcher=lambda _: INDEX, version_fetcher=lambda _: "2.9",
+        )
+        self.assertEqual((result.status, result.territory_code, result.imported_units), ("synchronized", "01023", 1))
+        with sqlite3.connect(self.db) as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(DISTINCT territory_code) FROM role_territory_imports").fetchone()[0], 1)
+
+    def test_rqa_code_is_validated_against_the_official_index(self):
+        self.assertIsNone(resolve_official_territory_code(self.db, "99999", index_fetcher=lambda _: INDEX))
+        result = synchronize_selected_territory(
+            self.db, "99999", True, fetcher=lambda _: self.fail("an unknown code must not download"),
+            index_fetcher=lambda _: INDEX,
+        )
+        self.assertEqual(result.status, "not_covered")
+
+    def test_rqa_code_never_refreshes_or_downloads_without_consent(self):
+        result = synchronize_selected_territory(
+            self.db, "01023", False,
+            index_fetcher=lambda _: self.fail("no-consent must not fetch the index"),
+            fetcher=lambda _: self.fail("no-consent must not fetch a territory"),
+        )
+        self.assertEqual(result.status, "consent_required")
 
     def test_existing_active_cache_never_downloads_again(self):
         self._sync()

@@ -164,6 +164,26 @@ def _index_entry(database_path: Path | str, municipality: str) -> dict | None:
     return matches[0] if len(matches) == 1 else None
 
 
+def _index_entry_for_territory(database_path: Path | str, territory_code: str) -> dict | None:
+    """Return exactly one official MAMH index row for a geographic code.
+
+    RQA and the MAMH role index both publish geographic territory codes.  The
+    code is accepted only when it is already present as an exact official
+    index entry; a city-name similarity never substitutes for this check.
+    """
+
+    code = str(territory_code or "").strip()
+    if not re.fullmatch(r"\d{5}", code):
+        return None
+    with closing(sqlite3.connect(database_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            "SELECT territory_code,municipality,source_url,source_updated_at FROM role_index_entries WHERE territory_code=?",
+            (code,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def _index_needs_refresh(database_path: Path | str) -> bool:
     """Refresh the small official catalogue occasionally, never on rendering.
 
@@ -215,6 +235,18 @@ def resolve_official_territory(database_path: Path | str, municipality: str, *, 
     if entry is None or _index_needs_refresh(database_path):
         _refresh_index_if_needed(database_path, index_fetcher)
         entry = _index_entry(database_path, municipality)
+    return entry
+
+
+def resolve_official_territory_code(
+    database_path: Path | str, territory_code: str, *, index_fetcher=_official_download,
+) -> dict | None:
+    """Resolve an RQA geographic code only against the official MAMH index."""
+
+    entry = _index_entry_for_territory(database_path, territory_code)
+    if entry is None or _index_needs_refresh(database_path):
+        _refresh_index_if_needed(database_path, index_fetcher)
+        entry = _index_entry_for_territory(database_path, territory_code)
     return entry
 
 
@@ -294,8 +326,15 @@ def _release_lock(database_path: Path | str, territory: str) -> None:
         connection.execute("DELETE FROM role_auto_sync_locks WHERE territory_code=?", (territory,))
 
 
-def synchronize_selected_municipality(database_path: Path | str, municipality: str, consent: bool, *, fetcher=_official_download, index_fetcher=_official_download, version_fetcher=probe_role_xml_version) -> AutoSyncResult:
-    """Safely synchronize at most one exact official territory after consent.
+def _synchronize_entry(
+    database_path: Path | str,
+    entry: dict | None,
+    consent: bool,
+    *,
+    fetcher=_official_download,
+    version_fetcher=probe_role_xml_version,
+) -> AutoSyncResult:
+    """Safely synchronize at most one already-validated official territory.
 
     The return value contains no address or municipality string.  Failures are
     categorical, short-lived (cooldown), and retain a manual-mode fallback.
@@ -305,10 +344,6 @@ def synchronize_selected_municipality(database_path: Path | str, municipality: s
         return AutoSyncResult("consent_required", "Activez la recherche publique ou poursuivez manuellement.")
     if not source_enabled(SOURCE_ID, database_path):
         return AutoSyncResult("source_disabled", "Cette source officielle est désactivée. Vous pouvez poursuivre manuellement.")
-    try:
-        entry = resolve_official_territory(database_path, municipality, index_fetcher=index_fetcher)
-    except Exception:
-        return AutoSyncResult("index_unavailable", "L’index officiel est momentanément indisponible. Vous pouvez poursuivre manuellement.")
     if entry is None:
         return AutoSyncResult("not_covered", "Cette municipalité ne peut pas être reliée avec certitude à un territoire officiel. Vous pouvez poursuivre manuellement.")
     territory = entry["territory_code"]
@@ -360,3 +395,31 @@ def synchronize_selected_municipality(database_path: Path | str, municipality: s
     finally:
         _release_lock(database_path, territory)
         _PROCESS_LOCK.release()
+
+
+def synchronize_selected_municipality(database_path: Path | str, municipality: str, consent: bool, *, fetcher=_official_download, index_fetcher=_official_download, version_fetcher=probe_role_xml_version) -> AutoSyncResult:
+    """Synchronize one municipality after an exact official-index lookup."""
+
+    if not consent:
+        return AutoSyncResult("consent_required", "Activez la recherche publique ou poursuivez manuellement.")
+    try:
+        entry = resolve_official_territory(database_path, municipality, index_fetcher=index_fetcher)
+    except Exception:
+        return AutoSyncResult("index_unavailable", "L’index officiel est momentanément indisponible. Vous pouvez poursuivre manuellement.")
+    return _synchronize_entry(database_path, entry, consent, fetcher=fetcher, version_fetcher=version_fetcher)
+
+
+def synchronize_selected_territory(database_path: Path | str, territory_code: str, consent: bool, *, fetcher=_official_download, index_fetcher=_official_download, version_fetcher=probe_role_xml_version) -> AutoSyncResult:
+    """Synchronize the one RQA-selected territory when its code is official.
+
+    This route is deliberately code-only: a selected RQA row cannot trigger a
+    municipal import through a fuzzy city-name match.
+    """
+
+    if not consent:
+        return AutoSyncResult("consent_required", "Activez la recherche publique ou poursuivez manuellement.")
+    try:
+        entry = resolve_official_territory_code(database_path, territory_code, index_fetcher=index_fetcher)
+    except Exception:
+        return AutoSyncResult("index_unavailable", "L’index officiel est momentanément indisponible. Vous pouvez poursuivre manuellement.")
+    return _synchronize_entry(database_path, entry, consent, fetcher=fetcher, version_fetcher=version_fetcher)

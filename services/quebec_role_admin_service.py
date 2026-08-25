@@ -71,6 +71,13 @@ def territory_for_municipality(database_path, municipality):
   rows=c.execute("SELECT i.territory_code,i.municipality FROM role_index_entries i JOIN role_territory_imports r ON r.territory_code=i.territory_code LEFT JOIN role_territory_settings s ON s.territory_code=i.territory_code WHERE COALESCE(s.enabled,1)=1").fetchall()
  matches=[row[0] for row in rows if municipality_key(row[1])==municipality_key(municipality)]
  return matches[0] if len(matches)==1 else None
+def territory_for_code(database_path, territory_code):
+ """Return an active local role only for one exact official geographic code."""
+ code=str(territory_code or '').strip()
+ if not code.isdigit() or len(code)!=5:return None
+ with closing(sqlite3.connect(database_path)) as c:
+  row=c.execute("SELECT r.territory_code FROM role_territory_imports r JOIN role_index_entries i ON i.territory_code=r.territory_code LEFT JOIN role_territory_settings s ON s.territory_code=r.territory_code WHERE r.territory_code=? AND COALESCE(s.enabled,1)=1",(code,)).fetchone()
+ return row[0] if row else None
 def coverage_summary(actor,database_path):
  _admin(actor,database_path)
  with closing(sqlite3.connect(database_path)) as c:

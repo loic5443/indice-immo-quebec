@@ -38,7 +38,7 @@
       "source_id": "quebec_address_repository",
       "name": "Référentiel québécois des adresses (RQA)",
       "owner": "Gouvernement du Québec",
-      "status": "deferred",
+      "status": "integrated",
       "classification": "observed",
       "geography": "Québec",
       "metrics": ["municipal_number", "unit", "street", "municipality", "postal_code", "latitude", "longitude"],
@@ -47,7 +47,7 @@
       "license_summary": "CC BY 4.0 annoncée par la fiche officielle. Attribution : MRNF / Données Québec — Référentiel québécois des adresses.",
       "refresh_frequency": "monthly",
       "retention": "cache SQLite local public, remplacé atomiquement après une synchronisation explicitement confirmée; l’archive ZIP temporaire est supprimée; jamais suivi par Git.",
-      "quality_rules": "HTTPS sur l’hôte officiel diffusion.mern.gouv.qc.ca, archive maximale 900 Mo, CSV UTF-8 validé, liste blanche de champs d’adresse publics, taille décompressée maximale 6 Go, recherche SQLite limitée à 8 résultats. Aucun propriétaire, valeur d’évaluation, dossier utilisateur ni donnée de télémétrie.",
+      "quality_rules": "HTTPS sur l’hôte officiel diffusion.mern.gouv.qc.ca, archive maximale 900 Mo, CSV UTF-8 validé, liste blanche de champs d’adresse publics, taille décompressée maximale 6 Go, recherche SQLite limitée à 8 résultats. Après consentement, le code géographique RQA doit correspondre exactement à une entrée MAMH avant toute synchronisation d’un seul territoire. Aucun propriétaire, valeur d’évaluation, dossier utilisateur ni donnée de télémétrie.",
       "user_display": "Suggestions publiques locales avec consentement — couverture provinciale des adresses; rôle municipal selon la disponibilité MAMH"
     },
     {

@@ -42,8 +42,13 @@ from services.dossier_tracking_service import (
 )
 from services.address_lookup_service import lookup
 from services.quebec_role_importer import display_role_address,search_role_units,role_street_variants,suggest_role_units
-from services.quebec_role_admin_service import territory_for_municipality
-from services.quebec_role_auto_sync import AutoSyncResult, municipal_coverage_status, synchronize_selected_municipality
+from services.quebec_role_admin_service import territory_for_code, territory_for_municipality
+from services.quebec_role_auto_sync import (
+    AutoSyncResult,
+    municipal_coverage_status,
+    synchronize_selected_municipality,
+    synchronize_selected_territory,
+)
 from services.address_form_service import (
     AddressFormState,
     empty_address_form_state,
@@ -302,9 +307,16 @@ def _queue_auto_role_sync(state: AddressFormState) -> None:
     if not state.valid or not state.address or not state.values.get("consent"):
         return
     # An imported local-role match is already authoritative; never redownload it.
-    if state.metadata.get("official_source") in {"role", "rqa"}:
+    # RQA is a provincial address record, not a role record: its verified
+    # geographic code may still authorize one controlled MAMH import.
+    if state.metadata.get("official_source") == "role":
         return
-    st.session_state[ADDRESS_AUTO_SYNC_PENDING_KEY] = {"street": state.address.street, "city": state.address.city}
+    territory_code = str(state.metadata.get("territory_code") or "")
+    st.session_state[ADDRESS_AUTO_SYNC_PENDING_KEY] = {
+        "street": state.address.street,
+        "city": state.address.city,
+        "territory_code": territory_code,
+    }
 
 
 def _run_queued_auto_role_sync() -> AutoSyncResult | None:
@@ -317,7 +329,12 @@ def _run_queued_auto_role_sync() -> AutoSyncResult | None:
     if pending.get("street") != state.address.street or pending.get("city") != state.address.city:
         return None
     with st.status("Vérification des données officielles", expanded=False) as status:
-        result = synchronize_selected_municipality(DATABASE_PATH, state.address.city, bool(state.values.get("consent")))
+        territory_code = str(pending.get("territory_code") or "")
+        result = (
+            synchronize_selected_territory(DATABASE_PATH, territory_code, bool(state.values.get("consent")))
+            if territory_code
+            else synchronize_selected_municipality(DATABASE_PATH, state.address.city, bool(state.values.get("consent")))
+        )
         if result.status in {"available", "synchronized"}:
             status.update(label="Renseignements disponibles", state="complete")
             st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(state)
@@ -451,6 +468,7 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
             source="rqa",
             longitude=row.get("longitude") if isinstance(row.get("longitude"), (int, float)) else None,
             latitude=row.get("latitude") if isinstance(row.get("latitude"), (int, float)) else None,
+            territory_code=str(row.get("municipality_code") or ""),
         )
         for row in suggest_rqa_addresses(DATABASE_PATH, query, limit=MAX_ADDRESS_SUGGESTIONS)
     ] if rqa_enabled else []
@@ -531,6 +549,7 @@ def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: l
                     source="role",
                     longitude=longitude,
                     latitude=latitude,
+                    territory_code=current.territory_code or suggestion.territory_code,
                 )
     return merged[:MAX_ADDRESS_SUGGESTIONS]
 
@@ -646,7 +665,14 @@ def _refresh_selected_local_enrichment() -> None:
     updated = submit_address_form(
         values["street"], values["city"], values["postal"], values["unit"], True,
         allow_missing_postal=not bool(values["postal"]),
-        metadata={"official_source": state.metadata.get("official_source"), "postal_optional": not bool(values["postal"])},
+        metadata={
+            "official_source": state.metadata.get("official_source"),
+            "postal_optional": not bool(values["postal"]),
+            # Keep the previously selected public RQA code across a rerun so
+            # an interrupted/resumed consented lookup retains its exact
+            # single-territory route.
+            "territory_code": state.metadata.get("territory_code", ""),
+        },
     )
     if not updated.valid:
         return
@@ -738,6 +764,7 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         source=suggestion.get("source", "external"),
         longitude=suggestion.get("longitude") if isinstance(suggestion.get("longitude"), (int, float)) else None,
         latitude=suggestion.get("latitude") if isinstance(suggestion.get("latitude"), (int, float)) else None,
+        territory_code=str(suggestion.get("territory_code") or ""),
     )
     if selected.source == "empty":
         return
@@ -788,6 +815,10 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         "official_source": selected.source,
         "postal_optional": selected.source in {"role", "rqa"} and not bool(resolved.postal_code),
     }
+    if selected.source == "rqa" and selected.territory_code:
+        # Public territory metadata only; it is validated once more against
+        # MAMH before it can authorize a single-territory synchronization.
+        metadata["territory_code"] = selected.territory_code
     selected_state = submit_address_form(
         values["street"],
         values["city"],
@@ -918,6 +949,7 @@ def _official_lookup(state: AddressFormState) -> dict:
         state.address.city,
         state.values["consent"],
         postal_available=not bool(state.metadata.get("postal_optional", False)),
+        territory_code=str(state.metadata.get("territory_code") or ""),
     )
     if result is not None:
         response["message"] = result["message"]
@@ -928,7 +960,14 @@ def _official_lookup(state: AddressFormState) -> dict:
     return response
 
 
-def _official_lookup_fields(street: str, city: str, consent: bool, *, postal_available: bool = True) -> dict:
+def _official_lookup_fields(
+    street: str,
+    city: str,
+    consent: bool,
+    *,
+    postal_available: bool = True,
+    territory_code: str = "",
+) -> dict:
     """Match public role fields without treating municipal data as an estimate."""
 
     response = {
@@ -939,7 +978,11 @@ def _official_lookup_fields(street: str, city: str, consent: bool, *, postal_ava
     }
     if not consent:
         return response
-    territory = territory_for_municipality(DATABASE_PATH, city)
+    # An RQA geographic code is used only after it has been matched exactly
+    # to an active, official MAMH territory.  Manual/external entries retain
+    # the existing exact municipal-name route.
+    territory = territory_for_code(DATABASE_PATH, territory_code) if territory_code else None
+    territory = territory or territory_for_municipality(DATABASE_PATH, city)
     matches = search_role_units(DATABASE_PATH, territory, street) if territory else []
     response.update({
         "coverage": bool(territory),

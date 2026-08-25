@@ -13,7 +13,7 @@ La base locale, les caches et les archives sont exclus de Git. Les recherches re
 
 ## Ce que couvre cette fonction
 
-Le RQA améliore la saisie et la normalisation d’une adresse québécoise. Il ne garantit pas qu’un rôle d’évaluation municipal soit disponible pour chaque municipalité. La valeur au rôle ne peut être montrée que lorsqu’un territoire MAMH compatible est officiellement disponible et synchronisé. Elle reste un repère fiscal, distinct d’une valeur marchande ou d’ImmoValue.
+Le RQA améliore la saisie et la normalisation d’une adresse québécoise. Après une sélection consentie, ImmoRadar valide son code géographique public contre l’index officiel MAMH. Si le territoire est compatible et autorisé, il peut synchroniser **uniquement ce territoire** de façon atomique; sinon, le mode manuel reste disponible. Il ne garantit pas qu’un rôle d’évaluation municipal soit disponible pour chaque municipalité. La valeur au rôle ne peut être montrée que lorsqu’un territoire MAMH compatible est officiellement disponible et synchronisé. Elle reste un repère fiscal, distinct d’une valeur marchande ou d’ImmoValue.
 
 ## Vie privée
 

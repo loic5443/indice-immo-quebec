@@ -53,6 +53,10 @@ class AddressSuggestion:
     # excludes it, so it cannot enter drafts, telemetry or diagnostics.
     longitude: float | None = None
     latitude: float | None = None
+    # The RQA publishes the official municipal geographic code.  It is
+    # transient selection metadata only: it is used to validate a single
+    # MAMH role territory after consent, never for telemetry or display.
+    territory_code: str = ""
 
     def to_dict(self) -> dict[str, str]:
         """Return display fields only; safe for UI assertions and exports."""

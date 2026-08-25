@@ -291,7 +291,7 @@ def suggest_rqa_addresses(database_path: Path | str, query: str, limit: int = MA
     maximum = max(1, min(int(limit), MAX_SUGGESTIONS))
     with closing(sqlite3.connect(database_path)) as connection:
         connection.row_factory = sqlite3.Row
-        columns = "address_text,civic_number,unit,street_name,municipality,postal_code,latitude,longitude"
+        columns = "address_text,civic_number,unit,street_name,municipality,municipality_code,postal_code,latitude,longitude"
         base = (
             " FROM rqa_addresses addresses JOIN rqa_active_import active ON active.import_id=addresses.import_id "
             "WHERE active.singleton=1 AND addresses.active=1 AND "
