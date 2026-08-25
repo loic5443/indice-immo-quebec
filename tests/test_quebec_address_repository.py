@@ -84,6 +84,16 @@ class QuebecAddressRepositoryTests(unittest.TestCase):
             columns = {entry[1] for entry in connection.execute("PRAGMA table_info(rqa_addresses)")}
         self.assertFalse({"owner", "proprietaire", "assessment", "value"} & columns)
 
+    def test_coverage_message_never_claims_a_local_snapshot_before_import(self):
+        import components.property_analysis as page
+
+        with patch.object(page, "DATABASE_PATH", self.db):
+            self.assertIn("n’est pas chargé", page._address_coverage_message())
+        archive(self.snapshot, [row("public-1", "123", "RUE PUBLIQUE", "Ville-Test")])
+        import_rqa_archive(self.snapshot, self.db)
+        with patch.object(page, "DATABASE_PATH", self.db):
+            self.assertIn("couvrent le Québec", page._address_coverage_message())
+
     def test_new_snapshot_switches_atomically_and_invalid_snapshot_preserves_previous(self):
         archive(self.snapshot, [row("old", "10", "RUE PUBLIQUE", "Ville-Test")])
         self.assertEqual(import_rqa_archive(self.snapshot, self.db).status, "ready")

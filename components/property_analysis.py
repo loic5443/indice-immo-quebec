@@ -69,6 +69,7 @@ from services.quebec_address_geocoder import (
 from services.quebec_address_repository import (
     SOURCE_ID as RQA_SOURCE_ID,
     present_rqa_text,
+    rqa_status,
     suggest_rqa_addresses,
 )
 from services.quebec_aerial_imagery import SOURCE_LABEL as AERIAL_SOURCE_LABEL, fetch_aerial_image
@@ -716,6 +717,30 @@ def _on_manual_mode_change() -> None:
     _clear_address_suggestions()
 
 
+def _address_coverage_message() -> str:
+    """Describe the address source actually loaded in this installation.
+
+    The provincial RQA archive is intentionally an explicit local cache.  A
+    new installation may not have imported it yet, so the UI must not claim
+    complete local coverage merely because the source is enabled.
+    """
+
+    try:
+        snapshot = rqa_status(DATABASE_PATH)
+    except Exception:
+        snapshot = {"status": "not_loaded"}
+    if snapshot.get("status") == "ready":
+        return (
+            "Les suggestions d’adresses couvrent le Québec grâce au répertoire public local. "
+            "La valeur au rôle municipal dépend toutefois de la disponibilité officielle de chaque municipalité; "
+            "vous pouvez toujours poursuivre manuellement."
+        )
+    return (
+        "Les suggestions en ligne dépendent du service public MRNF. Le répertoire provincial local n’est pas "
+        "chargé dans cet environnement; vous pouvez toujours saisir l’adresse manuellement."
+    )
+
+
 def _show_municipal_coverage_hint() -> None:
     """Show a local-only, actionable coverage state before a lookup.
 
@@ -1344,7 +1369,7 @@ def show_property_analysis() -> None:
             st.caption("Mode manuel actif : aucune recherche externe n’est effectuée.")
         else:
             st.caption("Les suggestions apparaissent automatiquement pendant la saisie.")
-            st.caption("Les suggestions d’adresses couvrent le Québec grâce au répertoire public local. La valeur au rôle municipal dépend toutefois de la disponibilité officielle de chaque municipalité; vous pouvez toujours poursuivre manuellement.")
+            st.caption(_address_coverage_message())
         _show_municipal_coverage_hint()
         resolution = st.session_state.get(ADDRESS_RESOLUTION_KEY)
         if isinstance(resolution, SuggestionResponse):
