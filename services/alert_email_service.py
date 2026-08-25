@@ -16,8 +16,18 @@ TEST_ALERT_FINGERPRINT = "brevo-email-test-v1"
 
 
 def has_alert_email_consent(user_id: int, database_path: Path | str) -> bool:
-    with closing(SQLiteRepository(database_path)._connect()) as connection:
-        row = connection.execute("SELECT alert_email_consent FROM users WHERE id = ?", (user_id,)).fetchone()
+    """Return a safe default while a temporary or pre-migration DB is absent.
+
+    Account rendering must never fail merely because an isolated UI test (or a
+    startup edge case) has no database available yet.  Absence always means no
+    consent; it never enables email delivery.
+    """
+
+    try:
+        with closing(SQLiteRepository(database_path)._connect()) as connection:
+            row = connection.execute("SELECT alert_email_consent FROM users WHERE id = ?", (user_id,)).fetchone()
+    except sqlite3.Error:
+        return False
     return bool(row and row[0])
 
 

@@ -33,6 +33,13 @@ class AlertEmailServiceTests(unittest.TestCase):
             row = connection.execute("SELECT alert_email_consent, marketing_consent FROM users WHERE id = ?", (self.user["id"],)).fetchone()
         self.assertEqual(row, (0, 0))
 
+    def test_missing_temporary_database_never_assumes_consent(self):
+        """A lightweight account render must degrade safely before DB setup."""
+
+        from services.alert_email_service import has_alert_email_consent
+
+        self.assertFalse(has_alert_email_consent(123, Path(self.temp.name) / "absent.sqlite"))
+
     def test_consent_can_be_withdrawn_immediately(self):
         self.assertTrue(set_alert_email_consent(self.user["id"], True, self.database_path))
         self.assertTrue(has_alert_email_consent(self.user["id"], self.database_path))
