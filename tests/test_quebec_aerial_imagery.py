@@ -4,6 +4,7 @@ from io import BytesIO
 from base64 import b64encode
 from pathlib import Path
 import unittest
+from urllib.parse import parse_qs, urlparse
 
 from PIL import Image, ImageDraw
 
@@ -52,6 +53,24 @@ class QuebecAerialImageryTests(unittest.TestCase):
         self.assertIn("continuer", result.message)
         too_large = fetch_aerial_image(-73.5, 45.5, True, fetch_image=lambda _: (b"x" * (MAX_IMAGE_BYTES + 1), "image/png"))
         self.assertEqual(too_large.status, "unavailable")
+
+    def test_empty_current_coverage_uses_a_recent_official_fallback(self):
+        """A blank 2025 sector may still be covered by the 2024 MRNF layer."""
+
+        blank = BytesIO()
+        Image.new("RGB", (20, 20), "white").save(blank, format="PNG")
+        layers: list[str] = []
+
+        def fetch_by_layer(url: str) -> tuple[bytes, str]:
+            layer = parse_qs(urlparse(url).query)["layers"][0]
+            layers.append(layer)
+            return (blank.getvalue(), "image/png") if len(layers) == 1 else (_image_bytes(), "image/png")
+
+        result = fetch_aerial_image(-73.5, 45.5, True, fetch_image=fetch_by_layer)
+        self.assertEqual(result.status, "available")
+        self.assertEqual(result.acquisition_year, 2024)
+        self.assertEqual(len(layers), 2)
+        self.assertNotEqual(layers[0], layers[1])
 
     def test_invalid_coordinates_never_start_a_request(self):
         result = fetch_aerial_image("not-a-coordinate", 45.5, True, fetch_image=lambda _: self.fail("request must not run"))

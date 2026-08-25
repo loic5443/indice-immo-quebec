@@ -24,8 +24,20 @@ SOURCE_ID = "mrnf_imagerie_orthorectifiee"
 SOURCE_LABEL = "MRNF — Imagerie orthorectifiée du Québec"
 # A current official RGB layer.  The service returns an image only where that
 # acquisition is covered; a missing image deliberately remains unavailable.
-LAYER = "Planification_Suivi_Controle_2025_2025_Planif_Suiv_Cont_20cm_RVB"
-ACQUISITION_YEAR = 2025
+# The MRNF publication is a collection of acquisitions, not a single
+# province-wide photograph.  Try the newest verified public layers first so
+# a sector absent from the current flight can still show a recent official
+# context from a prior acquisition.  This stays deliberately short: a
+# consented selection must never trigger a long series of map requests.
+AERIAL_LAYERS: tuple[tuple[int, str], ...] = (
+    (2025, "Planification_Suivi_Controle_2025_2025_Planif_Suiv_Cont_20cm_RVB"),
+    (2024, "Planification_Suivi_Controle_2024_2024_Planif_Suiv_Cont_20cm_RVB"),
+    (2023, "Planification_Suivi_Controle_2023_2023_Planif_Suiv_Cont_20cm_RVB"),
+)
+# Kept as a compatibility alias for callers and documentation that refer to
+# the newest layer.  The response itself always records the actual year used.
+LAYER = AERIAL_LAYERS[0][1]
+ACQUISITION_YEAR = AERIAL_LAYERS[0][0]
 REQUEST_TIMEOUT_SECONDS = 4.0
 MAX_IMAGE_BYTES = 1_500_000
 IMAGE_WIDTH = 512
@@ -53,7 +65,7 @@ def _valid_coordinate(longitude: object, latitude: object) -> bool:
     return -80.0 <= float(longitude) <= -57.0 and 44.0 <= float(latitude) <= 63.0
 
 
-def _get_map_url(longitude: float, latitude: float) -> str:
+def _get_map_url(longitude: float, latitude: float, layer: str = LAYER) -> str:
     """Build a bounded WMS request. Coordinates do not leave this function."""
 
     # About 230 m × 230 m around the selected civic point: enough property
@@ -63,7 +75,7 @@ def _get_map_url(longitude: float, latitude: float) -> str:
         "service": "WMS",
         "request": "GetMap",
         "version": "1.1.1",
-        "layers": LAYER,
+        "layers": layer,
         "styles": "",
         "srs": "EPSG:4326",
         "bbox": f"{longitude - half_span:.6f},{latitude - half_span:.6f},{longitude + half_span:.6f},{latitude + half_span:.6f}",
@@ -125,12 +137,23 @@ def fetch_aerial_image(
         return AerialImageResponse("consent_required", message="Activez la recherche publique pour afficher une vue aérienne officielle.")
     if not _valid_coordinate(longitude, latitude):
         return AerialImageResponse("unavailable", message="Vue aérienne indisponible : la source publique ne fournit pas de position utilisable.")
-    try:
-        image_bytes, mime_type = (fetch_image or _fetch_image)(_get_map_url(float(longitude), float(latitude)))
-        if mime_type != "image/png" or len(image_bytes) > MAX_IMAGE_BYTES or not _is_useful_image(image_bytes):
-            raise ValueError("unavailable_image")
-        return AerialImageResponse("available", image_bytes=image_bytes, mime_type=mime_type, acquisition_year=ACQUISITION_YEAR)
-    except Exception:
-        # Do not retain endpoint, coordinate or provider details in any UI
-        # error: all remain an internal, one-request failure.
-        return AerialImageResponse("unavailable", message="Vue aérienne officielle indisponible pour cette adresse. Vous pouvez continuer votre analyse.")
+    for acquisition_year, layer in AERIAL_LAYERS:
+        try:
+            image_bytes, mime_type = (fetch_image or _fetch_image)(
+                _get_map_url(float(longitude), float(latitude), layer)
+            )
+        except Exception:
+            # A service failure is not a coverage signal.  Stop immediately
+            # instead of multiplying failing external calls on a rerun.
+            break
+        if mime_type == "image/png" and len(image_bytes) <= MAX_IMAGE_BYTES and _is_useful_image(image_bytes):
+            return AerialImageResponse(
+                "available",
+                image_bytes=image_bytes,
+                mime_type=mime_type,
+                acquisition_year=acquisition_year,
+            )
+    # Do not retain endpoint, coordinate or provider details in any UI
+    # error: all remain an internal, consented request failure or a sector
+    # without a useful public acquisition.
+    return AerialImageResponse("unavailable", message="Vue aérienne officielle indisponible pour cette adresse. Vous pouvez continuer votre analyse.")
