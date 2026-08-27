@@ -1448,7 +1448,8 @@ def show_property_analysis() -> None:
                             width="stretch",
                         )
         address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
-        if not _has_revealed_public_information(address_lookup):
+        manual_mode = bool(st.session_state.get(ADDRESS_MANUAL_MODE_KEY, False))
+        if not _has_revealed_public_information(address_lookup) and not manual_mode:
             st.caption("Après votre consentement, cette action peut d’abord révéler la valeur au rôle municipal; ImmoValue reste une estimation marchande distincte, calculable avec au moins trois comparables autorisés.")
             st.button(
                 "Rechercher et révéler les renseignements disponibles",
@@ -1456,6 +1457,8 @@ def show_property_analysis() -> None:
                 type="primary",
                 on_click=_submit_address_lookup,
             )
+        elif manual_mode:
+            st.caption("Mode manuel : vous pouvez continuer avec vos chiffres sans effectuer de recherche publique.")
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     _run_queued_auto_role_sync()
     address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)

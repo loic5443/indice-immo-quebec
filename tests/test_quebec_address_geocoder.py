@@ -240,3 +240,5 @@ finally:
         app = AppTest.from_string(source).run(timeout=20)
         self.assertNotIn("address_form_suggestions", app.session_state)
         self.assertTrue(any("Mode manuel actif" in item.value for item in app.caption))
+        self.assertNotIn("address_lookup_submit", [button.key for button in app.button])
+        self.assertTrue(any("sans effectuer de recherche publique" in item.value for item in app.caption))
