@@ -33,7 +33,8 @@ class MarketsUiTests(unittest.TestCase):
         self.assertIn("Municipalités disponibles", [metric.label for metric in app.metric])
         self.assertIn("Rechercher et ajouter une municipalité", [item.label for item in app.text_input])
         text = " ".join(item.value for item in app.info)
-        self.assertIn("ne sont pas des prix de vente", text)
+        self.assertIn("Commencez par rechercher une municipalité", text)
+        self.assertTrue(any("ne retire jamais les municipalités" in item.value for item in app.caption))
 
     def test_available_comparison_has_one_official_indicator_selector(self):
         rows = [

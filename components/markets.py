@@ -100,8 +100,8 @@ def show_markets() -> None:
         return
 
     st.info(
-        "Ces repères officiels ne sont pas des prix de vente. Les prix de vente, rendements locatifs et niveaux de risque "
-        "restent indisponibles sans source autorisée."
+        "Commencez par rechercher une municipalité, puis ajoutez-en une deuxième pour comparer les repères "
+        "officiels disponibles à une année commune."
     )
     available, selected_count, limit = st.columns(3)
     available.metric("Municipalités disponibles", len(all_municipalities))
@@ -118,6 +118,7 @@ def show_markets() -> None:
         key="municipal_selected", placeholder="Choisir des municipalités",
         help="Une recherche ne retire jamais les municipalités que vous avez déjà choisies.",
     )
+    st.caption("Votre recherche ne retire jamais les municipalités déjà sélectionnées.")
     st.button("Réinitialiser la comparaison", on_click=_reset_municipal_selection, width="stretch")
 
     result = comparison(DATABASE_PATH, selected)
