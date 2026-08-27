@@ -111,6 +111,10 @@ p, li, label { color: var(--ink); }
 .account-summary h2 { margin: 0.75rem 0 0.2rem !important; }
 .account-summary p { color: var(--muted) !important; margin: 0.25rem 0; }
 .save-analysis-panel h3 { margin-top: 0 !important; }
+.save-analysis-panel > p { color: var(--muted) !important; max-width: 48rem; }
+.next-step-benefits { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
+.next-step-benefits span { display: inline-flex; align-items: center; padding: .42rem .65rem; border: 1px solid #d7e4f4; border-radius: 999px; background: #f7faff; color: #294866; font-size: .84rem; font-weight: 600; }
+.premium-next-step-note { margin: .85rem 0 0 !important; color: #4d6280 !important; font-size: .84rem; }
 
 .market-card { min-height: 310px; margin-bottom: 1rem; padding: 1.35rem; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--shadow); }
 .market-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }

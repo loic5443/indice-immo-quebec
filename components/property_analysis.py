@@ -1824,26 +1824,49 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         st.write("ImmoValue est une fourchette expérimentale issue des comparables que vous fournissez. Le rôle municipal est une valeur fiscale officielle, distincte d’une valeur marchande. ImmoScore mesure l’adéquation de vos hypothèses à votre profil; il ne constitue pas une recommandation.")
         st.caption("Chaque renseignement officiel affiché indique sa provenance, son année et sa fraîcheur. Une donnée absente reste indisponible.")
 
-    st.markdown(
-        "<div class='save-analysis-panel'><h3>Votre prochaine étape</h3>"
-        "<p>Conservez ce dossier pour y revenir avec les mêmes chiffres. Premium ajoute ensuite le suivi, "
-        "les comparaisons et le rapport complet — sans paiement pendant la bêta privée.</p>",
-        unsafe_allow_html=True,
-    )
+    user = current_user() if is_authenticated() else None
+    has_premium_follow_up = bool(user and can_use(user, "alerts"))
+    if has_premium_follow_up:
+        next_step_copy = (
+            "<div class='save-analysis-panel'><p class='eyebrow'>VOTRE DOSSIER</p>"
+            "<h3>Gardez votre analyse à portée de main</h3>"
+            "<p>Sauvegardez vos chiffres pour comparer les prochaines versions et activer un suivi "
+            "fondé uniquement sur des changements vérifiables.</p>"
+            "<div class='next-step-benefits'>"
+            "<span>✓ Dossier et scénarios conservés</span>"
+            "<span>✓ Suivi de changements calculables</span>"
+            "<span>✓ Rapport et comparaison disponibles</span>"
+            "</div></div>"
+        )
+    else:
+        next_step_copy = (
+            "<div class='save-analysis-panel'><p class='eyebrow'>VOTRE DOSSIER</p>"
+            "<h3>Commencez avec une analyse, poursuivez avec le suivi</h3>"
+            "<p>Sauvegardez gratuitement ce dossier. Premium ajoute le suivi de changements vérifiables, "
+            "les comparaisons et le rapport complet.</p>"
+            "<div class='next-step-benefits'>"
+            "<span>✓ Dossier privé sauvegardé</span>"
+            "<span>🔒 Alertes factuelles et suivi Premium</span>"
+            "<span>🔒 Comparaisons et rapport complet</span>"
+            "</div><p class='premium-next-step-note'>Premium est en préparation commerciale. "
+            "Aucun paiement n’est demandé pendant la bêta privée.</p></div>"
+        )
+    st.markdown(next_step_copy, unsafe_allow_html=True)
     if is_authenticated():
         _prepare_saved_property_name()
         property_name = st.text_input(
             "Nom court du dossier (facultatif si une adresse est sélectionnée)",
             key="saved_property_name", placeholder="Ex. Projet résidentiel",
         )
-        st.caption("Votre dossier reste privé à votre compte. Le rapport PDF et le suivi des changements vérifiables font partie de l’accès Premium bêta.")
-        action_save, action_edit, action_premium = st.columns(3)
+        st.caption("Votre dossier reste privé à votre compte. Les alertes par courriel exigent toujours un consentement séparé dans Mon compte.")
+        action_save, action_edit, action_premium = st.columns(3) if not has_premium_follow_up else (*st.columns(2), None)
         with action_save:
             save_requested = st.button("Sauvegarder mon dossier", type="primary", key="save_analysis", width="stretch")
         with action_edit:
             st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="edit_analysis_hypotheses", width="stretch")
-        with action_premium:
-            st.button("Découvrir le suivi Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", width="stretch")
+        if action_premium is not None:
+            with action_premium:
+                st.button("Voir les avantages Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", width="stretch")
         if save_requested:
             if not property_name.strip():
                 st.error("Ajoutez un nom de dossier ou sélectionnez une adresse.")
