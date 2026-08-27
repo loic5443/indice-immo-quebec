@@ -54,8 +54,10 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
               Spacer(1, 1.45 * inch), Paragraph("Fondé exclusivement sur les hypothèses saisies et les calculs déterministes ImmoRadar.", styles["center"]),
               Paragraph("Aucune donnée de ville simulée n'est utilisée dans ce rapport. Une estimation ImmoValue, lorsqu'elle est présente, provient uniquement des comparables déclarés dans le dossier.", styles["center"]), PageBreak()]
 
-    story += _heading("1. Résumé exécutif", styles)
+    story += _heading("1. Votre synthèse immobilière", styles)
+    property_type = inputs.get("_property_type") or inputs.get("property_type") or "À préciser"
     summary = [
+        ["Type de propriété", property_type],
         ["Profil", analysis.get("user_profile", "Non renseigné")],
         ["Score ImmoRadar", _score(analysis.get("immo_score"))],
         ["Indice de confiance", _score(analysis.get("confidence_index"))],
@@ -70,17 +72,7 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
     story += _heading("3. Hypothèses", styles)
     story += [_table(_input_rows(inputs), styles, [3.3 * inch, 3.45 * inch])]
     story += _heading("4. Résultats financiers", styles)
-    financial_rows = [
-        ["Revenus locatifs bruts mensuels", _money(inputs.get("rental_income_monthly", analysis.get("rental_income", 0)) + inputs.get("other_income_monthly", 0))],
-        ["Revenus effectifs mensuels", _effective_income(inputs)],
-        ["Dépenses mensuelles totales", _money(analysis.get("monthly_expenses", 0))],
-        ["RNE annuel", _money(_noi(inputs, analysis))],
-        ["Flux de trésorerie mensuel", _money(analysis.get("cash_flow", 0))],
-        ["Capital réellement investi", _money(inputs.get("down_payment", analysis.get("down_payment", 0)) + inputs.get("initial_repairs", 0) + inputs.get("acquisition_costs", 0))],
-        ["Rendement sur capital investi", _percent(analysis.get("cash_on_cash_return"))],
-        ["Taux de capitalisation", _percent(analysis.get("capitalization_rate"))],
-        ["DSCR", _ratio(analysis.get("debt_service_coverage_ratio"))],
-    ]
+    financial_rows = _financial_rows(inputs, analysis)
     story += [_table(financial_rows, styles, [3.3 * inch, 3.45 * inch]), PageBreak()]
 
     story += _heading("5. Score ImmoRadar et ImmoDNA", styles)
@@ -278,6 +270,41 @@ def _value_reference_note(official_role: dict[str, Any], immovalue: dict[str, An
         "ImmoValue reste à calculer seulement lorsque trois comparables admissibles sont disponibles. "
         "Le prix demandé est une donnée déclarée et ne modifie aucune autre valeur." + source_text
     )
+
+
+def _financial_rows(inputs: dict[str, Any], analysis: dict[str, Any]) -> list[list[str]]:
+    """Present saved results without turning a non-rental project into fake returns.
+
+    The calculations stored in the snapshot are unchanged.  This helper only
+    chooses the plain-language label shown in the exported report.
+    """
+    rental_project = bool(
+        float(inputs.get("rental_income_monthly", analysis.get("rental_income", 0)) or 0)
+        or float(inputs.get("other_income_monthly", 0) or 0)
+    )
+    if rental_project:
+        income_rows = [
+            ["Revenus locatifs bruts mensuels", _money(inputs.get("rental_income_monthly", analysis.get("rental_income", 0)) + inputs.get("other_income_monthly", 0))],
+            ["Revenus effectifs mensuels", _effective_income(inputs)],
+            ["Revenus nets annuels (RNE)", _money(_noi(inputs, analysis))],
+            ["Flux de trésorerie mensuel", _money(analysis.get("cash_flow", 0))],
+            ["Rendement sur capital investi", _percent(analysis.get("cash_on_cash_return"))],
+            ["Taux de capitalisation", _percent(analysis.get("capitalization_rate"))],
+            ["Capacité à couvrir la dette (DSCR)", _ratio(analysis.get("debt_service_coverage_ratio"))],
+        ]
+    else:
+        income_rows = [
+            ["Revenus locatifs", "Non applicable : aucun revenu locatif saisi."],
+            ["Flux de trésorerie locatif", "Non applicable : aucun revenu locatif saisi."],
+            ["Rendement sur capital investi", "Non applicable : aucun revenu locatif saisi."],
+            ["Taux de capitalisation", "Non applicable : aucun revenu locatif saisi."],
+            ["Capacité à couvrir la dette (DSCR)", "Non applicable : aucun revenu locatif saisi."],
+        ]
+    return [
+        ["Dépenses mensuelles totales", _money(analysis.get("monthly_expenses", 0))],
+        ["Capital réellement investi", _money(inputs.get("down_payment", analysis.get("down_payment", 0)) + inputs.get("initial_repairs", 0) + inputs.get("acquisition_costs", 0))],
+        *income_rows,
+    ]
 
 
 def _dimension_rows(dimensions):

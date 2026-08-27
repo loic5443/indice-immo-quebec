@@ -51,6 +51,9 @@ class ReportTests(unittest.TestCase):
                 "confidence": 62, "subject": {"asking_price": 440_000},
             }, ensure_ascii=False),
         }
+        saved_inputs = __import__("json").loads(self.analysis["financial_inputs_json"])
+        saved_inputs["_property_type"] = "Duplex"
+        self.analysis["financial_inputs_json"] = __import__("json").dumps(saved_inputs, ensure_ascii=False)
 
     def test_report_is_valid_french_pdf_with_required_sections(self):
         content = generate_report_pdf(self.analysis)
@@ -61,11 +64,13 @@ class ReportTests(unittest.TestCase):
             reader = PdfReader(path)
             self.assertGreaterEqual(len(reader.pages), 4)
             extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
-        for section in ("ImmoRadar", "Résumé exécutif", "Résultats financiers", "Scénarios", "Tests de résistance", "Avertissement"):
+        for section in ("ImmoRadar", "Votre synthèse immobilière", "Résultats financiers", "Scénarios", "Tests de résistance", "Avertissement"):
             self.assertIn(section, extracted)
         self.assertIn("Exemple fictif", extracted)
         self.assertIn("Montréal", extracted)
         self.assertIn(str(round(self.analysis["immo_score"])), extracted)
+        self.assertIn("Type de propriété", extracted)
+        self.assertIn("Duplex", extracted)
 
     def test_report_keeps_value_references_distinct(self):
         content = generate_report_pdf(self.analysis)
@@ -79,6 +84,20 @@ class ReportTests(unittest.TestCase):
             self.assertIn(amount, extracted)
         self.assertIn("repère fiscal", extracted)
         self.assertIn("pas une estimation de la valeur marchande", extracted)
+
+    def test_non_rental_report_does_not_present_zero_returns_as_results(self):
+        analysis = dict(self.analysis)
+        inputs = __import__("json").loads(analysis["financial_inputs_json"])
+        inputs["rental_income_monthly"] = 0
+        inputs["other_income_monthly"] = 0
+        analysis["financial_inputs_json"] = __import__("json").dumps(inputs, ensure_ascii=False)
+        analysis["rental_income"] = 0
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "rapport.pdf"
+            path.write_bytes(generate_report_pdf(analysis))
+            extracted = "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
+        self.assertIn("Non applicable : aucun revenu locatif saisi.", extracted)
+        self.assertNotIn("Flux de trésorerie mensuel\n0 $", extracted)
 
 
 if __name__ == "__main__":
