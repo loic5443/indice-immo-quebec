@@ -104,7 +104,6 @@ def show_premium() -> None:
         _status("Disponible", "Suivi de changements réellement calculables. Les avis par courriel restent facultatifs et exigent un consentement séparé.")
     with future:
         st.markdown("<div class='subsection-title' role='heading' aria-level='3'>En préparation</div>", unsafe_allow_html=True)
-        _status("Disponible", "Avis générique par courriel pour les nouvelles alertes vérifiables, seulement avec votre consentement.")
         _status("Bientôt disponible", "Données enrichies et radar des occasions, après validation de chaque source.", "simulated")
         _status("Bientôt disponible", "Comparaisons municipales plus larges lorsque des données officielles comparables sont disponibles.", "simulated")
 

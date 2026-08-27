@@ -45,6 +45,13 @@ page.show_premium()
         self.assertTrue(any("accès Premium bêta est actif" in item.value for item in app.success))
         self.assertIn("Enregistrer mon choix", [button.label for button in app.button])
 
+    def test_preparation_column_does_not_claim_a_ready_feature(self):
+        app = self._app(False)
+        markdown = "\n".join(item.value for item in app.markdown)
+        preparation = markdown.split("En préparation", 1)[1].split("Ce qui se débloque réellement", 1)[0]
+        self.assertNotIn("data-pill real'>Disponible</span>", preparation)
+        self.assertEqual(preparation.count("Bientôt disponible"), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -56,7 +56,7 @@ class PropertySummaryUiTests(unittest.TestCase):
         ).run(timeout=20)
         buttons = [button.label for button in app.button]
         self.assertIn("Sauvegarder mon dossier", buttons)
-        self.assertIn("Découvrir le suivi Premium", buttons)
+        self.assertIn("Voir les avantages Premium", buttons)
         self.assertIn("Modifier mes chiffres", buttons)
 
     def test_selected_address_prefills_save_name_without_replacing_a_custom_name(self):
