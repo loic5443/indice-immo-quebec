@@ -219,6 +219,78 @@ def _tracking_overview(analyses: list[dict]) -> dict[str, int]:
     }
 
 
+def _dossier_tracking_summary(
+    snapshots: list[dict], *, followed: bool, email_consent: bool,
+) -> dict[str, object]:
+    """Describe only factual, owner-visible follow-up status for one dossier.
+
+    A tracking choice is useful only when the person can see what it means:
+    one snapshot is a starting point, while two snapshots can establish an
+    actual change.  The helper reads immutable snapshots only and never
+    refreshes a source, recalculates an analysis, or creates an alert.
+    """
+
+    calculable = build_calculable_alerts(snapshots) if followed else []
+    if not followed:
+        state = "inactive"
+        message = "Le suivi n’est pas encore activé pour ce dossier."
+    elif calculable:
+        state = "attention"
+        message = f"{len(calculable)} changement(s) vérifiable(s) sont disponibles."
+    elif len(snapshots) < 2:
+        state = "waiting"
+        message = "Le suivi est actif. Sauvegardez une nouvelle version plus tard pour pouvoir comparer ce qui a changé."
+    else:
+        state = "current"
+        message = "Le suivi est actif. Aucun changement vérifiable n’est détecté entre les instantanés sauvegardés."
+    return {
+        "state": state,
+        "message": message,
+        "alerts": calculable,
+        "snapshot_count": len(snapshots),
+        "email_consent": bool(email_consent),
+    }
+
+
+def _show_dossier_tracking_status(
+    user: dict, snapshots: list[dict], *, followed: bool,
+) -> None:
+    """Render one compact, honest follow-up card near a saved dossier."""
+
+    entitled = can_use(user, "alerts")
+    summary = _dossier_tracking_summary(
+        snapshots,
+        followed=followed,
+        email_consent=bool(user.get("alert_email_consent")),
+    )
+    with st.container(border=True):
+        st.markdown("**Suivi de ce dossier**")
+        if not entitled:
+            st.caption("Aperçu Premium · Le suivi compare uniquement les instantanés sauvegardés et affiche seulement les changements vérifiables.")
+            return
+        state = str(summary["state"])
+        if state == "attention":
+            st.warning(str(summary["message"]))
+            for alert in list(summary["alerts"])[:2]:
+                st.write(f"• {alert['title']}")
+        elif state == "waiting":
+            st.info(str(summary["message"]))
+        elif state == "current":
+            st.success(str(summary["message"]))
+        else:
+            st.caption(str(summary["message"]))
+        if followed:
+            snapshot_count = int(summary["snapshot_count"])
+            st.caption(
+                f"{snapshot_count} instantané(s) sauvegardé(s) · "
+                + (
+                    "avis par courriel autorisés pour ce compte."
+                    if bool(summary["email_consent"])
+                    else "les avis par courriel restent désactivés pour ce compte."
+                )
+            )
+
+
 def _show_comparison_metric(label: str, value_a: str, value_b: str, relation: str | None = None) -> None:
     """Keep each indicator narrow and readable on a phone."""
     with st.container(border=True):
@@ -402,6 +474,8 @@ def show_saved_analyses() -> None:
         label = f"{favorite}  {analysis['property_name']} · dernière mise à jour {analysis['created_at'][:10]}"
         with st.expander(label):
             history = history_by_id.get(int(analysis["id"]))
+            fingerprint = dossier_fingerprint(user["id"], analysis["property_name"])
+            followed = fingerprint in tracked_fingerprints
             if history and history.total > 1:
                 status = "Dernier instantané" if history.is_latest else f"Instantané {history.position}"
                 st.caption(
@@ -412,6 +486,8 @@ def show_saved_analyses() -> None:
                     st.markdown("**Historique des instantanés**")
                     st.dataframe(_snapshot_history_rows(history.snapshots), hide_index=True, width="stretch")
                     st.caption("Les montants et scores sont ceux sauvegardés à chaque date. Une donnée absente reste non disponible.")
+            snapshots = list(history.snapshots) if history else [analysis]
+            _show_dossier_tracking_status(user, snapshots, followed=followed)
             _show_saved_value_context(analysis)
             first, second, third = st.columns(3)
             first.metric("Prix retenu pour les calculs", _money(analysis["price"]))
@@ -490,8 +566,6 @@ def show_saved_analyses() -> None:
                 else:
                     go_to("Analyser")
                     st.rerun()
-            fingerprint = dossier_fingerprint(user["id"], analysis["property_name"])
-            followed = fingerprint in tracked_fingerprints
             if can_use(user, "alerts"):
                 follow_label = "Arrêter le suivi" if followed else "Suivre ce dossier"
                 if follow_column.button(follow_label, key=f"follow_{analysis['id']}", width="stretch"):

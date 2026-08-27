@@ -2,7 +2,14 @@
 
 import unittest
 
-from components.saved_analyses import _filter_saved_analyses, _saved_immovalue, _saved_official_role, _snapshot_history_rows, _tracking_overview
+from components.saved_analyses import (
+    _dossier_tracking_summary,
+    _filter_saved_analyses,
+    _saved_immovalue,
+    _saved_official_role,
+    _snapshot_history_rows,
+    _tracking_overview,
+)
 from services.dossier_tracking_service import dossier_fingerprint
 from streamlit.testing.v1 import AppTest
 
@@ -34,6 +41,51 @@ class SavedAnalysisFiltersTests(unittest.TestCase):
             "resilience_json": '{"tests": [{"name": "Taux +1 point", "financial": {"cash_flow_monthly": -25}}]}',
         }
         self.assertEqual(_tracking_overview([analysis]), {"total": 1, "important": 1, "updates": 0})
+
+    def test_dossier_tracking_status_distinguishes_waiting_from_a_real_alert(self):
+        single = {
+            "id": 1, "property_name": "Projet Alpha", "created_at": "2026-02-01",
+            "cash_flow": 100, "immovalue_json": "{}", "official_role_snapshot_json": "{}", "resilience_json": "{}",
+        }
+        waiting = _dossier_tracking_summary([single], followed=True, email_consent=False)
+        self.assertEqual(waiting["state"], "waiting")
+        self.assertFalse(waiting["alerts"])
+        self.assertIn("nouvelle version", waiting["message"])
+
+        current = {**single, "id": 2, "created_at": "2026-03-01"}
+        unchanged = _dossier_tracking_summary([current, single], followed=True, email_consent=True)
+        self.assertEqual(unchanged["state"], "current")
+        self.assertTrue(unchanged["email_consent"])
+
+        sensitive = {
+            **current,
+            "resilience_json": '{"tests": [{"name": "Taux +1 point", "financial": {"cash_flow_monthly": -25}}]}',
+        }
+        attention = _dossier_tracking_summary([sensitive], followed=True, email_consent=True)
+        self.assertEqual(attention["state"], "attention")
+        self.assertEqual(attention["alerts"][0]["kind"], "rate_sensitivity")
+
+    def test_dossier_tracking_inactive_never_implies_an_alert(self):
+        summary = _dossier_tracking_summary([], followed=False, email_consent=True)
+        self.assertEqual(summary["state"], "inactive")
+        self.assertEqual(summary["alerts"], [])
+
+    def test_saved_dossier_shows_a_clear_follow_up_state_in_the_interface(self):
+        app = AppTest.from_string(
+            "import components.saved_analyses as page\n"
+            "user = {'plan': 'premium', 'role': 'user', 'alert_email_consent': 0}\n"
+            "snapshot = {'id': 1, 'property_name': 'Dossier test', 'created_at': '2026-02-01', 'cash_flow': 100, 'immovalue_json': '{}', 'official_role_snapshot_json': '{}', 'resilience_json': '{}'}\n"
+            "page._show_dossier_tracking_status(user, [snapshot], followed=True)\n"
+        ).run(timeout=20)
+        self.assertFalse(app.exception)
+        text = " ".join(
+            item.value
+            for items in (app.markdown, app.info, app.caption)
+            for item in items
+        )
+        self.assertIn("Suivi de ce dossier", text)
+        self.assertIn("nouvelle version", text)
+        self.assertIn("désactivés", text)
 
     def test_saved_official_role_remains_a_fiscal_snapshot(self):
         snapshot = _saved_official_role({
