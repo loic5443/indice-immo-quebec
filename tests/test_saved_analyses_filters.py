@@ -70,6 +70,22 @@ class SavedAnalysisFiltersTests(unittest.TestCase):
         self.assertEqual(summary["state"], "inactive")
         self.assertEqual(summary["alerts"], [])
 
+    def test_guest_saved_dossiers_page_explains_the_account_value_without_inventing_data(self):
+        app = AppTest.from_string(
+            "import components.saved_analyses as page\n"
+            "original = page.is_authenticated\n"
+            "try:\n"
+            "    page.is_authenticated = lambda: False\n"
+            "    page.show_saved_analyses()\n"
+            "finally:\n"
+            "    page.is_authenticated = original\n"
+        ).run(timeout=20)
+        self.assertFalse(app.exception)
+        text = " ".join(item.value for item in app.markdown)
+        self.assertIn("Dossiers privés sauvegardés", text)
+        self.assertIn("Suivi factuel et comparaisons Premium", text)
+        self.assertEqual([button.label for button in app.button], ["Créer mon espace gratuit"])
+
     def test_saved_dossier_shows_a_clear_follow_up_state_in_the_interface(self):
         app = AppTest.from_string(
             "import components.saved_analyses as page\n"

@@ -412,8 +412,19 @@ def show_saved_analyses() -> None:
     st.title("Mes propriétés")
     st.markdown("<p class='section-intro'>Retrouvez vos dossiers sauvegardés, leurs points de repère et le suivi disponible.</p>", unsafe_allow_html=True)
     if not is_authenticated():
-        st.info("Connectez-vous pour consulter et sauvegarder vos analyses.")
-        st.button("Ouvrir Mon compte", type="primary", on_click=go_to, args=("Mon compte",))
+        st.markdown(
+            "<div class='account-summary'><p class='eyebrow'>VOTRE ESPACE IMMORADAR</p>"
+            "<div class='notice-title' role='heading' aria-level='2'>Gardez les décisions qui méritent d’être suivies.</div>"
+            "<p>Un espace gratuit vous permet de conserver votre dossier après une analyse et de le retrouver "
+            "avec les mêmes chiffres. Le suivi et les comparaisons détaillées restent des avantages Premium.</p>"
+            "<div class='next-step-benefits'>"
+            "<span>✓ Dossiers privés sauvegardés</span>"
+            "<span>✓ Retrouver vos scénarios</span>"
+            "<span>🔒 Suivi factuel et comparaisons Premium</span>"
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
+        st.button("Créer mon espace gratuit", type="primary", on_click=go_to, args=("Mon compte",), width="stretch")
         return
 
     user = current_user()
