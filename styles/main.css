@@ -131,6 +131,10 @@ div.stButton > button, div.stDownloadButton > button { border-radius: 9px; paddi
 div.stButton > button[kind="primary"] { background: var(--blue); color: white; }
 div.stButton > button[kind="primary"]:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
 div.stButton > button[kind="secondary"] { background: white; color: var(--blue); }
+/* Streamlit form submissions use a distinct button kind. Keep account actions
+   aligned with the calm primary blue rather than Streamlit's alert-red theme. */
+div.stFormSubmitButton > button[kind="primaryFormSubmit"] { background: var(--blue); color: #ffffff; border-color: var(--blue); }
+div.stFormSubmitButton > button[kind="primaryFormSubmit"]:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
 /* The sidebar's general light-text rule must not hide secondary button labels. */
 [data-testid="stSidebar"] div.stButton > button[kind="secondary"],
 [data-testid="stSidebar"] div.stButton > button[kind="secondary"] * { color: #123765 !important; background: #ffffff; }

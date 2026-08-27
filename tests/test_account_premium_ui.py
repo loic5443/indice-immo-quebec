@@ -4,6 +4,21 @@ import unittest
 
 
 class AccountPremiumUiTests(unittest.TestCase):
+    def test_login_form_keeps_one_clear_submit_action(self):
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_string(
+            "import components.account as page\n"
+            "page.is_authenticated = lambda: False\n"
+            "page.show_account()\n"
+        ).run(timeout=20)
+        self.assertFalse(app.exception)
+        self.assertEqual(
+            [button.label for button in app.button].count("Se connecter"),
+            1,
+        )
+        self.assertIn("FormSubmitter:login_form-Se connecter", [button.key for button in app.button])
+
     def test_free_account_sees_beta_quota_truth_and_concrete_premium_outcome(self):
         from streamlit.testing.v1 import AppTest
 
