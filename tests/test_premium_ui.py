@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from data.database import authenticate_user, create_user, initialize_database
+from components.premium import _free_estimation_limit
 
 
 class PremiumUiTests(unittest.TestCase):
@@ -51,6 +52,14 @@ page.show_premium()
         preparation = markdown.split("En préparation", 1)[1].split("Ce qui se débloque réellement", 1)[0]
         self.assertNotIn("data-pill real'>Disponible</span>", preparation)
         self.assertEqual(preparation.count("Bientôt disponible"), 2)
+
+    def test_free_quota_copy_matches_the_current_beta_setting(self):
+        beta_title, beta_table = _free_estimation_limit(False)
+        enforced_title, enforced_table = _free_estimation_limit(True)
+        self.assertIn("désactivé pendant la bêta", beta_title)
+        self.assertIn("désactivé", beta_table)
+        self.assertIn("par mois", enforced_title)
+        self.assertIn("1 complète", enforced_table)
 
 
 if __name__ == "__main__":
