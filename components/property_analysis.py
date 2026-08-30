@@ -1269,11 +1269,17 @@ def _show_property_stage() -> None:
     # Keep the established first-run default so the first visible step is
     # immediately usable.  Reopened dossiers provide their original objective
     # before this widget is created, therefore it remains selected there.
-    st.selectbox("Votre objectif", list(ANALYSIS_OBJECTIVES), key="workflow_objective_choice")
+    st.radio(
+        "Quel est votre projet?",
+        list(ANALYSIS_OBJECTIVES),
+        key="workflow_objective_choice",
+        help="Ce choix adapte la lecture ImmoRadar à votre objectif. Il ne modifie jamais les renseignements publics affichés.",
+    )
     chosen_objective = st.session_state.get("workflow_objective_choice", "")
     if chosen_objective:
         st.session_state["workflow_objective"] = chosen_objective
         st.session_state["workflow_profile"] = ANALYSIS_OBJECTIVES[chosen_objective]
+    st.caption("Vous pourrez modifier ce choix plus tard. Il sert à expliquer votre analyse, pas à formuler une recommandation d’achat.")
     _hydrate_dossier_name_from_selected_address()
     name, kind, asking = st.columns(3)
     with name:
