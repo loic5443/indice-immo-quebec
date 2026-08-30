@@ -164,6 +164,28 @@ class PropertySummaryUiTests(unittest.TestCase):
         captions = "\n".join(item.value for item in app.caption)
         self.assertIn("reste distinct du rôle municipal et d’ImmoValue", captions)
 
+    def test_financial_form_adapts_rental_copy_to_the_selected_objective(self):
+        rental = AppTest.from_string(
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "st.session_state['workflow_objective_choice'] = 'Investir et louer'\n"
+            "page._show_finance_stage()\n"
+        ).run(timeout=20)
+        self.assertEqual(
+            rental.number_input(key="rental_income").label,
+            "Revenus locatifs mensuels prévus ($)",
+        )
+
+        owner = AppTest.from_string(
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "st.session_state['workflow_objective_choice'] = 'Acheter pour y habiter'\n"
+            "page._show_finance_stage()\n"
+        ).run(timeout=20)
+        captions = "\n".join(item.value for item in owner.caption)
+        self.assertIn("ne nécessite pas de revenu locatif", captions)
+        self.assertTrue(any(item.label == "Ajouter des revenus locatifs (facultatif)" for item in owner.expander))
+
     def test_renewal_date_is_optional_in_advanced_financial_inputs(self):
         app = AppTest.from_string(
             "import components.property_analysis as page\n"

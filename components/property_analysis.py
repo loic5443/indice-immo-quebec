@@ -1305,12 +1305,20 @@ def _show_finance_stage() -> None:
     """Render the useful financial inputs first; less common inputs stay available."""
 
     st.markdown("<div class='section-space compact-space'></div><h2>2. Vos chiffres</h2><p class='section-intro'>Ajoutez les montants que vous connaissez. Les résultats ne sont affichés qu’après votre calcul.</p>", unsafe_allow_html=True)
+    rental_objective = st.session_state.get("workflow_objective_choice") == "Investir et louer"
+    rental_already_entered = bool(st.session_state.get("rental_income", 0))
     acquisition, financing = st.columns(2)
     with acquisition:
         st.number_input("Prix retenu pour vos calculs ($)", min_value=0.0, step=5_000.0, key="property_price")
         st.number_input("Mise de fonds ($)", min_value=0.0, step=5_000.0, key="down_payment")
-        st.number_input("Revenus locatifs mensuels ($)", min_value=0.0, step=100.0, key="rental_income")
-        st.number_input("Autres dépenses mensuelles ($)", min_value=0.0, step=25.0, key="other_expenses")
+        if rental_objective or rental_already_entered:
+            st.number_input("Revenus locatifs mensuels prévus ($)", min_value=0.0, step=100.0, key="rental_income")
+            st.caption("Indiquez les loyers prévus avant vacance. Les résultats locatifs restent non applicables tant qu’aucun revenu n’est saisi.")
+        else:
+            st.caption("Votre projet ne nécessite pas de revenu locatif. Ajoutez-en seulement si la propriété sera louée, en tout ou en partie.")
+            with st.expander("Ajouter des revenus locatifs (facultatif)", expanded=False):
+                st.number_input("Revenus locatifs mensuels prévus ($)", min_value=0.0, step=100.0, key="rental_income")
+        st.number_input("Autres dépenses mensuelles liées au projet ($, facultatif)", min_value=0.0, step=25.0, key="other_expenses")
     with financing:
         st.number_input("Taux hypothécaire annuel (%)", min_value=0.0, max_value=25.0, step=0.05, format="%.2f", key="mortgage_rate")
         st.number_input("Amortissement (années)", min_value=5, max_value=30, step=1, key="amortization_years")
