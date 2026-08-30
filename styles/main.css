@@ -115,6 +115,10 @@ p, li, label { color: var(--ink); }
 .next-step-benefits { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
 .next-step-benefits span { display: inline-flex; align-items: center; padding: .42rem .65rem; border: 1px solid #d7e4f4; border-radius: 999px; background: #f7faff; color: #294866; font-size: .84rem; font-weight: 600; }
 .premium-next-step-note { margin: .85rem 0 0 !important; color: #4d6280 !important; font-size: .84rem; }
+.sidebar-account-card { margin: 0.4rem 0 0.55rem; padding: 0.9rem 0.95rem; border: 1px solid rgba(185,214,255,.32); border-radius: 12px; background: rgba(255,255,255,.08); }
+.sidebar-account-card p { margin: 0 0 .25rem !important; color: #b9d6ff !important; font-size: .68rem; font-weight: 800; letter-spacing: .11em; }
+.sidebar-account-card strong { display: block; color: #ffffff !important; font-size: 1rem; }
+.sidebar-account-card span { display: block; margin-top: .22rem; color: #d7e4f4 !important; font-size: .78rem; line-height: 1.35; }
 
 .market-card { min-height: 310px; margin-bottom: 1rem; padding: 1.35rem; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--shadow); }
 .market-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
@@ -136,9 +140,10 @@ div.stButton > button[kind="secondary"] { background: white; color: var(--blue);
 div.stFormSubmitButton > button[kind="primaryFormSubmit"] { background: var(--blue); color: #ffffff; border-color: var(--blue); }
 div.stFormSubmitButton > button[kind="primaryFormSubmit"]:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
 /* The sidebar's general light-text rule must not hide secondary button labels. */
-[data-testid="stSidebar"] div.stButton > button[kind="secondary"],
-[data-testid="stSidebar"] div.stButton > button[kind="secondary"] * { color: #123765 !important; background: #ffffff; }
+[data-testid="stSidebar"] div.stButton > button,
+[data-testid="stSidebar"] div.stButton > button * { color: #123765 !important; background: #ffffff !important; }
 [data-testid="stSidebar"] div.stButton > button[kind="primary"] { color: #ffffff !important; }
+[data-testid="stSidebar"] div.stButton > button[kind="primary"] * { color: #ffffff !important; }
 [data-testid="stSidebar"] details { background: #ffffff; border-radius: 9px; }
 [data-testid="stSidebar"] details summary,
 [data-testid="stSidebar"] details summary * { color: #123765 !important; }

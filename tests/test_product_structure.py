@@ -17,6 +17,7 @@ class ProductStructureTests(unittest.TestCase):
 
         app = AppTest.from_string("import components.sidebar as page\npage.show_sidebar()").run(timeout=20)
         self.assertEqual(app.radio(key="primary_navigation").options, PRIMARY_PAGES)
+        self.assertIn("👤 Se connecter", [button.label for button in app.button])
         app.radio(key="primary_navigation").set_value("Analyser").run(timeout=20)
         self.assertEqual(app.session_state["main_navigation"], "Analyser")
 

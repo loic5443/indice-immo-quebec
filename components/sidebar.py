@@ -48,9 +48,18 @@ def show_sidebar() -> str:
     )
 
     st.sidebar.divider()
-    st.sidebar.caption("Espace personnel")
     account_label = "Mon compte" if "current_user" in st.session_state else "Se connecter"
-    if st.sidebar.button(account_label, key="secondary_account", width="stretch"):
+    account_hint = (
+        "Vos dossiers, préférences et alertes."
+        if "current_user" in st.session_state
+        else "Connectez-vous pour sauvegarder vos dossiers."
+    )
+    st.sidebar.markdown(
+        f"<div class='sidebar-account-card'><p>ESPACE PERSONNEL</p><strong>{account_label}</strong>"
+        f"<span>{account_hint}</span></div>",
+        unsafe_allow_html=True,
+    )
+    if st.sidebar.button(f"👤 {account_label}", key="secondary_account", width="stretch"):
         _secondary("Mon compte")
     with st.sidebar.expander("Informations et aide"):
         if st.button("À propos", key="secondary_about", width="stretch"):
