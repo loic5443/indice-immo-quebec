@@ -1164,6 +1164,12 @@ def _address_lookup_readiness(editor_street: str, consent: bool, manual_mode: bo
     return "ready", "3. Choisissez une suggestion ou lancez la recherche des renseignements publics disponibles.", True
 
 
+def _address_panel_title(revealed: bool) -> str:
+    """Keep the active public result visible while preserving easy address editing."""
+
+    return "Modifier l’adresse et les renseignements publics" if revealed else "Commencer par une adresse"
+
+
 def _current_role_match(address_lookup: dict | None) -> dict | None:
     """Return the selected official match without inventing a public value."""
 
@@ -1366,7 +1372,12 @@ def show_property_analysis() -> None:
     address_state = _address_state_for_current_user()
     _refresh_selected_local_enrichment()
     address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)
-    with st.expander("Commencer par une adresse", expanded=True):
+    existing_public_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
+    public_information_revealed = _has_revealed_public_information(existing_public_lookup)
+    with st.expander(
+        _address_panel_title(public_information_revealed),
+        expanded=not public_information_revealed,
+    ):
         st.markdown("**Votre première valeur, en trois gestes :** autorisez la recherche publique, saisissez l’adresse, puis choisissez une suggestion. Vous pouvez aussi poursuivre entièrement en mode manuel.")
         st.checkbox(
             "J’accepte qu’ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",
@@ -1829,35 +1840,16 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         "Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources",
     ])
     with overview_tab:
+        st.subheader("Estimation marchande ImmoValue")
+        st.caption("Cette estimation expérimentale reste distincte du rôle municipal et de vos calculs financiers. Elle n’est disponible qu’avec trois comparables admissibles dont vous confirmez la provenance.")
         immovalue = _show_immovalue(address_lookup)
-        score, confidence, verdict = st.columns(3)
-        score.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Indisponible")
-        confidence.metric("Confiance", f"{engine_result.confidence_index} / 100")
-        verdict.metric("Lecture", engine_result.verdict.capitalize())
-        st.caption("La confiance décrit la qualité et la complétude des renseignements saisis; elle ne garantit pas une décision.")
-        strengths, checks = st.columns(2)
-        with strengths:
-            st.subheader("Points forts")
-            for item in engine_result.positive_factors[:3] or ["Indisponible tant que les hypothèses requises ne sont pas fournies."]:
-                st.success(item)
-        with checks:
-            st.subheader("À vérifier")
-            for item in (engine_result.negative_factors + engine_result.missing_data)[:3] or ["Ajoutez des renseignements pour obtenir des vérifications ciblées."]:
-                st.warning(item)
     with finances_tab:
-        st.subheader("Les chiffres de votre projet")
-        first, second, third = st.columns(3)
-        first.metric("Paiement hypothécaire", _money(result.monthly_payment))
-        second.metric("Revenus effectifs mensuels", _money(result.effective_rental_income_monthly))
-        third.metric("Flux de trésorerie mensuel", _money(result.cash_flow_monthly))
+        st.subheader("Détails de vos calculs")
+        st.caption("Les indicateurs essentiels sont déjà résumés plus haut. Voici les repères complémentaires fondés sur les chiffres que vous avez saisis.")
         a, b, c = st.columns(3)
         a.metric("Revenus nets annuels (RNE)", _money(result.net_operating_income_annual))
         b.metric("Capital réellement investi", _money(result.actual_capital_invested))
-        c.metric("Rendement sur capital", f"{result.cash_on_cash_return:.2f} %")
-        d, e, f = st.columns(3)
-        d.metric("Taux de capitalisation", f"{result.capitalization_rate:.2f} %")
-        e.metric("Capacité à couvrir la dette (DSCR)", f"{result.debt_service_coverage_ratio:.2f}x")
-        f.metric("Marge mensuelle de sécurité", _money(result.monthly_safety_margin))
+        c.metric("Marge mensuelle de sécurité", _money(result.monthly_safety_margin))
         if result.housing_cost_ratio is not None:
             st.info(f"Part déclarée du revenu consacrée au logement et aux dettes : {result.housing_cost_ratio:.1f} %. Calcul : paiement hypothécaire + revenus et dépenses du projet + autres dettes, divisé par le revenu brut mensuel. Ce n’est pas un critère officiel de prêteur.")
         else:

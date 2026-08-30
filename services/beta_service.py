@@ -1,10 +1,13 @@
 """Private beta invitations: opaque codes are shown once and stored only as hashes."""
 import hashlib,secrets
+import sqlite3
 import csv
 from io import StringIO
 from contextlib import closing
 from datetime import datetime,timezone
 from repositories.sqlite_repository import SQLiteRepository
+from domain.models import UserProfile
+from services.auth_service import _hash_password, _now
 
 def _hash(code): return hashlib.sha256(code.encode()).hexdigest()
 def create_invitation(actor_id,database_path,label="",max_uses=1,expires_at=None):
@@ -32,6 +35,71 @@ def registration_allowed(code,database_path,development_mode=False):
  if settings["invitation_required"] and not development_mode:
   return (validate_invitation(code or "",database_path)=="active", "Code d'invitation invalide ou indisponible.")
  return True,""
+
+
+def register_beta_user(name, email, password, database_path, invitation_code="", profile=None, development_mode=False):
+ """Create an account and consume its invitation in one SQLite transaction.
+
+ The former UI flow checked an invitation, created the account, then consumed
+ the invitation in three distinct operations.  A failed final operation could
+ leave a valid account without an accurately counted beta place.  This helper
+ is deliberately the single mutation boundary for the public registration
+ form: an invitation is consumed only after its account row is inserted, and
+ every failure rolls both mutations back.
+ """
+ profile = profile or UserProfile()
+ normalized_email = str(email or "").strip().lower()
+ password_hash, password_salt = _hash_password(password)
+ repo = SQLiteRepository(database_path)
+ with closing(repo._connect()) as connection:
+  try:
+   # A writer lock makes the participant limit and invitation use count safe
+   # against simultaneous Streamlit submissions.
+   connection.execute("BEGIN IMMEDIATE")
+   settings = connection.execute("SELECT * FROM beta_settings WHERE id=1").fetchone()
+   user_count = int(connection.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+   if not settings["registrations_open"]:
+    connection.rollback()
+    return False, "Inscriptions momentanément fermées."
+   if user_count >= int(settings["max_participants"]):
+    connection.rollback()
+    return False, "La capacité bêta est atteinte."
+
+   invitation = None
+   if settings["invitation_required"] and not development_mode:
+    invitation = connection.execute(
+     "SELECT rowid,* FROM beta_invitations WHERE code_hash=?", (_hash(invitation_code or ""),)
+    ).fetchone()
+    if invitation_status(invitation) != "active":
+     connection.rollback()
+     return False, "Code d'invitation invalide ou indisponible."
+
+   connection.execute(
+    """INSERT INTO users (
+      name, email, password_hash, password_salt, plan, created_at,
+      user_type, investment_horizon, risk_tolerance
+    ) VALUES (?, ?, ?, ?, 'free', ?, ?, ?, ?)""",
+    (
+     str(name or "").strip(), normalized_email, password_hash, password_salt,
+     _now(), profile.user_type, profile.investment_horizon, profile.risk_tolerance,
+    ),
+   )
+   if invitation is not None:
+    consumed = connection.execute(
+     "UPDATE beta_invitations SET uses_count=uses_count+1 WHERE rowid=? AND uses_count<max_uses AND active=1",
+     (invitation["rowid"],),
+    ).rowcount == 1
+    if not consumed:
+     connection.rollback()
+     return False, "Code d'invitation invalide ou indisponible."
+   connection.commit()
+  except sqlite3.IntegrityError:
+   connection.rollback()
+   return False, "Un compte existe déjà pour cette adresse courriel."
+  except sqlite3.Error:
+   connection.rollback()
+   return False, "La création du compte n’a pas pu être terminée. Réessayez plus tard."
+ return True, "Compte créé. Vous pouvez maintenant vous connecter."
 
 def consume_invitation(code,database_path):
  """Atomically consume exactly one active invitation after successful registration."""

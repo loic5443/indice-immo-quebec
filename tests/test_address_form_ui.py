@@ -101,6 +101,13 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
 
+    def test_revealed_public_result_keeps_address_editing_secondary(self):
+        self.assertEqual(property_analysis._address_panel_title(False), "Commencer par une adresse")
+        self.assertEqual(
+            property_analysis._address_panel_title(True),
+            "Modifier l’adresse et les renseignements publics",
+        )
+
     def test_home_reveal_opens_the_empty_canonical_analyzer_form(self):
         """Accueil never collects an address; Analyse owns the empty form."""
         source = (

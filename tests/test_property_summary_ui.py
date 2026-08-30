@@ -1,6 +1,7 @@
 """Focused Streamlit assertions for the unified property summary."""
 
 import unittest
+from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
@@ -42,6 +43,13 @@ class PropertySummaryUiTests(unittest.TestCase):
             [item.label for item in app.tabs],
             ["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"],
         )
+
+    def test_detail_tabs_extend_the_summary_without_repeating_it(self):
+        source = (Path("components") / "property_analysis.py").read_text(encoding="utf-8")
+        results_section = source[source.index("def _show_results"):source.index("def _show_immovalue")]
+        self.assertIn("Les indicateurs essentiels sont déjà résumés plus haut", results_section)
+        self.assertIn("Estimation marchande ImmoValue", results_section)
+        self.assertNotIn('score.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Indisponible")', results_section)
 
     def test_authenticated_summary_makes_saving_the_clear_primary_action(self):
         app = AppTest.from_string(

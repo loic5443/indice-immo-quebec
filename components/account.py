@@ -6,11 +6,11 @@ import streamlit as st
 
 from components.sidebar import go_to
 from components.premium_teaser import show_premium_teaser
-from data.database import authenticate_user, count_analyses, create_user, get_user, validate_registration
+from data.database import authenticate_user, count_analyses, get_user, validate_registration
 from data.database import DATABASE_PATH
 from services.privacy_service import delete_account, export_user_data
 from services.onboarding_service import STEPS, complete, progress
-from services.beta_service import registration_allowed, consume_invitation
+from services.beta_service import register_beta_user
 from services.entitlements_service import can_use, quota_is_enforced, quota_status
 from services.alert_email_service import (
     alert_email_delivery_status,
@@ -298,24 +298,19 @@ def show_account() -> None:
                 for error in errors:
                     st.error(error)
             else:
-                allowed, beta_message = registration_allowed(invitation_code, DATABASE_PATH)
-                if not allowed:
-                    st.error(beta_message)
-                    return
-                created, message = create_user(name, email, password)
+                created, message = register_beta_user(
+                    name, email, password, DATABASE_PATH, invitation_code=invitation_code,
+                )
                 if created:
-                    if invitation_code and not consume_invitation(invitation_code, DATABASE_PATH):
-                        st.error("Compte créé, mais le code n'a pas pu être consommé. Contactez l'administrateur.")
+                    # The account and its invitation, when required, are now
+                    # committed together.  A failed code can never leave an
+                    # uncounted account or consume a beta place by itself.
+                    user = _start_new_account_session(email, password)
+                    if user is None:
+                        st.error("Compte créé, mais la connexion locale n’a pas pu démarrer. Connectez-vous avec vos identifiants.")
                     else:
-                        # The user has just proven control of the chosen password.
-                        # Start the local session directly; the mandatory onboarding
-                        # is still shown before any personal area is available.
-                        user = _start_new_account_session(email, password)
-                        if user is None:
-                            st.error("Compte créé, mais la connexion locale n’a pas pu démarrer. Connectez-vous avec vos identifiants.")
-                        else:
-                            st.session_state["account_creation_notice"] = message
-                            st.rerun()
+                        st.session_state["account_creation_notice"] = message
+                        st.rerun()
                 else:
                     st.error(message)
 
