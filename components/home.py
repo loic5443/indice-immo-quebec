@@ -45,6 +45,7 @@ def show_home() -> None:
         with premium:
             st.write("")
             st.button("Découvrir Premium", on_click=go_to, args=("Premium",), width="stretch")
+    st.caption("Commencez sans compte ni document. À l’étape suivante, vous choisissez si ImmoRadar peut consulter les renseignements publics disponibles.")
     st.caption(
         "Lorsqu’elle est disponible, la première valeur révélée est celle du rôle municipal officiel : un repère fiscal, "
         "pas un prix de vente. Elle peut différer du marché selon l’année du rôle et le secteur. ImmoValue est distincte "
@@ -89,5 +90,5 @@ def show_home() -> None:
     ):
         with column:
             st.markdown(f"<article class='benefit-card'><h3>{title}</h3><p>{copy}</p></article>", unsafe_allow_html=True)
-    st.markdown("<div class='final-cta'><h2>Prêt à ouvrir votre dossier immobilier?</h2><p>Commencez avec une adresse ou les hypothèses que vous avez déjà.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='final-cta'><h2>Prêt à ouvrir votre dossier immobilier?</h2><p>Commencez avec une adresse. Vous ajouterez vos chiffres seulement lorsque vous serez prêt.</p></div>", unsafe_allow_html=True)
     st.button("Analyser une propriété", type="primary", on_click=_start_from_home, key="home_final_analysis")

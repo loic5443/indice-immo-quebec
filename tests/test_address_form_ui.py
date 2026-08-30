@@ -8,6 +8,7 @@ from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
+import components.property_analysis as property_analysis
 from data.database import create_user, initialize_database
 from services.address_form_service import restore_address_form, serialize_address_form, submit_address_form
 from services.analysis_workflow import load_draft, save_draft
@@ -128,6 +129,24 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertEqual(app.text_input(key="address_form_city").value, "")
         self.assertEqual(app.text_input(key="address_form_postal").value, "")
         self.assertEqual(list(app.exception), [])
+
+    def test_first_public_lookup_explains_the_next_step_without_blocking_canonical_state(self):
+        """A visitor sees the next useful action while restored state can still submit."""
+
+        app = self._app()
+        self.assertFalse(app.button(key="address_lookup_submit").disabled)
+        messages = "\n".join(item.value for item in app.info)
+        self.assertIn("Cochez l’accord de recherche publique", messages)
+
+        app.checkbox(key="address_form_consent").set_value(True).run(timeout=20)
+        self.assertFalse(app.button(key="address_lookup_submit").disabled)
+        messages = "\n".join(item.value for item in app.info)
+        self.assertIn("trois caractères utiles", messages)
+
+        self.assertEqual(
+            property_analysis._address_lookup_readiness("123 rue Exemple", True, False, False)[0],
+            "ready",
+        )
 
     def test_consented_address_form_shows_public_role_without_calculation(self):
         """The Analyser form reveals a covered public role without financial calculation."""

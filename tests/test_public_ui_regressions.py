@@ -85,6 +85,7 @@ class PublicUiRegressionTests(unittest.TestCase):
         home.run(timeout=20)
         self.assertEqual(sum("Gardez une longueur" in item.value for item in home.get("markdown")), 1)
         self.assertTrue(any("repère fiscal" in item.value and "pas un prix de vente" in item.value for item in home.caption))
+        self.assertTrue(any("Commencez sans compte ni document" in item.value for item in home.caption))
         feedback = AppTest.from_string(
             "import components.feedback as page\n"
             "original_is_authenticated = page.is_authenticated\n"

@@ -1141,6 +1141,29 @@ def _visible_analysis_stage(step: int, calculated: bool, has_financial_data: boo
     return 1 if step <= 2 and not has_financial_data else 2
 
 
+def _address_lookup_readiness(editor_street: str, consent: bool, manual_mode: bool, revealed: bool) -> tuple[str, str, bool]:
+    """Give a new visitor one actionable next step before any public lookup.
+
+    This is presentation-only: validation and all source access remain in the
+    existing explicit submission action.  Keeping it pure also makes the
+    consent-first sequence easy to regress-test.
+    """
+    if manual_mode:
+        return "manual", "Mode manuel actif : vous pouvez continuer avec vos chiffres sans effectuer de recherche publique.", False
+    if revealed:
+        return "revealed", "Les renseignements publics disponibles sont déjà révélés pour cette adresse.", False
+    if not consent:
+        return "consent", "1. Cochez l’accord de recherche publique. Aucun appel n’est effectué avant votre accord.", False
+    if len(useful_query(editor_street)) < 3:
+        # Keep the explicit action available after consent: a copied complete
+        # address may be held by the canonical form state while the live
+        # editor is restoring after a Streamlit rerun.  Submission still runs
+        # the single central validation and never calls a source without a
+        # useful address.
+        return "address", "2. Saisissez au moins trois caractères utiles de l’adresse pour obtenir des suggestions.", True
+    return "ready", "3. Choisissez une suggestion ou lancez la recherche des renseignements publics disponibles.", True
+
+
 def _current_role_match(address_lookup: dict | None) -> dict | None:
     """Return the selected official match without inventing a public value."""
 
@@ -1242,7 +1265,7 @@ def _hydrate_dossier_name_from_selected_address() -> None:
 def _show_property_stage() -> None:
     """Render the simple first stage while retaining the existing workflow values."""
 
-    st.markdown("<div class='section-space compact-space'></div><h2>1. Propriété et valeur</h2><p class='section-intro'>Choisissez votre objectif, puis recherchez la propriété dans le bloc ci-dessus.</p>", unsafe_allow_html=True)
+    st.markdown("<div class='section-space compact-space'></div><h2>1. Propriété et valeur</h2><p class='section-intro'>La recherche d’adresse ci-dessus suffit pour révéler un rôle municipal disponible. Les choix ci-dessous servent ensuite à personnaliser votre analyse.</p>", unsafe_allow_html=True)
     # Keep the established first-run default so the first visible step is
     # immediately usable.  Reopened dossiers provide their original objective
     # before this widget is created, therefore it remains selected there.
@@ -1260,7 +1283,7 @@ def _show_property_stage() -> None:
     with asking:
         st.number_input("Prix demandé (facultatif)", min_value=0.0, step=5_000.0, key="iv_asking")
     st.caption("Le prix demandé sert uniquement à comparer le rôle municipal et ImmoValue lorsqu’elle est disponible. Il ne remplace pas le prix retenu pour vos calculs financiers.")
-    st.caption("Ces renseignements servent à organiser votre dossier. La recherche publique et les calculs restent séparés.")
+    st.caption("Ces renseignements servent à organiser votre dossier et à personnaliser la suite. Ils ne modifient ni la recherche publique ni la valeur au rôle municipal.")
     st.button("Continuer vers les finances", type="primary", key="continue_to_finances", on_click=_continue_to_finances)
 
 
@@ -1336,6 +1359,7 @@ def show_property_analysis() -> None:
     _refresh_selected_local_enrichment()
     address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)
     with st.expander("Commencer par une adresse", expanded=True):
+        st.markdown("**Votre première valeur, en trois gestes :** autorisez la recherche publique, saisissez l’adresse, puis choisissez une suggestion. Vous pouvez aussi poursuivre entièrement en mode manuel.")
         st.checkbox(
             "J’accepte qu’ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",
             key=ADDRESS_WIDGET_KEYS["consent"],
@@ -1449,7 +1473,19 @@ def show_property_analysis() -> None:
                         )
         address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
         manual_mode = bool(st.session_state.get(ADDRESS_MANUAL_MODE_KEY, False))
+        lookup_state, lookup_message, _ = _address_lookup_readiness(
+            editor_street,
+            bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
+            manual_mode,
+            _has_revealed_public_information(address_lookup),
+        )
         if not _has_revealed_public_information(address_lookup) and not manual_mode:
+            # The action intentionally remains available.  Streamlit can be
+            # restoring the live address editor while the canonical form state
+            # already contains a copied address.  Central validation in the
+            # callback remains the authority for whether a lookup may run.
+            if lookup_state != "ready":
+                st.info(lookup_message)
             st.caption("Après votre consentement, cette action peut d’abord révéler la valeur au rôle municipal; ImmoValue reste une estimation marchande distincte, calculable avec au moins trois comparables autorisés.")
             st.button(
                 "Rechercher et révéler les renseignements disponibles",
@@ -1458,7 +1494,7 @@ def show_property_analysis() -> None:
                 on_click=_submit_address_lookup,
             )
         elif manual_mode:
-            st.caption("Mode manuel : vous pouvez continuer avec vos chiffres sans effectuer de recherche publique.")
+            st.caption(lookup_message)
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     _run_queued_auto_role_sync()
     address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)
