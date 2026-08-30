@@ -54,8 +54,8 @@ class QuebecAerialImageryTests(unittest.TestCase):
         too_large = fetch_aerial_image(-73.5, 45.5, True, fetch_image=lambda _: (b"x" * (MAX_IMAGE_BYTES + 1), "image/png"))
         self.assertEqual(too_large.status, "unavailable")
 
-    def test_empty_current_coverage_uses_a_recent_official_fallback(self):
-        """A blank 2025 sector may still be covered by the 2024 MRNF layer."""
+    def test_empty_current_coverage_uses_the_next_verified_official_layer(self):
+        """A blank first layer can fall back without changing the reported year."""
 
         blank = BytesIO()
         Image.new("RGB", (20, 20), "white").save(blank, format="PNG")
@@ -68,9 +68,17 @@ class QuebecAerialImageryTests(unittest.TestCase):
 
         result = fetch_aerial_image(-73.5, 45.5, True, fetch_image=fetch_by_layer)
         self.assertEqual(result.status, "available")
-        self.assertEqual(result.acquisition_year, 2024)
+        self.assertEqual(result.acquisition_year, 2025)
         self.assertEqual(len(layers), 2)
         self.assertNotEqual(layers[0], layers[1])
+
+    def test_current_official_layer_prioritizes_the_inventory_coverage(self):
+        """The broader verified MRNF layer is attempted before fallback imagery."""
+
+        calls: list[str] = []
+        fetch_aerial_image(-73.5, 45.5, True, fetch_image=lambda url: calls.append(url) or (_image_bytes(), "image/png"))
+        self.assertEqual(len(calls), 1)
+        self.assertIn("Inventaire_Ecoforestier_2025", calls[0])
 
     def test_invalid_coordinates_never_start_a_request(self):
         result = fetch_aerial_image("not-a-coordinate", 45.5, True, fetch_image=lambda _: self.fail("request must not run"))

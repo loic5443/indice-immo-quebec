@@ -6,6 +6,6 @@ Cette vue est un contexte visuel seulement. Elle n’est jamais utilisée pour c
 
 L’image est demandée uniquement au service WMS officiel du MRNF, par HTTPS, après le consentement. Elle reste en mémoire pour la session courante et n’est pas ajoutée aux brouillons, analyses sauvegardées, rapports PDF, journaux, diagnostics ou événements de télémétrie. Les coordonnées nécessaires au rendu ne sont jamais conservées après la requête.
 
-La couverture et l’année de prise de vue varient. Si aucun rendu officiel exploitable n’est disponible, ImmoRadar indique simplement que la vue aérienne est indisponible et l’analyse peut se poursuivre en mode manuel.
+La couverture et l’année de prise de vue varient. ImmoRadar essaie d’abord les couches officielles récentes de l’inventaire écoforestier, puis des couches récentes de planification et suivi; il n’effectue qu’un nombre limité de requêtes après consentement. Si aucun rendu officiel exploitable n’est disponible, ImmoRadar indique simplement que la vue aérienne est indisponible et l’analyse peut se poursuivre en mode manuel.
 
 Attribution : MRNF — Imagerie orthorectifiée du Québec. Licence : CC BY 4.0, selon la fiche officielle Données Québec.

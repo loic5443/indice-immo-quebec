@@ -22,17 +22,19 @@ WMS_URL = "https://servicesmatriciels.mern.gouv.qc.ca/erdas-iws/ogc/wms/Imagerie
 WMS_HOST = "servicesmatriciels.mern.gouv.qc.ca"
 SOURCE_ID = "mrnf_imagerie_orthorectifiee"
 SOURCE_LABEL = "MRNF — Imagerie orthorectifiée du Québec"
-# A current official RGB layer.  The service returns an image only where that
-# acquisition is covered; a missing image deliberately remains unavailable.
-# The MRNF publication is a collection of acquisitions, not a single
-# province-wide photograph.  Try the newest verified public layers first so
-# a sector absent from the current flight can still show a recent official
-# context from a prior acquisition.  This stays deliberately short: a
-# consented selection must never trigger a long series of map requests.
+# The official service publishes two complementary acquisition programs.  The
+# ecoforest inventory layer has broader useful coverage in several populated
+# sectors than the planning/follow-up layer that was initially queried alone.
+# Both remain official MRNF imagery, are fetched only after consent, and are
+# visual context only.  The publication is still a collection of acquisitions,
+# not a promise of a province-wide current photo.  Try only a short list of
+# newest verified layers so a selection never starts a long series of requests.
 AERIAL_LAYERS: tuple[tuple[int, str], ...] = (
+    (2025, "Inventaire_Ecoforestier_2025_2025_Inv_Ecofor_20cm_RVB"),
     (2025, "Planification_Suivi_Controle_2025_2025_Planif_Suiv_Cont_20cm_RVB"),
+    (2024, "Inventaire_Ecoforestier_2024_2024_Inv_Ecofor_20cm_RVB"),
     (2024, "Planification_Suivi_Controle_2024_2024_Planif_Suiv_Cont_20cm_RVB"),
-    (2023, "Planification_Suivi_Controle_2023_2023_Planif_Suiv_Cont_20cm_RVB"),
+    (2023, "Inventaire_Ecoforestier_2023_2023_Inv_Ecofor_20cm_RVB"),
 )
 # Kept as a compatibility alias for callers and documentation that refer to
 # the newest layer.  The response itself always records the actual year used.
