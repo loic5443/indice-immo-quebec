@@ -1232,6 +1232,8 @@ def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict 
             st.info("Vos chiffres financiers sont calculés. Pour comparer un prix demandé à une estimation de marché, ajoutez ensuite trois ventes comparables dont vous confirmez la provenance.")
         elif role_match:
             st.info("Le rôle municipal est révélé. Ajoutez maintenant les chiffres que vous connaissez pour comprendre les finances de votre projet. ImmoValue restera distincte et ne sera proposée qu’avec trois comparables admissibles.")
+            st.markdown("**Pour poursuivre simplement :** choisissez le type de propriété, ajoutez le prix demandé seulement si vous le connaissez, puis passez aux chiffres de financement et aux revenus ou dépenses de votre projet.")
+            st.caption("Le type de propriété personnalise la lecture de votre dossier. Le prix demandé est facultatif : il servira uniquement à comparer votre point de départ avec ImmoValue lorsqu’elle pourra être calculée.")
         else:
             st.info("Choisissez une adresse couverte ou poursuivez manuellement. Vous pouvez ensuite ajouter vos chiffres pour calculer l’analyse financière.")
         st.caption("Le prix demandé, si vous l’avez, sert seulement à comparer votre point de départ avec ImmoValue lorsqu’elle est produite. Il n’est jamais remplacé automatiquement par la valeur au rôle.")

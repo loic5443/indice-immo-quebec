@@ -116,6 +116,9 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertIn("Le rôle municipal est révélé", messages)
         self.assertIn("trois comparables admissibles", messages)
         self.assertIn("n’est pas un prix de vente", messages)
+        rendered = "\n".join([item.value for item in app.markdown] + [item.value for item in app.caption])
+        self.assertIn("Pour poursuivre simplement", rendered)
+        self.assertIn("prix demandé est facultatif", rendered)
 
     def test_saved_immovalue_snapshot_keeps_declared_price_without_an_address(self):
         app = AppTest.from_string(
