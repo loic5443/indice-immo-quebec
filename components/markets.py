@@ -5,6 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from data.database import DATABASE_PATH
+from components.sidebar import go_to
 from services.municipal_comparison_service import comparison, municipalities, selection_options
 
 
@@ -94,9 +95,17 @@ def show_markets() -> None:
     all_municipalities = municipalities(DATABASE_PATH)
     if not all_municipalities:
         st.warning(
-            "Aucune donnée municipale officielle n’est encore chargée dans cet environnement. "
-            "Un administrateur peut importer une source MAMH autorisée; aucune valeur de remplacement n’est affichée."
+            "La comparaison municipale officielle n’est pas encore disponible dans cet environnement. "
+            "ImmoRadar n’affiche aucune valeur de remplacement et ne crée aucun indicateur de marché sans source autorisée."
         )
+        st.markdown(
+            "<div class='account-summary'><p class='eyebrow'>EN ATTENDANT</p>"
+            "<div class='notice-title' role='heading' aria-level='2'>Analysez une propriété avec les renseignements disponibles.</div>"
+            "<p>Vous pouvez révéler un rôle municipal lorsqu’il est disponible, ajouter vos chiffres et sauvegarder votre dossier. "
+            "La comparaison entre municipalités apparaîtra ici seulement lorsque les mêmes indicateurs officiels pourront être comparés honnêtement.</p></div>",
+            unsafe_allow_html=True,
+        )
+        st.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), key="markets_empty_analysis")
         return
 
     st.info(

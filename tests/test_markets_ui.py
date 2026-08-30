@@ -16,8 +16,11 @@ class MarketsUiTests(unittest.TestCase):
             "finally:\n"
             "    page.municipalities = original_municipalities\n"
         ).run(timeout=20)
-        self.assertTrue(any("Aucune donnée municipale officielle" in item.value for item in app.warning))
+        self.assertTrue(any("comparaison municipale officielle" in item.value for item in app.warning))
         self.assertEqual(list(app.multiselect), [])
+        self.assertIn("Analyser une propriété", [button.label for button in app.button])
+        text = " ".join(item.value for item in app.warning)
+        self.assertIn("ne crée aucun indicateur de marché", text)
 
     def test_loaded_source_shows_counts_without_invented_market_indicators(self):
         app = AppTest.from_string(
