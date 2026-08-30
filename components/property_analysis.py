@@ -1304,12 +1304,39 @@ def _show_property_stage() -> None:
 def _show_finance_stage() -> None:
     """Render the useful financial inputs first; less common inputs stay available."""
 
-    st.markdown("<div class='section-space compact-space'></div><h2>2. Vos chiffres</h2><p class='section-intro'>Ajoutez les montants que vous connaissez. Les résultats ne sont affichés qu’après votre calcul.</p>", unsafe_allow_html=True)
-    rental_objective = st.session_state.get("workflow_objective_choice") == "Investir et louer"
+    objective = st.session_state.get("workflow_objective_choice", "")
+    finance_copy = {
+        "Acheter pour y habiter": (
+            "Vérifiez vos chiffres de financement et le coût mensuel de votre projet. "
+            "Les revenus locatifs sont facultatifs.",
+            "Prix d’achat envisagé ($)",
+        ),
+        "Investir et louer": (
+            "Ajoutez vos hypothèses de financement, de loyers et de dépenses pour lire le flux de trésorerie. "
+            "Les résultats apparaissent seulement après votre calcul.",
+            "Prix d’acquisition envisagé ($)",
+        ),
+        "Connaître la valeur de ma propriété": (
+            "Ajoutez seulement les chiffres utiles pour étudier votre situation. "
+            "La valeur au rôle municipal reste distincte de ce prix de référence.",
+            "Valeur de référence pour vos chiffres ($)",
+        ),
+        "Préparer une vente": (
+            "Ajoutez les chiffres utiles pour examiner votre situation avant une vente. "
+            "Le prix demandé et la valeur au rôle restent des repères distincts.",
+            "Prix de référence pour vos chiffres ($)",
+        ),
+    }
+    intro, price_label = finance_copy.get(
+        objective,
+        ("Ajoutez les montants que vous connaissez. Les résultats ne sont affichés qu’après votre calcul.", "Prix retenu pour vos calculs ($)"),
+    )
+    st.markdown(f"<div class='section-space compact-space'></div><h2>2. Vos chiffres</h2><p class='section-intro'>{intro}</p>", unsafe_allow_html=True)
+    rental_objective = objective == "Investir et louer"
     rental_already_entered = bool(st.session_state.get("rental_income", 0))
     acquisition, financing = st.columns(2)
     with acquisition:
-        st.number_input("Prix retenu pour vos calculs ($)", min_value=0.0, step=5_000.0, key="property_price")
+        st.number_input(price_label, min_value=0.0, step=5_000.0, key="property_price")
         st.number_input("Mise de fonds ($)", min_value=0.0, step=5_000.0, key="down_payment")
         if rental_objective or rental_already_entered:
             st.number_input("Revenus locatifs mensuels prévus ($)", min_value=0.0, step=100.0, key="rental_income")

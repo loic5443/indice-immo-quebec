@@ -186,6 +186,23 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertIn("ne nécessite pas de revenu locatif", captions)
         self.assertTrue(any(item.label == "Ajouter des revenus locatifs (facultatif)" for item in owner.expander))
 
+    def test_financial_form_uses_plain_language_for_each_project(self):
+        cases = {
+            "Acheter pour y habiter": "Prix d’achat envisagé ($)",
+            "Investir et louer": "Prix d’acquisition envisagé ($)",
+            "Connaître la valeur de ma propriété": "Valeur de référence pour vos chiffres ($)",
+            "Préparer une vente": "Prix de référence pour vos chiffres ($)",
+        }
+        for objective, expected_label in cases.items():
+            with self.subTest(objective=objective):
+                app = AppTest.from_string(
+                    "import streamlit as st\n"
+                    "import components.property_analysis as page\n"
+                    f"st.session_state['workflow_objective_choice'] = {objective!r}\n"
+                    "page._show_finance_stage()\n"
+                ).run(timeout=20)
+                self.assertEqual(app.number_input(key="property_price").label, expected_label)
+
     def test_renewal_date_is_optional_in_advanced_financial_inputs(self):
         app = AppTest.from_string(
             "import components.property_analysis as page\n"
