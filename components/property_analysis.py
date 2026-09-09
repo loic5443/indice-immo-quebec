@@ -731,8 +731,13 @@ def _address_coverage_message() -> str:
     except Exception:
         snapshot = {"status": "not_loaded"}
     if snapshot.get("status") == "ready":
+        address_count = int(snapshot.get("addresses") or 0)
+        updated_at = str(snapshot.get("updated_at") or "")[:10]
+        count_label = f"{address_count:,}".replace(",", " ")
+        freshness = f" · index local mis à jour le {updated_at}" if updated_at else ""
         return (
-            "Les suggestions d’adresses couvrent le Québec grâce au répertoire public local. "
+            f"Le répertoire public local contient {count_label} adresse(s) québécoise(s){freshness}. "
+            "Les suggestions couvrent le Québec grâce à ce répertoire officiel. "
             "La valeur au rôle municipal dépend toutefois de la disponibilité officielle de chaque municipalité; "
             "vous pouvez toujours poursuivre manuellement."
         )

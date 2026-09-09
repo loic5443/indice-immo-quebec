@@ -92,7 +92,10 @@ class QuebecAddressRepositoryTests(unittest.TestCase):
         archive(self.snapshot, [row("public-1", "123", "RUE PUBLIQUE", "Ville-Test")])
         import_rqa_archive(self.snapshot, self.db)
         with patch.object(page, "DATABASE_PATH", self.db):
-            self.assertIn("couvrent le Québec", page._address_coverage_message())
+            message = page._address_coverage_message()
+            self.assertIn("1 adresse", message)
+            self.assertIn("couvrent le Québec", message)
+            self.assertIn("valeur au rôle municipal dépend", message)
 
     def test_new_snapshot_switches_atomically_and_invalid_snapshot_preserves_previous(self):
         archive(self.snapshot, [row("old", "10", "RUE PUBLIQUE", "Ville-Test")])
