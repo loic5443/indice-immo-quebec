@@ -100,6 +100,64 @@ def _objective_options(saved_objective: str = "") -> list[str]:
     return options
 
 
+def _show_alert_email_preferences(user: dict) -> None:
+    """Show the independent alert-email preference before secondary settings."""
+
+    email_alerts_available = can_use(user, "alerts")
+    with st.container(border=True):
+        st.subheader("Alertes par courriel")
+        if not email_alerts_available:
+            st.markdown(
+                "<div class='premium-next-step'><p class='eyebrow'>APERÇU PREMIUM</p>"
+                "<p>Recevez un avis générique seulement lorsqu’un changement vérifiable "
+                "est détecté dans un dossier suivi. Les détails restent dans ImmoRadar.</p></div>",
+                unsafe_allow_html=True,
+            )
+            st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
+            st.button("Découvrir les alertes Premium", key="account_alerts_premium", on_click=go_to, args=("Premium",), width="stretch")
+            return
+
+        st.write("Choisissez séparément si les alertes vérifiables de vos dossiers peuvent vous être envoyées par courriel.")
+        delivery = alert_email_delivery_status(user["id"], DATABASE_PATH)
+        alert_email_consent = st.checkbox(
+            "Recevoir les alertes de mes dossiers par courriel (Premium)",
+            value=bool(st.session_state.get("current_user", user).get("alert_email_consent")),
+            key="account_alert_email_consent",
+        )
+        if delivery["readiness"] != "ready":
+            st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas configurée sur ce serveur pour le moment.")
+        elif delivery["latest_outcome"] == "failed":
+            st.warning("Le dernier essai de livraison n’a pas abouti. Vos alertes restent visibles dans ImmoRadar; vous pouvez refaire un test ci-dessous.")
+        elif delivery["latest_outcome"] == "sent":
+            st.caption("Livraison configurée · le dernier essai ou avis a été envoyé avec succès.")
+        else:
+            st.caption("Livraison configurée · aucun avis n’a encore été nécessaire.")
+        if st.button("Enregistrer mon choix d’alerte", key="save_alert_email_preference", type="primary"):
+            saved = set_alert_email_consent(user["id"], bool(alert_email_consent), DATABASE_PATH)
+            if saved:
+                st.session_state["current_user"] = {
+                    **st.session_state.get("current_user", user),
+                    "alert_email_consent": int(bool(alert_email_consent)),
+                }
+                st.success("Votre choix d’alerte par courriel est enregistré.")
+            else:
+                st.error("Votre choix n’a pas pu être enregistré. Réessayez plus tard.")
+
+        current_consent = bool(st.session_state.get("current_user", user).get("alert_email_consent"))
+        if current_consent and alert_email_readiness() == "ready":
+            st.success("La livraison des alertes par courriel est prête.")
+            with st.expander("Tester la livraison par courriel", expanded=False):
+                st.caption("Un seul courriel de test sera envoyé à l’adresse de votre compte. Il ne contient aucune adresse de propriété ni donnée financière.")
+                if st.button("Envoyer un courriel test", key="send_alert_email_test"):
+                    outcome = send_test_alert_email(int(user["id"]), DATABASE_PATH)
+                    if outcome == "sent":
+                        st.success("Courriel de test envoyé. Vérifiez votre boîte de réception et les indésirables.")
+                    elif outcome == "already_sent":
+                        st.info("Un courriel de test a déjà été envoyé pour ce compte.")
+                    else:
+                        st.error("Le courriel de test n’a pas pu être envoyé. Vérifiez la configuration Brevo et réessayez plus tard.")
+
+
 def show_account() -> None:
     """Show account credentials forms or the signed-in account summary."""
     st.markdown("<p class='eyebrow'>ESPACE PERSONNEL</p>", unsafe_allow_html=True)
@@ -138,6 +196,7 @@ def show_account() -> None:
             st.info("Votre espace est prêt. Commencez par analyser une propriété : vous pourrez ensuite conserver votre dossier et vos scénarios ici.")
             primary.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
         sign_out.button("Se déconnecter", on_click=logout, width="stretch")
+        _show_alert_email_preferences(user)
         with st.expander("Préférences pour mes nouvelles analyses", expanded=False):
             st.caption("Ces choix personnalisent vos prochains dossiers. Ils ne modifient jamais les analyses déjà sauvegardées.")
             objective_options = _objective_options(str(user.get("user_objective") or ""))
@@ -185,66 +244,6 @@ def show_account() -> None:
                         "alert_email_consent": int(bool(user.get("alert_email_consent"))),
                     }
                     st.success("Préférences enregistrées pour vos nouvelles analyses.")
-        # Alert delivery is deliberately separate from profile preferences: it
-        # is a distinct consent and should never be hidden among analysis fields.
-        email_alerts_available = can_use(user, "alerts")
-        with st.container(border=True):
-            st.subheader("Alertes par courriel")
-            if not email_alerts_available:
-                # A disabled consent control looks like a broken setting.  Free
-                # accounts instead get a truthful preview and a single route to
-                # the plan explanation; no consent is stored until the feature
-                # is actually available to the account.
-                st.markdown(
-                    "<div class='premium-next-step'><p class='eyebrow'>APERÇU PREMIUM</p>"
-                    "<p>Recevez un avis générique seulement lorsqu’un changement vérifiable "
-                    "est détecté dans un dossier suivi. Les détails restent dans ImmoRadar.</p></div>",
-                    unsafe_allow_html=True,
-                )
-                st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
-                st.button("Découvrir les alertes Premium", key="account_alerts_premium", on_click=go_to, args=("Premium",), width="stretch")
-            else:
-                st.write("Choisissez séparément si les alertes vérifiables de vos dossiers peuvent vous être envoyées par courriel.")
-                delivery = alert_email_delivery_status(user["id"], DATABASE_PATH)
-                alert_email_consent = st.checkbox(
-                    "Recevoir les alertes de mes dossiers par courriel (Premium)",
-                    value=bool(st.session_state.get("current_user", user).get("alert_email_consent")),
-                    key="account_alert_email_consent",
-                )
-                if delivery["readiness"] != "ready":
-                    st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas configurée sur ce serveur pour le moment.")
-                elif delivery["latest_outcome"] == "failed":
-                    st.warning("Le dernier essai de livraison n’a pas abouti. Vos alertes restent visibles dans ImmoRadar; vous pouvez refaire un test ci-dessous.")
-                elif delivery["latest_outcome"] == "sent":
-                    st.caption("Livraison configurée · le dernier essai ou avis a été envoyé avec succès.")
-                else:
-                    st.caption("Livraison configurée · aucun avis n’a encore été nécessaire.")
-                if st.button("Enregistrer mon choix d’alerte", key="save_alert_email_preference", type="primary"):
-                    saved = set_alert_email_consent(user["id"], bool(alert_email_consent), DATABASE_PATH)
-                    if saved:
-                        st.session_state["current_user"] = {
-                            **st.session_state.get("current_user", user),
-                            "alert_email_consent": int(bool(alert_email_consent)),
-                        }
-                        st.success("Votre choix d’alerte par courriel est enregistré.")
-                    else:
-                        st.error("Votre choix n’a pas pu être enregistré. Réessayez plus tard.")
-
-                # A test is intentionally separate from saving consent. It is an
-                # explicit one-time action for an eligible account.
-                current_consent = bool(st.session_state.get("current_user", user).get("alert_email_consent"))
-                if current_consent and alert_email_readiness() == "ready":
-                    st.success("La livraison des alertes par courriel est prête.")
-                    with st.expander("Tester la livraison par courriel", expanded=False):
-                        st.caption("Un seul courriel de test sera envoyé à l’adresse de votre compte. Il ne contient aucune adresse de propriété ni donnée financière.")
-                        if st.button("Envoyer un courriel test", key="send_alert_email_test"):
-                            outcome = send_test_alert_email(int(user["id"]), DATABASE_PATH)
-                            if outcome == "sent":
-                                st.success("Courriel de test envoyé. Vérifiez votre boîte de réception et les indésirables.")
-                            elif outcome == "already_sent":
-                                st.info("Un courriel de test a déjà été envoyé pour ce compte.")
-                            else:
-                                st.error("Le courriel de test n’a pas pu être envoyé. Vérifiez la configuration Brevo et réessayez plus tard.")
         if not can_use(user, "advanced_comparisons"):
             show_premium_teaser(
                 feature="Dossiers suivis, comparaisons, scénarios et rapports",

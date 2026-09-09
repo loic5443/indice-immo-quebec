@@ -59,7 +59,7 @@ def show_sidebar() -> str:
         f"<span>{account_hint}</span></div>",
         unsafe_allow_html=True,
     )
-    if st.sidebar.button(f"👤 {account_label}", key="secondary_account", width="stretch"):
+    if st.sidebar.button(f"👤 {account_label} et alertes", key="secondary_account", width="stretch"):
         _secondary("Mon compte")
     with st.sidebar.expander("Informations et aide"):
         if st.button("À propos", key="secondary_about", width="stretch"):
