@@ -39,6 +39,20 @@ class MarketsUiTests(unittest.TestCase):
         self.assertIn("Commencez par rechercher une municipalité", text)
         self.assertTrue(any("ne retire jamais les municipalités" in item.value for item in app.caption))
 
+    def test_one_selected_municipality_gives_a_clear_next_step(self):
+        app = AppTest.from_string(
+            "import components.markets as page\n"
+            "original_municipalities, original_comparison = page.municipalities, page.comparison\n"
+            "try:\n"
+            "    page.municipalities = lambda _database, _query='': ['Montréal', 'Québec']\n"
+            "    page.comparison = lambda *_args: {'available': False, 'year': None, 'rows': [], 'missing': []}\n"
+            "    page.show_markets()\n"
+            "finally:\n"
+            "    page.municipalities, page.comparison = original_municipalities, original_comparison\n"
+        ).run(timeout=20)
+        app.multiselect(key="municipal_selected").set_value(["Montréal"]).run(timeout=20)
+        self.assertTrue(any("Montréal est sélectionnée" in item.value for item in app.info))
+
     def test_available_comparison_has_one_official_indicator_selector(self):
         rows = [
             {"indicator_code": code, "municipality_name": municipality, "value": value, "year": 2025}

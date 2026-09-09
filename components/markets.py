@@ -139,6 +139,11 @@ def show_markets() -> None:
                 "Choisissez des municipalités couvertes par les mêmes indicateurs et la même année; "
                 "aucune valeur manquante n’est remplacée par zéro."
             )
+        elif len(selected) == 1:
+            st.info(
+                f"{selected[0]} est sélectionnée. Ajoutez une deuxième municipalité pour afficher une comparaison "
+                "fondée sur les mêmes indicateurs officiels et la même année."
+            )
         else:
             st.info(
                 "Sélectionnez au moins deux municipalités couvertes par la même année. Les données manquantes restent "
