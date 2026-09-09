@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
+BREVO_ACCOUNT_URL = "https://api.brevo.com/v3/account"
 
 
 class BrevoUnavailable(RuntimeError):
@@ -25,6 +27,35 @@ def delivery_status(environment: dict[str, str] | None = None) -> str:
     if not environment.get("BREVO_API_KEY", "").strip() or not environment.get("BREVO_SENDER_EMAIL", "").strip():
         return "not_configured"
     return "ready"
+
+
+def verify_delivery_configuration(
+    environment: dict[str, str] | None = None, *, opener=urlopen,
+) -> str:
+    """Check Brevo credentials only after an explicit user action.
+
+    The check calls Brevo's account endpoint, never sends an email, and
+    returns categorical outcomes only.  It intentionally exposes neither a
+    key, an account record nor a provider response body.
+    """
+
+    status = delivery_status(environment)
+    if status != "ready":
+        return status
+    environment = environment if environment is not None else os.environ
+    request = Request(
+        BREVO_ACCOUNT_URL,
+        headers={"accept": "application/json", "api-key": environment["BREVO_API_KEY"]},
+    )
+    try:
+        with opener(request, timeout=10) as response:
+            return "verified" if 200 <= int(response.status) < 300 else "provider_unavailable"
+    except HTTPError as error:
+        return "credentials_rejected" if error.code in {401, 403} else "provider_unavailable"
+    except URLError:
+        return "provider_unavailable"
+    except OSError:
+        return "transport_error"
 
 
 def send_email(recipient: str, subject: str, html_content: str, *, environment: dict[str, str] | None = None, opener=urlopen) -> None:

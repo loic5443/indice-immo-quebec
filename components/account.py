@@ -17,6 +17,7 @@ from services.alert_email_service import (
     alert_email_readiness,
     send_test_alert_email,
     set_alert_email_consent,
+    verify_alert_email_configuration,
 )
 from services.auth_service import validate_login_submission
 from domain.objectives import ANALYSIS_OBJECTIVES
@@ -146,6 +147,16 @@ def _show_alert_email_preferences(user: dict) -> None:
         current_consent = bool(st.session_state.get("current_user", user).get("alert_email_consent"))
         if current_consent and alert_email_readiness() == "ready":
             st.success("La livraison des alertes par courriel est prête.")
+            with st.expander("Vérifier la configuration Brevo", expanded=False):
+                st.caption("Cette vérification ne transmet ni dossier, ni adresse, ni donnée financière et n’envoie aucun courriel.")
+                if st.button("Vérifier Brevo", key="verify_brevo_configuration"):
+                    configuration = verify_alert_email_configuration()
+                    if configuration == "verified":
+                        st.success("Brevo confirme que la configuration de courriel est valide.")
+                    elif configuration == "credentials_rejected":
+                        st.error("Brevo refuse actuellement la clé configurée. Créez ou remplacez la clé API dans les réglages locaux, puis vérifiez de nouveau.")
+                    else:
+                        st.warning("Brevo n’est pas joignable ou sa configuration est incomplète pour le moment. Aucun courriel n’a été envoyé.")
             with st.expander("Tester la livraison par courriel", expanded=False):
                 st.caption("Un seul courriel de test sera envoyé à l’adresse de votre compte. Il ne contient aucune adresse de propriété ni donnée financière.")
                 if st.button("Envoyer un courriel test", key="send_alert_email_test"):

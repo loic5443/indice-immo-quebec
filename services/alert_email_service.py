@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
 
-from providers.brevo_email import BrevoUnavailable, delivery_status, send_email
+from providers.brevo_email import BrevoUnavailable, delivery_status, send_email, verify_delivery_configuration
 from repositories.sqlite_repository import SQLiteRepository
 from services.entitlements_service import can_use
 
@@ -52,6 +52,16 @@ def alert_email_readiness(environment: dict[str, str] | None = None) -> str:
     """Expose only a safe status for the UI, never provider configuration."""
 
     return delivery_status(environment)
+
+
+def verify_alert_email_configuration(
+    environment: dict[str, str] | None = None, *, opener=None,
+) -> str:
+    """Return a safe explicit Brevo configuration result for the account UI."""
+
+    if opener is None:
+        return verify_delivery_configuration(environment)
+    return verify_delivery_configuration(environment, opener=opener)
 
 
 def alert_email_delivery_status(
