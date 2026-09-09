@@ -63,7 +63,10 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
                 st.caption(f"Dossier : {alert['property_name']} · instantané du {str(alert['created_at'])[:10]}")
                 user_id = user.get("id")
                 if isinstance(user_id, int):
-                    if st.button("Ouvrir et modifier ce dossier", key=f"alert_open_{alert['analysis_id']}"):
+                    # One snapshot can legitimately create several factual
+                    # alerts (for example a role update and rate sensitivity).
+                    # Include the alert category so every action stays unique.
+                    if st.button("Ouvrir et modifier ce dossier", key=f"alert_open_{alert['analysis_id']}_{alert['kind']}"):
                         try:
                             st.session_state["analysis_reopen_pending"] = prepare_reopen_draft(
                                 user_id, int(alert["analysis_id"]), DATABASE_PATH,

@@ -87,7 +87,7 @@ class AlertsUiTests(unittest.TestCase):
                     f"page.show_alert_center({user!r}, {[analysis]!r})\n"
                 )
                 app = AppTest.from_string(source).run(timeout=20)
-                app.button(key=f"alert_open_{analysis_id}").click().run(timeout=20)
+                app.button(key=f"alert_open_{analysis_id}_rate_sensitivity").click().run(timeout=20)
                 self.assertEqual(app.session_state["main_navigation"], "Analyser")
                 self.assertEqual(app.session_state["analysis_reopen_pending"]["owner_id"], user["id"])
             finally:
