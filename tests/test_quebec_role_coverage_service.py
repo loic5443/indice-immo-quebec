@@ -54,7 +54,9 @@ class RoleCoverageSyncTests(unittest.TestCase):
         with sqlite3.connect(self.db) as connection, connection:
             connection.execute("INSERT INTO role_territory_settings(territory_code,enabled) VALUES('02048',0)")
         result = synchronize_role_coverage(self.db, territory_limit=None, byte_budget=1_000_000, fetcher=self._fetcher, version_fetcher=lambda _: "2.9")
-        self.assertEqual((result.synchronized, result.remaining), (2, 0))
+        # A disabled territory is intentionally not downloaded, but it is
+        # still visibly uncovered rather than reported as a completed job.
+        self.assertEqual((result.synchronized, result.remaining, result.status), (2, 1, "stopped"))
         with sqlite3.connect(self.db) as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM role_territory_imports WHERE territory_code='02048'").fetchone()[0], 0)
 
@@ -74,6 +76,14 @@ class RoleCoverageSyncTests(unittest.TestCase):
         self.assertEqual((first.synchronized, first.failed), (0, 1))
         second = synchronize_role_coverage(self.db, territory_limit=1, byte_budget=1_000_000, fetcher=self._fetcher, version_fetcher=lambda _: "2.9")
         self.assertEqual((second.synchronized, second.failed), (1, 0))
+
+    def test_cooldown_failure_remains_uncovered_in_the_completion_count(self):
+        failed = synchronize_role_coverage(
+            self.db, territory_limit=1, byte_budget=1_000_000,
+            fetcher=lambda _: (_ for _ in ()).throw(ValueError("official_network_unavailable")),
+            version_fetcher=lambda _: "2.9",
+        )
+        self.assertEqual((failed.status, failed.remaining), ("stopped", 3))
 
 
 if __name__ == "__main__":

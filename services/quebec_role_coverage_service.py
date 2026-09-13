@@ -116,12 +116,18 @@ def synchronize_role_coverage(
                 skipped += 1
             else:
                 failed += 1
-        remaining = len(_eligible_entries(database_path))
+        # Cooldown entries are intentionally omitted from this batch, but they
+        # still count as uncovered.  Never call the provincial job complete
+        # until every official territory has an active imported role.
+        remaining = coverage_status(database_path)["remaining"]
         status = "completed" if remaining == 0 else "stopped"
         output = CoverageSyncResult(run_id, status, scanned, synchronized, skipped, failed, downloaded, remaining)
         _finish_run(database_path, output)
         return output
     except Exception:
-        output = CoverageSyncResult(run_id, "failed", scanned, synchronized, skipped, failed + 1, downloaded, len(_eligible_entries(database_path)))
+        output = CoverageSyncResult(
+            run_id, "failed", scanned, synchronized, skipped, failed + 1,
+            downloaded, coverage_status(database_path)["remaining"],
+        )
         _finish_run(database_path, output)
         raise
