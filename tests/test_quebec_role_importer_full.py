@@ -30,5 +30,11 @@ class RoleImporterFullTests(unittest.TestCase):
   self.xml.write_text(XML.replace('01023','99999',1))
   with self.assertRaises(ValueError):
    import_role_xml(self.xml,self.db)
+ def test_failed_import_keeps_the_previous_territory_atomic(self):
+  import_role_xml(self.xml,self.db,batch_size=1)
+  self.xml.write_text(XML.replace('<RLM01A>01023</RLM01A>','<RLM01A>99999</RLM01A>'))
+  with self.assertRaises(ValueError):
+   import_role_xml(self.xml,self.db,batch_size=1)
+  self.assertEqual(search_role_units(self.db,'01023','12 RUE')[0]['total_value'],300)
  def test_whitelist_excludes_sensitive_labels(self):
   self.assertNotIn('RL0201Gx',PUBLIC_FIELDS);self.assertNotIn('RL0201Hx',PUBLIC_FIELDS)

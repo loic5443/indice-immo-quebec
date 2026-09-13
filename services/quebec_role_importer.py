@@ -39,34 +39,55 @@ def _unit(element, sequence, territory, year, checksum, source_version):
  provenance={key:{"source":f"MAMH rôle {territory} XML {source_version}","xml":key} for key in PUBLIC_FIELDS if _text(element,key) is not None}
  return (territory,checksum,matricule or f"unit-{sequence}",matricule,civic,street,local,address,_text(element,"RL0105A"),_num(element,"RL0302A"),_num(element,"RL0306A"),_num(element,"RL0307A",True),_num(element,"RL0402A"),_num(element,"RL0403A"),_num(element,"RL0404A"),year,_text(element,"RL0401A"),json.dumps(provenance,ensure_ascii=False),_role_key(' '.join(x for x in (civic,street) if x)),_role_key(street or ''))
 
-def import_role_xml(path, database_path, territory="01023"):
- """Atomically replace one territory after a complete, streaming validation."""
- path=Path(path); digest=hashlib.sha256()
- with path.open("rb") as stream:
+_UNIT_COLUMNS="territory_code,import_checksum,unit_key,matricule,civic_number,street_name,address_unit,address_text,use_code,land_area_m2,building_floors,construction_year,land_value,building_value,total_value,role_year,market_reference_date,field_provenance,address_search_key,street_search_key"
+_UNIT_PLACEHOLDERS=",".join("?" for _ in _UNIT_COLUMNS.split(","))
+
+
+def _checksum(path):
+ digest=hashlib.sha256()
+ with Path(path).open("rb") as stream:
   for block in iter(lambda:stream.read(1024*1024),b""): digest.update(block)
- checksum=digest.hexdigest(); version=year=None; rows=[]; rejected=0; sequence=0
- for _,element in ET.iterparse(path,events=("end",)):
-  if element.tag=="VERSION": version=(element.text or '').strip()
-  elif element.tag=="RLM01A" and (element.text or '').strip()!=territory: raise ValueError("Territoire XML inattendu.")
-  elif element.tag=="RLM02A": year=int((element.text or '').strip())
-  elif element.tag=="RLUEx":
-   sequence+=1
-   try: rows.append(_unit(element,sequence,territory,year or 0,checksum,version or "inconnue"))
-   except ValueError: rejected+=1
-   element.clear()
- if version not in SUPPORTED_XML_VERSIONS or not year: raise ValueError("Version ou année XML invalide.")
+ return digest.hexdigest()
+
+
+def import_role_xml(path, database_path, territory="01023", batch_size=1_000):
+ """Atomically replace one role while staging public rows in temporary disk storage.
+
+ The former implementation kept every unit in Python memory.  This version
+ keeps only a small batch in memory, writes the whitelist-only rows to a
+ connection-local temporary table, then replaces the live territory only after
+ the complete XML has passed validation.  A failed import leaves the prior
+ role untouched.
+ """
+ if batch_size < 1: raise ValueError("Taille de lot invalide.")
+ path=Path(path); metadata=inspect_role_xml(path,territory)
+ checksum=_checksum(path); version=metadata["version"]; year=metadata["year"]
  c=sqlite3.connect(database_path)
+ rows=[]; rejected=0; sequence=0; imported=0
  try:
+  c.execute("PRAGMA temp_store=FILE")
+  c.execute(f"CREATE TEMP TABLE role_import_stage AS SELECT {_UNIT_COLUMNS} FROM role_assessment_units WHERE 0")
+  stage_sql=f"INSERT INTO role_import_stage ({_UNIT_COLUMNS}) VALUES ({_UNIT_PLACEHOLDERS})"
+  for _,element in ET.iterparse(path,events=("end",)):
+   if element.tag=="RLUEx":
+    sequence+=1
+    try: rows.append(_unit(element,sequence,territory,year,checksum,version))
+    except ValueError: rejected+=1
+    element.clear()
+    if len(rows)>=batch_size:
+     c.executemany(stage_sql,rows); imported+=len(rows); rows.clear(); c.commit()
+  if rows:
+   c.executemany(stage_sql,rows); imported+=len(rows); rows.clear(); c.commit()
   c.execute("BEGIN IMMEDIATE")
   c.execute("DELETE FROM role_assessment_units WHERE territory_code=?",(territory,))
-  c.executemany("INSERT INTO role_assessment_units (territory_code,import_checksum,unit_key,matricule,civic_number,street_name,address_unit,address_text,use_code,land_area_m2,building_floors,construction_year,land_value,building_value,total_value,role_year,market_reference_date,field_provenance,address_search_key,street_search_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",rows)
-  c.execute("INSERT OR REPLACE INTO role_territory_imports (territory_code,source_version,role_year,checksum,imported_units,rejected_units,synced_at) VALUES (?,?,?,?,?,?,?)",(territory,version,year,checksum,len(rows),rejected,datetime.now(timezone.utc).isoformat()))
+  c.execute(f"INSERT INTO role_assessment_units ({_UNIT_COLUMNS}) SELECT {_UNIT_COLUMNS} FROM role_import_stage")
+  c.execute("INSERT OR REPLACE INTO role_territory_imports (territory_code,source_version,role_year,checksum,imported_units,rejected_units,synced_at) VALUES (?,?,?,?,?,?,?)",(territory,version,year,checksum,imported,rejected,datetime.now(timezone.utc).isoformat()))
   c.commit()
  except Exception:
   c.rollback();raise
  finally:
   c.close()
- return {"territory_code":territory,"version":version,"year":year,"imported_units":len(rows),"rejected_units":rejected,"checksum":checksum}
+ return {"territory_code":territory,"version":version,"year":year,"imported_units":imported,"rejected_units":rejected,"checksum":checksum}
 
 def _role_key(value):
  """Compare public street labels without stripping meaningful civic information."""
