@@ -102,6 +102,44 @@ def _official_download(url: str, maximum: int = MAX_BYTES) -> bytes:
         raise ValueError("official_network_unavailable") from error
 
 
+def _official_download_to_temporary_file(url: str, maximum: int = MAX_BYTES) -> tuple[str, int]:
+    """Stream one official XML to a temporary file without retaining it in RAM."""
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname not in OFFICIAL_HOSTS:
+        raise ValueError("official_host_required")
+    path = ""
+    opener = urllib.request.build_opener(_NoRedirect)
+    request = urllib.request.Request(url, headers={"User-Agent": "ImmoRadar/1.0 official-data"})
+    try:
+        with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
+            if response.geturl() != url:
+                raise ValueError("redirect_refused")
+            declared = response.headers.get("Content-Length")
+            if declared and int(declared) > maximum:
+                raise ValueError("official_file_too_large")
+            with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as temporary:
+                path = temporary.name; total = 0; first = b""
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk: break
+                    if not first: first = chunk[:4]
+                    total += len(chunk)
+                    if total > maximum: raise ValueError("official_file_too_large")
+                    temporary.write(chunk)
+        if not first.startswith(b"\xef\xbb\xbf<"):
+            raise ValueError("XML territorial invalide ou trop volumineux.")
+        return path, total
+    except urllib.error.HTTPError as error:
+        raise ValueError("official_http_error") from error
+    except urllib.error.URLError as error:
+        raise ValueError("official_network_unavailable") from error
+    except Exception:
+        if path:
+            try: os.unlink(path)
+            except OSError: pass
+        raise
+
+
 def official_content_length(url: str) -> int | None:
     """Read only an official file size for a controlled batch budget check."""
 
@@ -389,6 +427,7 @@ def _synchronize_entry(
     fetcher=_official_download,
     version_fetcher=probe_role_xml_version,
     maximum_bytes: int = MAX_BYTES,
+    stream_to_file: bool = False,
 ) -> AutoSyncResult:
     """Safely synchronize at most one already-validated official territory.
 
@@ -419,21 +458,24 @@ def _synchronize_entry(
         version = version_fetcher(source_url)
         if version not in SUPPORTED_XML_VERSIONS:
             raise ValueError("Version ou année XML invalide.")
-        content = fetcher(source_url)
-        size = len(content)
-        # The public consent flow keeps ``MAX_BYTES``. A separate, explicit
-        # coverage job can pass its independently tested maintenance ceiling.
-        checksum = validate_xml(content, maximum_bytes)
-        with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as temporary:
-            temporary.write(content)
-            path = temporary.name
+        if stream_to_file:
+            path, size = _official_download_to_temporary_file(source_url, maximum_bytes)
+        else:
+            content = fetcher(source_url)
+            size = len(content)
+            # The public consent flow keeps ``MAX_BYTES``. A separate, explicit
+            # coverage job can pass its independently tested maintenance ceiling.
+            validate_xml(content, maximum_bytes)
+            with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as temporary:
+                temporary.write(content)
+                path = temporary.name
         try:
             summary = import_role_xml(path, database_path, territory)
         finally:
             os.unlink(path)
         with closing(sqlite3.connect(database_path)) as connection, connection:
             _record_attempt(connection, territory, "success")
-            _record_history(connection, territory, "public_auto_import", "success", "official_xml_validated", checksum=checksum, units=summary["imported_units"])
+            _record_history(connection, territory, "public_auto_import", "success", "official_xml_validated", checksum=summary["checksum"], units=summary["imported_units"])
         return AutoSyncResult("synchronized", "Renseignements officiels disponibles.", territory, summary["imported_units"], size, summary["version"])
     except Exception as error:
         unsupported_format = str(error) == "Version ou année XML invalide."

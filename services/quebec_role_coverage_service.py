@@ -21,7 +21,7 @@ DEFAULT_BATCH_TERRITORIES = 10
 DEFAULT_BATCH_BYTES = 250_000_000
 # This higher ceiling is restricted to the explicit, local coverage command.
 # The consent-driven, user-initiated path keeps its 20 MB safety ceiling.
-MAX_COVERAGE_FILE_BYTES = 100_000_000
+MAX_COVERAGE_FILE_BYTES = 700_000_000
 
 
 def _coverage_download(url: str) -> bytes:
@@ -143,6 +143,7 @@ def synchronize_role_coverage(
                 fetcher=fetcher,
                 version_fetcher=version_fetcher,
                 maximum_bytes=MAX_COVERAGE_FILE_BYTES,
+                stream_to_file=fetcher is _coverage_download,
             )
             if result.status == "synchronized":
                 synchronized += 1
