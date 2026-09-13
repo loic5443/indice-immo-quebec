@@ -128,7 +128,11 @@ def synchronize_role_coverage(
                 except ValueError:
                     failed += 1
                     continue
-                if declared_size is None or declared_size > byte_budget - downloaded:
+                if (
+                    declared_size is None
+                    or declared_size > MAX_COVERAGE_FILE_BYTES
+                    or declared_size > byte_budget - downloaded
+                ):
                     skipped += 1
                     continue
             scanned += 1

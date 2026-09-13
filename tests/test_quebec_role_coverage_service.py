@@ -127,6 +127,18 @@ class RoleCoverageSyncTests(unittest.TestCase):
         )
         self.assertEqual((result.scanned, result.synchronized, result.skipped), (0, 0, 1))
 
+    def test_coverage_never_retries_a_file_above_its_per_file_ceiling(self):
+        fetcher = lambda _: self.fail("a file above the per-file ceiling must not download")
+        result = synchronize_role_coverage(
+            self.db,
+            territory_limit=1,
+            byte_budget=MAX_COVERAGE_FILE_BYTES * 3,
+            fetcher=fetcher,
+            version_fetcher=lambda _: "2.9",
+            content_length_fetcher=lambda _: MAX_COVERAGE_FILE_BYTES + 1,
+        )
+        self.assertEqual((result.scanned, result.synchronized, result.skipped), (0, 0, 1))
+
 
 if __name__ == "__main__":
     unittest.main()
