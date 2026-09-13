@@ -30,6 +30,12 @@ SOURCE_LABEL = "MRNF — Imagerie orthorectifiée du Québec"
 # not a promise of a province-wide current photo.  Try only a short list of
 # newest verified layers so a selection never starts a long series of requests.
 AERIAL_LAYERS: tuple[tuple[int, str], ...] = (
+    # The MRNF capabilities currently publish the 2026 planning imagery.  It
+    # is tried first when it covers the selected point, then the broader
+    # inventory collection remains the first 2025 fallback.  A blank image
+    # simply means that acquisition does not cover this location; it is never
+    # presented as a property photo.
+    (2026, "Planification_Suivi_Controle_2026_2026_Planif_Suiv_Cont_20cm_RVB"),
     (2025, "Inventaire_Ecoforestier_2025_2025_Inv_Ecofor_20cm_RVB"),
     (2025, "Planification_Suivi_Controle_2025_2025_Planif_Suiv_Cont_20cm_RVB"),
     (2024, "Inventaire_Ecoforestier_2024_2024_Inv_Ecofor_20cm_RVB"),
