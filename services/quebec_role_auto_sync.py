@@ -102,6 +102,26 @@ def _official_download(url: str, maximum: int = MAX_BYTES) -> bytes:
         raise ValueError("official_network_unavailable") from error
 
 
+def official_content_length(url: str) -> int | None:
+    """Read only an official file size for a controlled batch budget check."""
+
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname not in OFFICIAL_HOSTS:
+        raise ValueError("official_host_required")
+    opener = urllib.request.build_opener(_NoRedirect)
+    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "ImmoRadar/1.0 official-data"})
+    try:
+        with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
+            if response.geturl() != url:
+                raise ValueError("redirect_refused")
+            declared = response.headers.get("Content-Length")
+            return int(declared) if declared and declared.isdigit() else None
+    except urllib.error.HTTPError as error:
+        raise ValueError("official_http_error") from error
+    except urllib.error.URLError as error:
+        raise ValueError("official_network_unavailable") from error
+
+
 def probe_role_xml_version(url: str) -> str:
     """Read only an official XML header before downloading a full territory.
 

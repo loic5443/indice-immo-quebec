@@ -115,6 +115,18 @@ class RoleCoverageSyncTests(unittest.TestCase):
         self.assertEqual(result.synchronized, 1)
         self.assertEqual(validate.call_args.args[1], MAX_COVERAGE_FILE_BYTES)
 
+    def test_budget_never_starts_a_file_that_would_exceed_the_remaining_limit(self):
+        fetcher = lambda _: self.fail("a file over the remaining budget must not download")
+        result = synchronize_role_coverage(
+            self.db,
+            territory_limit=1,
+            byte_budget=99,
+            fetcher=fetcher,
+            version_fetcher=lambda _: "2.9",
+            content_length_fetcher=lambda _: 100,
+        )
+        self.assertEqual((result.scanned, result.synchronized, result.skipped), (0, 0, 1))
+
 
 if __name__ == "__main__":
     unittest.main()

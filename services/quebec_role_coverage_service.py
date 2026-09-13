@@ -11,8 +11,9 @@ from pathlib import Path
 
 from services.diagnostics_service import source_enabled
 from services.quebec_role_auto_sync import (
-    SOURCE_ID, _official_download, _synchronize_entry, _territory_is_available,
-    _territory_is_disabled, _cooling_down, probe_role_xml_version,
+    SOURCE_ID, _canonical_mamh_url, _official_download, _synchronize_entry, _territory_is_available,
+    _territory_is_disabled, _cooling_down, official_content_length,
+    probe_role_xml_version,
 )
 
 
@@ -98,7 +99,8 @@ def _finish_run(database_path: Path | str, result: CoverageSyncResult) -> None:
 
 def synchronize_role_coverage(
     database_path: Path | str, *, territory_limit: int | None = DEFAULT_BATCH_TERRITORIES,
-    byte_budget: int = DEFAULT_BATCH_BYTES, fetcher=_coverage_download, version_fetcher=probe_role_xml_version,
+    byte_budget: int = DEFAULT_BATCH_BYTES, fetcher=_coverage_download,
+    version_fetcher=probe_role_xml_version, content_length_fetcher=official_content_length,
 ) -> CoverageSyncResult:
     """Sync a bounded batch. ``None`` is an explicit all-territories request."""
     if territory_limit is not None and territory_limit < 1:
@@ -116,6 +118,19 @@ def synchronize_role_coverage(
         for entry in candidates:
             if downloaded >= byte_budget:
                 break
+            # Never begin an unknown-size file: a batch must honour its public
+            # byte budget rather than exceed it by one last territory.
+            # Injectable fetchers are used by no-network tests. The real
+            # downloader always preflights the official declared size.
+            if fetcher is _coverage_download or content_length_fetcher is not official_content_length:
+                try:
+                    declared_size = content_length_fetcher(_canonical_mamh_url(entry["source_url"]))
+                except ValueError:
+                    failed += 1
+                    continue
+                if declared_size is None or declared_size > byte_budget - downloaded:
+                    skipped += 1
+                    continue
             scanned += 1
             result = _synchronize_entry(
                 database_path,
