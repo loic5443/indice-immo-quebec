@@ -3,11 +3,17 @@
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from data.database import initialize_database
 from services.quebec_role_auto_sync import resolve_official_territory
-from services.quebec_role_coverage_service import coverage_status, synchronize_role_coverage
+from services.quebec_role_coverage_service import (
+    MAX_COVERAGE_FILE_BYTES,
+    _coverage_download,
+    coverage_status,
+    synchronize_role_coverage,
+)
 
 
 INDEX = (
@@ -84,6 +90,14 @@ class RoleCoverageSyncTests(unittest.TestCase):
             version_fetcher=lambda _: "2.9",
         )
         self.assertEqual((failed.status, failed.remaining), ("stopped", 3))
+
+    def test_controlled_coverage_download_has_a_separate_strict_limit(self):
+        with patch("services.quebec_role_coverage_service._official_download", return_value=b"official") as download:
+            self.assertEqual(_coverage_download("https://www.mamh.gouv.qc.ca/role/RM01023.xml"), b"official")
+        download.assert_called_once_with(
+            "https://www.mamh.gouv.qc.ca/role/RM01023.xml",
+            maximum=MAX_COVERAGE_FILE_BYTES,
+        )
 
 
 if __name__ == "__main__":

@@ -18,6 +18,15 @@ from services.quebec_role_auto_sync import (
 
 DEFAULT_BATCH_TERRITORIES = 10
 DEFAULT_BATCH_BYTES = 250_000_000
+# This higher ceiling is restricted to the explicit, local coverage command.
+# The consent-driven, user-initiated path keeps its 20 MB safety ceiling.
+MAX_COVERAGE_FILE_BYTES = 100_000_000
+
+
+def _coverage_download(url: str) -> bytes:
+    """Download one larger official role only during a controlled batch."""
+
+    return _official_download(url, maximum=MAX_COVERAGE_FILE_BYTES)
 
 
 @dataclass(frozen=True)
@@ -89,7 +98,7 @@ def _finish_run(database_path: Path | str, result: CoverageSyncResult) -> None:
 
 def synchronize_role_coverage(
     database_path: Path | str, *, territory_limit: int | None = DEFAULT_BATCH_TERRITORIES,
-    byte_budget: int = DEFAULT_BATCH_BYTES, fetcher=_official_download, version_fetcher=probe_role_xml_version,
+    byte_budget: int = DEFAULT_BATCH_BYTES, fetcher=_coverage_download, version_fetcher=probe_role_xml_version,
 ) -> CoverageSyncResult:
     """Sync a bounded batch. ``None`` is an explicit all-territories request."""
     if territory_limit is not None and territory_limit < 1:
