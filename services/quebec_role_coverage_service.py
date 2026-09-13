@@ -12,7 +12,7 @@ from pathlib import Path
 from services.diagnostics_service import source_enabled
 from services.quebec_role_auto_sync import (
     SOURCE_ID, _official_download, _synchronize_entry, _territory_is_available,
-    _territory_is_disabled, probe_role_xml_version,
+    _territory_is_disabled, _cooling_down, probe_role_xml_version,
 )
 
 
@@ -56,7 +56,14 @@ def _eligible_entries(database_path: Path | str) -> list[dict[str, str]]:
     for row in rows:
         entry = dict(row)
         code = entry["territory_code"]
-        if not _territory_is_disabled(database_path, code) and not _territory_is_available(database_path, code):
+        # A failed XML is retried only after the existing cooldown.  Otherwise
+        # a handful of temporary source failures would occupy every subsequent
+        # batch slot and prevent the rest of Québec from progressing.
+        if (
+            not _territory_is_disabled(database_path, code)
+            and not _territory_is_available(database_path, code)
+            and not _cooling_down(database_path, code)
+        ):
             eligible.append(entry)
     return eligible
 

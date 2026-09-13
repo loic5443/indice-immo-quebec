@@ -64,6 +64,17 @@ class RoleCoverageSyncTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "official_source_disabled"):
             synchronize_role_coverage(self.db, fetcher=lambda _: self.fail("download must not run"))
 
+    def test_recent_failure_does_not_block_the_next_territory_in_a_small_batch(self):
+        def failing_first(url):
+            if "01023" in url:
+                raise ValueError("official_network_unavailable")
+            return self._fetcher(url)
+
+        first = synchronize_role_coverage(self.db, territory_limit=1, byte_budget=1_000_000, fetcher=failing_first, version_fetcher=lambda _: "2.9")
+        self.assertEqual((first.synchronized, first.failed), (0, 1))
+        second = synchronize_role_coverage(self.db, territory_limit=1, byte_budget=1_000_000, fetcher=self._fetcher, version_fetcher=lambda _: "2.9")
+        self.assertEqual((second.synchronized, second.failed), (1, 0))
+
 
 if __name__ == "__main__":
     unittest.main()
