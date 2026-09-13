@@ -38,7 +38,13 @@ function onRender(event) {
   }
 
   if (!configured) {
-    input.addEventListener("input", scheduleValue);
+    // Streamlit 1.59 can discard a delayed iframe event while the field keeps
+    // focus.  Send the current value on the native input event, then keep the
+    // debounce as a small fallback for IME/keyboard implementations.
+    input.addEventListener("input", () => {
+      window.clearTimeout(timer);
+      sendValue();
+    });
     input.addEventListener("keyup", scheduleValue);
     Streamlit.setFrameHeight(74);
     configured = true;
