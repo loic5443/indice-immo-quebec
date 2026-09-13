@@ -49,3 +49,4 @@ La navigation principale regroupe **Accueil**, **Analyser**, **Mes propriétés*
 # Couverture d’adresses
 
 - [Couverture des adresses du Québec](COUVERTURE_ADRESSES_QUEBEC.md) — RQA local, consentement et limites entre l’adresse, le rôle municipal et ImmoValue.
+- [Couverture des rôles municipaux](COUVERTURE_ROLES_MUNICIPAUX.md) — synchronisation contrôlée et reprise des rôles MAMH officiels.
