@@ -368,6 +368,7 @@ def _synchronize_entry(
     *,
     fetcher=_official_download,
     version_fetcher=probe_role_xml_version,
+    maximum_bytes: int = MAX_BYTES,
 ) -> AutoSyncResult:
     """Safely synchronize at most one already-validated official territory.
 
@@ -400,7 +401,9 @@ def _synchronize_entry(
             raise ValueError("Version ou année XML invalide.")
         content = fetcher(source_url)
         size = len(content)
-        checksum = validate_xml(content, MAX_BYTES)
+        # The public consent flow keeps ``MAX_BYTES``. A separate, explicit
+        # coverage job can pass its independently tested maintenance ceiling.
+        checksum = validate_xml(content, maximum_bytes)
         with tempfile.NamedTemporaryFile(suffix=".xml", delete=False) as temporary:
             temporary.write(content)
             path = temporary.name

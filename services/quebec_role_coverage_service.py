@@ -117,7 +117,14 @@ def synchronize_role_coverage(
             if downloaded >= byte_budget:
                 break
             scanned += 1
-            result = _synchronize_entry(database_path, entry, True, fetcher=fetcher, version_fetcher=version_fetcher)
+            result = _synchronize_entry(
+                database_path,
+                entry,
+                True,
+                fetcher=fetcher,
+                version_fetcher=version_fetcher,
+                maximum_bytes=MAX_COVERAGE_FILE_BYTES,
+            )
             if result.status == "synchronized":
                 synchronized += 1
                 downloaded += result.size_bytes

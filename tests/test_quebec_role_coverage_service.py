@@ -1,5 +1,6 @@
 """No-network checks for resumable official-role coverage batches."""
 
+import hashlib
 import sqlite3
 import tempfile
 import unittest
@@ -98,6 +99,21 @@ class RoleCoverageSyncTests(unittest.TestCase):
             "https://www.mamh.gouv.qc.ca/role/RM01023.xml",
             maximum=MAX_COVERAGE_FILE_BYTES,
         )
+
+    def test_coverage_validation_uses_its_separate_ceiling(self):
+        with patch(
+            "services.quebec_role_auto_sync.validate_xml",
+            side_effect=lambda content, maximum: hashlib.sha256(content).hexdigest(),
+        ) as validate:
+            result = synchronize_role_coverage(
+                self.db,
+                territory_limit=1,
+                byte_budget=1_000_000,
+                fetcher=self._fetcher,
+                version_fetcher=lambda _: "2.9",
+            )
+        self.assertEqual(result.synchronized, 1)
+        self.assertEqual(validate.call_args.args[1], MAX_COVERAGE_FILE_BYTES)
 
 
 if __name__ == "__main__":
