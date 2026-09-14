@@ -132,8 +132,18 @@ def search_role_units(database_path, territory, query, limit=20):
   c.row_factory=sqlite3.Row
   fields="matricule,civic_number,street_name,address_unit,address_text,use_code,land_value,building_value,total_value,role_year,market_reference_date,field_provenance"
   if civic and street_key:
-   cursor=c.execute(f"SELECT {fields} FROM role_assessment_units WHERE territory_code=? AND civic_number=? ORDER BY address_text LIMIT ?",(territory,civic,100))
-   rows=[dict(row) for row in cursor.fetchall() if _role_key(row["street_name"] or "")==street_key][:limit]
+   # The imported, normalized street key is indexed with the territory and
+   # civic number.  A province-wide local role database must never scan every
+   # civic record in a territory after a selection: when the exact public
+   # address is absent, returning no match lets the interface explain the
+   # manual path immediately instead of leaving the person waiting.
+   cursor=c.execute(
+    f"SELECT {fields} FROM role_assessment_units "
+    "WHERE territory_code=? AND civic_number=? AND street_search_key=? "
+    "ORDER BY address_text LIMIT ?",
+    (territory,civic,street_key,limit),
+   )
+   rows=[dict(row) for row in cursor.fetchall()]
   else:
    cursor=c.execute(f"SELECT {fields} FROM role_assessment_units WHERE territory_code=? AND (matricule=? OR address_text LIKE ?) ORDER BY address_text LIMIT ?",(territory,query,f"%{query}%",limit))
    rows=[dict(r) for r in cursor.fetchall()]
@@ -189,7 +199,16 @@ def role_street_variants(database_path, territory, query, limit=5):
  if not street_key or not territory:return []
  c=sqlite3.connect(database_path)
  try:
-  rows=c.execute("SELECT DISTINCT street_name FROM role_assessment_units WHERE territory_code=? AND street_name IS NOT NULL ORDER BY street_name",(territory,)).fetchall()
-  return [row[0] for row in rows if _role_key(row[0])==street_key][:limit]
+  # Keep the no-match path as bounded as the successful lookup.  Loading all
+  # street names from a large municipality merely to offer a variant can make
+  # an address form appear frozen; the imported public search key is already
+  # indexed for this exact comparison.
+  rows=c.execute(
+   "SELECT DISTINCT street_name FROM role_assessment_units "
+   "WHERE territory_code=? AND street_search_key=? AND street_name IS NOT NULL "
+   "ORDER BY street_name LIMIT ?",
+   (territory,street_key,max(1,min(int(limit),20))),
+  ).fetchall()
+  return [row[0] for row in rows]
  finally:
   c.close()
