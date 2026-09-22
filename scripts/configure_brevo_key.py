@@ -5,7 +5,6 @@ from __future__ import annotations
 import ctypes
 import getpass
 import sys
-import winreg
 import tkinter as tk
 from tkinter import messagebox
 
@@ -17,6 +16,10 @@ def valid_key(value: str) -> bool:
 
 
 def save_user_environment_variable(name: str, value: str) -> None:
+    if sys.platform != "win32":
+        raise OSError("La configuration locale de Brevo est disponible sur Windows seulement.")
+    import winreg
+
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
         winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
     # Notify future Windows processes without exposing the value.

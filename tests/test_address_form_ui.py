@@ -430,11 +430,14 @@ class AddressFormUiTests(unittest.TestCase):
     def test_authenticated_draft_resumes_in_the_real_form(self):
         state = submit_address_form("123 rue Exemple, Ville-exemple, QC, Canada", "Ville-exemple", "H2X1Y4", consent=True)
         save_draft(1, {"address_form": serialize_address_form(state)}, 2, self.db)
-        app = self._app(authenticated=True)
-        self.assertEqual(list(app.exception), [])
-        self.assertEqual(app.session_state["address_form_editor_street"], "123 rue Exemple, Ville-exemple, QC, Canada")
-        self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
-        self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
-        self.assertTrue(app.checkbox(key="address_form_consent").value)
-        app.run(timeout=20)
-        self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
+        # A restored draft may request public suggestions during rendering.
+        # Keep this UI regression deterministic and offline in CI.
+        with patch.object(property_analysis, "suggest_addresses", return_value=property_analysis.SuggestionResponse("ok", ())):
+            app = self._app(authenticated=True)
+            self.assertEqual(list(app.exception), [])
+            self.assertEqual(app.session_state["address_form_editor_street"], "123 rue Exemple, Ville-exemple, QC, Canada")
+            self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
+            self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
+            self.assertTrue(app.checkbox(key="address_form_consent").value)
+            app.run(timeout=20)
+            self.assertEqual(app.text_input(key="address_form_city").value, "Ville-exemple")
