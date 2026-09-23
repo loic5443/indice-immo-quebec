@@ -21,7 +21,7 @@ Paiements, Stripe, accès public, collecte automatique d'annonces, comparables a
 
 ## Validation automatisée
 
-Le test `tests/test_beta_end_to_end.py` exécute 43 vérifications distinctes et tracées dans une base temporaire isolée, sans réseau ni données réelles. L'ancienne mention de 58 étapes était incorrecte : les étapes 25 à 58 répétaient uniquement un contrôle d'existence de la base. Le test actuel vérifie notamment l'inscription transactionnelle, l'épuisement d'une invitation, le brouillon, le CSV, le consentement analytique, l'idempotence, les retours, une source, l'export et la suppression. Il s'agit d'un parcours de fumée au niveau des services, non d'une validation complète de l'interface, du PDF et de tous les 58 gestes historiques.
+Le test `tests/test_beta_end_to_end.py` exécute 60 vérifications distinctes et tracées dans deux parcours sur des bases temporaires isolées, sans réseau ni données réelles. L'ancienne mention de 58 étapes était incorrecte : les étapes 25 à 58 répétaient uniquement un contrôle d'existence de la base. Les parcours actuels vérifient l'inscription transactionnelle, les invitations, le brouillon, le CSV, le consentement analytique, l'idempotence, les retours, les sources, l'export, la suppression, ainsi qu'un calcul financier sauvegardé, sa relecture isolée, ses scénarios et son PDF. Il s'agit de vérifications au niveau des services et du contenu PDF; elles ne remplacent pas une validation complète des 58 gestes dans l'interface.
 
 ## Intervention humaine nécessaire
 
