@@ -57,7 +57,7 @@ def show_admin():
  repo=SQLiteRepository(DATABASE_PATH); actor=current_user()["id"]
  with repo._connect() as c:
   settings=dict(c.execute("SELECT * FROM beta_settings WHERE id=1").fetchone()); accounts=c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
- st.title("Administration", anchor=False)
+ st.markdown("<h1>Administration</h1>", unsafe_allow_html=True)
  _show_role_data_admin(actor)
  st.metric("Comptes bêta",accounts);st.write(f"Inscriptions : {'ouvertes' if settings['registrations_open'] else 'fermées'} · limite {settings['max_participants']}");st.caption("Migrations : "+", ".join(applied_migrations(DATABASE_PATH)))
  with st.expander("Invitations",expanded=True):

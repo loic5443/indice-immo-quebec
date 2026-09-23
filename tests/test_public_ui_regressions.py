@@ -25,17 +25,22 @@ class PublicUiRegressionTests(unittest.TestCase):
         for name in ("account", "admin", "markets", "feedback", "property_analysis", "saved_analyses"):
             with self.subTest(page=name):
                 tree = ast.parse((root / f"{name}.py").read_text(encoding="utf-8"))
-                titles = (
+                titles = [
                     node for node in ast.walk(tree)
                     if isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "title"
+                    and node.func.attr == "markdown"
                     and isinstance(node.func.value, ast.Name)
                     and node.func.value.id == "st"
-                )
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)
+                    and node.args[0].value.startswith("<h1>")
+                ]
+                self.assertEqual(len(titles), 1)
                 self.assertTrue(all(
-                    any(keyword.arg == "anchor" and isinstance(keyword.value, ast.Constant)
-                        and keyword.value.value is False for keyword in call.keywords)
+                    any(keyword.arg == "unsafe_allow_html" and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is True for keyword in call.keywords)
                     for call in titles
                 ))
 
