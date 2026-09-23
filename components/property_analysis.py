@@ -19,6 +19,7 @@ from components.scenarios import show_scenarios
 from components.sidebar import go_to
 from data.database import save_analysis
 from data.database import DATABASE_PATH
+from repositories.sqlite_repository import SQLiteRepository
 from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 from domain.scenarios import build_resilience_tests, build_standard_scenarios
 from services.market_data_service import market_context_snapshot
@@ -1837,6 +1838,30 @@ def _official_role_snapshot(address_lookup: dict | None) -> dict:
     }
 
 
+def _save_snapshot_signature(property_name: str, inputs: PropertyInputs, profile: str, address_lookup: dict | None, immovalue: dict | None) -> str:
+    """Identify one unchanged save action without retaining its inputs in the key."""
+
+    payload = {
+        "name": property_name.strip(), "inputs": asdict(inputs), "profile": profile,
+        "property_type": _property_type(),
+        "objective": st.session_state.get("workflow_objective", ""),
+        "role": _official_role_snapshot(address_lookup),
+        "immovalue": _immovalue_snapshot_for_save(immovalue),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+
+
+def _unchanged_snapshot_is_saved(owner_id: int, signature: str) -> bool:
+    last = st.session_state.get(LAST_SAVED_ANALYSIS_KEY)
+    return bool(
+        isinstance(last, dict)
+        and last.get("owner_id") == owner_id
+        and last.get("signature") == signature
+        and isinstance(last.get("id"), int)
+        and SQLiteRepository(DATABASE_PATH).get_owned_analysis(owner_id, last["id"]) is not None
+    )
+
+
 def _show_aerial_view(address_lookup: dict | None) -> None:
     """Render a transient official aerial context after a revealed lookup.
 
@@ -2159,6 +2184,11 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         if save_requested:
             if not property_name.strip():
                 st.error("Ajoutez un nom de dossier ou sélectionnez une adresse.")
+            elif _unchanged_snapshot_is_saved(
+                current_user()["id"],
+                _save_snapshot_signature(property_name, inputs, engine_result.profile, address_lookup, immovalue),
+            ):
+                st.info("Ce dossier inchangé est déjà sauvegardé dans Mes propriétés.")
             else:
                 analysis_id = save_analysis(current_user()["id"], property_name, {
                     "price": inputs.price, "down_payment": inputs.down_payment,
@@ -2184,6 +2214,9 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                     "id": analysis_id,
                     "owner_id": current_user()["id"],
                     "property_name": property_name.strip(),
+                    "signature": _save_snapshot_signature(
+                        property_name, inputs, engine_result.profile, address_lookup, immovalue,
+                    ),
                 }
                 st.success("Dossier, scénarios et tests de résistance sauvegardés dans Mes propriétés.")
                 # A previously followed dossier may gain a new factual alert
