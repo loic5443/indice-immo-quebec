@@ -13,7 +13,9 @@ def set_source_enabled(actor,source_id,enabled,reason,database_path):
  with closing(SQLiteRepository(database_path)._connect()) as c,c:
   role=c.execute("SELECT role FROM users WHERE id=?",(actor,)).fetchone()
   if not role or role[0]!="admin": raise PermissionError("Accès refusé")
-  c.execute("UPDATE data_sources SET enabled=? WHERE source_id=?",(int(enabled),source_id));c.execute("INSERT INTO source_admin_history(source_id,actor_id,action,reason) VALUES(?,?,?,?)",(source_id,actor,"enabled" if enabled else "disabled",redact(reason)))
+  changed=c.execute("UPDATE data_sources SET enabled=? WHERE source_id=?",(int(enabled),source_id)).rowcount
+  if changed != 1: raise ValueError("Source inconnue.")
+  c.execute("INSERT INTO source_admin_history(source_id,actor_id,action,reason) VALUES(?,?,?,?)",(source_id,actor,"enabled" if enabled else "disabled",redact(reason)))
 def source_enabled(source_id,database_path):
  with closing(SQLiteRepository(database_path)._connect()) as c: row=c.execute("SELECT enabled FROM data_sources WHERE source_id=?",(source_id,)).fetchone()
  return True if row is None else bool(row[0])
