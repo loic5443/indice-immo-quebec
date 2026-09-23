@@ -132,6 +132,24 @@ ADDRESS_WIDGET_KEYS = {
     "consent": "address_form_consent",
 }
 
+# Streamlit drops widget keys when their stage is no longer rendered. Keep the
+# dossier label and type in separate, non-widget state across the three stages.
+PROPERTY_NAME_STATE_KEY = "analysis_property_name_value"
+PROPERTY_TYPE_STATE_KEY = "analysis_property_type_value"
+
+
+def _property_name() -> str:
+    return st.session_state.get(PROPERTY_NAME_STATE_KEY, st.session_state.get("workflow_property_name", ""))
+
+
+def _property_type() -> str:
+    return st.session_state.get(PROPERTY_TYPE_STATE_KEY, st.session_state.get("workflow_property_type", ""))
+
+
+def _remember_property_details() -> None:
+    st.session_state[PROPERTY_NAME_STATE_KEY] = st.session_state.get("workflow_property_name", "")
+    st.session_state[PROPERTY_TYPE_STATE_KEY] = st.session_state.get("workflow_property_type", "")
+
 
 def reset_analysis() -> None:
     st.session_state.update(DEFAULTS)
@@ -161,6 +179,7 @@ def _apply_reopen_draft() -> str | None:
     st.session_state["iv_asking"] = payload.get("asking_price") or 0.0
     st.session_state["workflow_property_name"] = str(payload.get("property_name") or "")
     st.session_state["workflow_property_type"] = str(payload.get("property_type") or "")
+    _remember_property_details()
     objective = str(payload.get("objective") or "")
     st.session_state["workflow_objective"] = objective if objective in ANALYSIS_OBJECTIVES else ""
     st.session_state["workflow_objective_choice"] = st.session_state["workflow_objective"]
@@ -1057,8 +1076,8 @@ def _workflow_values() -> dict:
     return {
         "profile": st.session_state.get("workflow_profile", ""),
         "objective": st.session_state.get("workflow_objective", ""),
-        "property_name": st.session_state.get("workflow_property_name", ""),
-        "property_type": st.session_state.get("workflow_property_type", ""),
+        "property_name": _property_name(),
+        "property_type": _property_type(),
         "price": st.session_state.get("property_price", 0),
         "down_payment": st.session_state.get("down_payment", 0),
     }
@@ -1093,8 +1112,8 @@ def _ensure_workflow_state() -> tuple[int, set[int]]:
     st.session_state.setdefault("workflow_profile", default_profile)
     st.session_state.setdefault("workflow_objective", default_objective)
     st.session_state.setdefault("workflow_objective_choice", default_objective)
-    st.session_state.setdefault("workflow_property_name", "")
-    st.session_state.setdefault("workflow_property_type", "")
+    st.session_state.setdefault(PROPERTY_NAME_STATE_KEY, st.session_state.get("workflow_property_name", ""))
+    st.session_state.setdefault(PROPERTY_TYPE_STATE_KEY, st.session_state.get("workflow_property_type", ""))
     return step, completed
 
 
@@ -1127,6 +1146,7 @@ def _next_workflow_step() -> None:
 def _continue_to_finances() -> None:
     """Advance the compatible nine-step draft through the first visible stage."""
 
+    _remember_property_details()
     _move_workflow(2)
     if not st.session_state.get("workflow_errors"):
         _move_workflow(3)
@@ -1264,7 +1284,7 @@ def _show_visible_stage_progress(active_stage: int) -> None:
 def _hydrate_dossier_name_from_selected_address() -> None:
     """Use a selected official address as the optional dossier label, never overwriting a custom name."""
 
-    if useful_query(st.session_state.get("workflow_property_name", "")):
+    if useful_query(_property_name()):
         return
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if not isinstance(state, AddressFormState) or not state.address:
@@ -1273,11 +1293,14 @@ def _hydrate_dossier_name_from_selected_address() -> None:
         return
     address = state.address
     st.session_state["workflow_property_name"] = ", ".join(part for part in (address.street, address.city) if part)
+    _remember_property_details()
 
 
 def _show_property_stage() -> None:
     """Render the simple first stage while retaining the existing workflow values."""
 
+    st.session_state.setdefault("workflow_property_name", _property_name())
+    st.session_state.setdefault("workflow_property_type", _property_type())
     st.markdown("<div class='section-space compact-space'></div><h2>1. Propriété et valeur</h2><p class='section-intro'>La recherche d’adresse ci-dessus suffit pour révéler un rôle municipal disponible. Les choix ci-dessous servent ensuite à personnaliser votre analyse.</p>", unsafe_allow_html=True)
     # Keep the established first-run default so the first visible step is
     # immediately usable.  Reopened dossiers provide their original objective
@@ -1296,9 +1319,10 @@ def _show_property_stage() -> None:
     _hydrate_dossier_name_from_selected_address()
     name, kind, asking = st.columns(3)
     with name:
-        st.text_input("Nom court du dossier (facultatif si une adresse est sélectionnée)", key="workflow_property_name", placeholder="Ex. Projet résidentiel")
+        st.text_input("Nom court du dossier (facultatif si une adresse est sélectionnée)", key="workflow_property_name", placeholder="Ex. Projet résidentiel", on_change=_remember_property_details)
     with kind:
-        st.selectbox("Type de propriété (requis)", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type")
+        st.selectbox("Type de propriété (requis)", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type", on_change=_remember_property_details)
+    _remember_property_details()
     with asking:
         st.number_input("Prix demandé (facultatif)", min_value=0.0, step=5_000.0, key="iv_asking")
     st.caption("Le prix demandé sert uniquement à comparer le rôle municipal et ImmoValue lorsqu’elle est disponible. Il ne remplace pas le prix retenu pour vos calculs financiers.")
@@ -1724,15 +1748,19 @@ def _summary_dossier_label() -> tuple[str, str]:
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if isinstance(state, AddressFormState) and state.address:
         address = state.address
-        return ", ".join(part for part in (address.street, address.city) if part), st.session_state.get("workflow_property_type", "")
-    return st.session_state.get("workflow_property_name") or "Dossier immobilier", st.session_state.get("workflow_property_type", "")
+        return ", ".join(part for part in (address.street, address.city) if part), _property_type()
+    return _property_name() or "Dossier immobilier", _property_type()
 
 
 def _prepare_saved_property_name() -> None:
-    """Suggest the selected public address without replacing a custom dossier name."""
+    """Reuse the dossier label or selected address without replacing a custom name."""
 
     current = st.session_state.get("saved_property_name")
     if isinstance(current, str) and current.strip():
+        return
+    dossier_name = _property_name()
+    if isinstance(dossier_name, str) and dossier_name.strip():
+        st.session_state["saved_property_name"] = dossier_name.strip()
         return
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if isinstance(state, AddressFormState) and state.address:
@@ -1760,7 +1788,7 @@ def _immovalue_snapshot_for_save(immovalue: dict | None) -> dict:
     snapshot = dict(immovalue) if isinstance(immovalue, dict) else {}
     asking = st.session_state.get("iv_asking")
     asking_price = float(asking) if isinstance(asking, (int, float)) and asking > 0 else None
-    property_type = st.session_state.get("workflow_property_type")
+    property_type = _property_type()
     snapshot["subject"] = {
         "asking_price": asking_price,
         "property_type": property_type if isinstance(property_type, str) else "",
@@ -1959,7 +1987,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                     "financial_inputs": {
                         **asdict(inputs),
                         "_analysis_objective": st.session_state.get("workflow_objective", ""),
-                        "_property_type": st.session_state.get("workflow_property_type", ""),
+                        "_property_type": _property_type(),
                         "mortgage_renewal_date": (
                             st.session_state["mortgage_renewal_date"].isoformat()
                             if isinstance(st.session_state.get("mortgage_renewal_date"), date)

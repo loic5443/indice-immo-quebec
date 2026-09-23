@@ -1,5 +1,6 @@
 """Exercise account creation and the visual onboarding against isolated SQLite."""
 
+import json
 import tempfile
 import unittest
 from contextlib import closing
@@ -165,6 +166,96 @@ finally:
         self._click(app, "Calculer mon analyse")
         self.assertIn("ImmoScore", [item.label for item in app.metric])
         self.assertIn("Créer mon espace gratuit", [item.label for item in app.button])
+
+    def test_signed_in_analysis_is_saved_and_visible_in_my_properties(self):
+        created, _ = register_beta_user(
+            "Visiteur de test", "visitor@example.invalid", "test-password-only-456",
+            self.database_path, invitation_code=self.invitation,
+        )
+        self.assertTrue(created)
+        source = f'''
+from pathlib import Path
+import streamlit as st
+import components.property_analysis as analysis_page
+import components.saved_analyses as saved_page
+from data.database import authenticate_user, save_analysis, list_analyses
+database_path = Path({str(self.database_path)!r})
+user = authenticate_user("visitor@example.invalid", "test-password-only-456", database_path)
+originals = {{
+    "analysis_db": analysis_page.DATABASE_PATH,
+    "analysis_auth": analysis_page.is_authenticated,
+    "analysis_user": analysis_page.current_user,
+    "analysis_save": analysis_page.save_analysis,
+    "saved_db": saved_page.DATABASE_PATH,
+    "saved_auth": saved_page.is_authenticated,
+    "saved_user": saved_page.current_user,
+    "saved_list": saved_page.list_analyses,
+    "saved_alerts": saved_page.show_alert_center,
+}}
+try:
+    analysis_page.DATABASE_PATH = database_path
+    analysis_page.is_authenticated = lambda: True
+    analysis_page.current_user = lambda: user
+    analysis_page.save_analysis = lambda owner, name, values, **kwargs: save_analysis(
+        owner, name, values, database_path, **kwargs
+    )
+    saved_page.DATABASE_PATH = database_path
+    saved_page.is_authenticated = lambda: True
+    saved_page.current_user = lambda: user
+    saved_page.list_analyses = lambda owner, _path=database_path: list_analyses(owner, database_path)
+    saved_page.show_alert_center = lambda *_args, **_kwargs: None
+    if st.session_state.get("main_navigation") == "Mes propriétés":
+        saved_page.show_saved_analyses()
+    else:
+        analysis_page.show_property_analysis()
+finally:
+    analysis_page.DATABASE_PATH = originals["analysis_db"]
+    analysis_page.is_authenticated = originals["analysis_auth"]
+    analysis_page.current_user = originals["analysis_user"]
+    analysis_page.save_analysis = originals["analysis_save"]
+    saved_page.DATABASE_PATH = originals["saved_db"]
+    saved_page.is_authenticated = originals["saved_auth"]
+    saved_page.current_user = originals["saved_user"]
+    saved_page.list_analyses = originals["saved_list"]
+    saved_page.show_alert_center = originals["saved_alerts"]
+'''
+        app = AppTest.from_string(source, default_timeout=20).run()
+        self.assertFalse(app.exception)
+        app.text_input(key="workflow_property_name").set_value("Projet de test")
+        app.selectbox(key="workflow_property_type").set_value("Maison")
+        self._click(app, "Continuer vers les finances")
+        app.selectbox(key="analysis_step_selector").set_value(1).run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.text_input(key="workflow_property_name").value, "Projet de test")
+        self.assertEqual(app.selectbox(key="workflow_property_type").value, "Maison")
+        self._click(app, "Continuer vers les finances")
+        app.number_input(key="property_price").set_value(400000.0)
+        app.number_input(key="down_payment").set_value(80000.0)
+        app.number_input(key="mortgage_rate").set_value(5.0)
+        app.run()
+        self._click(app, "Calculer mon analyse")
+        self.assertIn("Sauvegarder mon dossier", [item.label for item in app.button])
+        self._click(app, "Sauvegarder mon dossier")
+        self.assertTrue(
+            any("sauvegardés" in item.value for item in app.success),
+            (
+                [item.value for item in app.error],
+                [item.value for item in app.success],
+                app.session_state["workflow_property_name"] if "workflow_property_name" in app.session_state else None,
+                app.session_state["saved_property_name"] if "saved_property_name" in app.session_state else None,
+            ),
+        )
+        owner_id = self._user()["id"]
+        analyses = SQLiteRepository(self.database_path).list_analyses(owner_id)
+        self.assertEqual(len(analyses), 1)
+        self.assertEqual(analyses[0]["property_name"], "Projet de test")
+        self.assertEqual(json.loads(analyses[0]["financial_inputs_json"])["_property_type"], "Maison")
+        self.assertEqual(SQLiteRepository(self.database_path).list_analyses(1), [])
+        app.session_state["main_navigation"] = "Mes propriétés"
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertIn("Mes propriétés", [item.value for item in app.title])
+        self.assertIn("Projet de test", " ".join(item.label for item in app.expander))
 
 
 if __name__ == "__main__":
