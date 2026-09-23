@@ -137,6 +137,10 @@ ADDRESS_WIDGET_KEYS = {
 PROPERTY_NAME_STATE_KEY = "analysis_property_name_value"
 PROPERTY_TYPE_STATE_KEY = "analysis_property_type_value"
 PROPERTY_AUTO_NAME_KEY = "analysis_property_auto_name"
+SAVED_AUTO_NAME_KEY = "analysis_saved_auto_name"
+FINANCIAL_STATE_KEY = "analysis_financial_values"
+FINANCIAL_RESTORE_KEY = "analysis_financial_restore"
+FINANCIAL_OWNER_KEY = "analysis_financial_owner"
 
 
 def _property_name() -> str:
@@ -152,12 +156,16 @@ def _remember_property_details() -> None:
     if name != st.session_state.get(PROPERTY_AUTO_NAME_KEY):
         st.session_state.pop(PROPERTY_AUTO_NAME_KEY, None)
     st.session_state[PROPERTY_NAME_STATE_KEY] = name
-    st.session_state[PROPERTY_TYPE_STATE_KEY] = st.session_state.get("workflow_property_type", "")
+    if "workflow_property_type" in st.session_state:
+        st.session_state[PROPERTY_TYPE_STATE_KEY] = st.session_state["workflow_property_type"]
 
 
 def reset_analysis() -> None:
     st.session_state.update(DEFAULTS)
+    st.session_state[FINANCIAL_STATE_KEY] = dict(DEFAULTS)
+    st.session_state.pop(FINANCIAL_RESTORE_KEY, None)
     st.session_state.pop(PROPERTY_AUTO_NAME_KEY, None)
+    st.session_state.pop(SAVED_AUTO_NAME_KEY, None)
     st.session_state.pop("analysis_calculation_signature", None)
     st.session_state.pop("analysis_calculation_requested", None)
     st.session_state.pop("analysis_calculation_errors", None)
@@ -178,13 +186,19 @@ def _apply_reopen_draft() -> str | None:
         return None
     if payload.get("owner_id") != current_user().get("id"):
         return None
+    financial_values = dict(DEFAULTS)
     for key, value in payload.get("financial_values", {}).items():
         if key in DEFAULTS and isinstance(value, (int, float)) and not isinstance(value, bool):
-            st.session_state[key] = value
+            financial_values[key] = value
+    st.session_state.update(financial_values)
+    st.session_state[FINANCIAL_STATE_KEY] = financial_values
+    st.session_state[FINANCIAL_RESTORE_KEY] = True
     st.session_state["iv_asking"] = payload.get("asking_price") or 0.0
     st.session_state["workflow_property_name"] = str(payload.get("property_name") or "")
     st.session_state["workflow_property_type"] = str(payload.get("property_type") or "")
     st.session_state.pop(PROPERTY_AUTO_NAME_KEY, None)
+    st.session_state.pop(SAVED_AUTO_NAME_KEY, None)
+    st.session_state.pop("saved_property_name", None)
     _remember_property_details()
     objective = str(payload.get("objective") or "")
     st.session_state["workflow_objective"] = objective if objective in ANALYSIS_OBJECTIVES else ""
@@ -200,6 +214,7 @@ def _apply_reopen_draft() -> str | None:
         # An older snapshot has no renewal date. Never keep the prior draft's
         # date when opening it as a fresh editable dossier.
         st.session_state["mortgage_renewal_date"] = None
+    financial_values["mortgage_renewal_date"] = st.session_state["mortgage_renewal_date"]
     st.session_state["analysis_step"] = 1
     st.session_state["analysis_completed_steps"] = {1}
     st.session_state["analysis_reopen_show_property_stage"] = True
@@ -891,6 +906,8 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         metadata=metadata,
     )
     st.session_state[ADDRESS_STATE_KEY] = selected_state
+    if selected_state.valid:
+        _hydrate_dossier_name_from_selected_address()
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = resolved.street
     st.session_state[ADDRESS_STREET_INPUT_KEY] = resolved.street
     # This callback runs before the adjacent editors are instantiated in the
@@ -934,6 +951,8 @@ def _select_resolved_address() -> None:
         bool(values.get("consent")), metadata={"official_source": "external"},
     )
     st.session_state[ADDRESS_STATE_KEY] = selected_state
+    if selected_state.valid:
+        _hydrate_dossier_name_from_selected_address()
     st.session_state[ADDRESS_HYDRATE_KEY] = True
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = values["street"]
     st.session_state[ADDRESS_WIDGET_KEYS["city"]] = values["city"]
@@ -1153,6 +1172,7 @@ def _continue_to_finances() -> None:
     """Advance the compatible nine-step draft through the first visible stage."""
 
     _remember_property_details()
+    st.session_state[FINANCIAL_RESTORE_KEY] = True
     _move_workflow(2)
     if not st.session_state.get("workflow_errors"):
         _move_workflow(3)
@@ -1434,8 +1454,39 @@ def _show_technical_workflow(step: int) -> None:
 
 
 def show_property_analysis() -> None:
+    # Streamlit removes widget keys while their stage is hidden. Keep a
+    # non-widget copy so calculated results and later edits use the same
+    # submitted figures after every rerun.
+    owner_id = _address_owner_id()
+    previous_owner = st.session_state.get(FINANCIAL_OWNER_KEY, owner_id)
+    if previous_owner is not None and previous_owner != owner_id:
+        # Signing out or switching accounts must not carry private figures
+        # into the next visitor's draft. Guest-to-account keeps that guest's
+        # own in-progress analysis as before.
+        st.session_state.update(DEFAULTS)
+        st.session_state[FINANCIAL_STATE_KEY] = dict(DEFAULTS)
+        st.session_state.pop("analysis_calculation_signature", None)
+        st.session_state.pop("analysis_calculation_requested", None)
+        for key in (
+            PROPERTY_NAME_STATE_KEY, PROPERTY_TYPE_STATE_KEY, PROPERTY_AUTO_NAME_KEY,
+            SAVED_AUTO_NAME_KEY, "workflow_property_name", "workflow_property_type",
+            "saved_property_name", LAST_SAVED_ANALYSIS_KEY,
+            "workflow_profile", "workflow_objective", "workflow_objective_choice",
+        ):
+            st.session_state.pop(key, None)
+    st.session_state[FINANCIAL_OWNER_KEY] = owner_id
+    financial_values = st.session_state.setdefault(FINANCIAL_STATE_KEY, dict(DEFAULTS))
+    restore_financial_values = bool(st.session_state.get("analysis_calculation_signature")) or bool(
+        st.session_state.pop(FINANCIAL_RESTORE_KEY, False)
+    )
     for key, value in DEFAULTS.items():
-        st.session_state.setdefault(key, value)
+        if restore_financial_values:
+            st.session_state[key] = financial_values.get(key, value)
+        elif key in st.session_state:
+            financial_values[key] = st.session_state[key]
+        else:
+            st.session_state[key] = financial_values.get(key, value)
+    st.session_state[FINANCIAL_STATE_KEY] = financial_values
     reopen_notice = _apply_reopen_draft()
     st.markdown("<p class='eyebrow'>DOSSIER IMMOBILIER 360</p>", unsafe_allow_html=True)
     st.title("Révéler la valeur et analyser votre projet")
@@ -1765,18 +1816,26 @@ def _prepare_saved_property_name() -> None:
     """Reuse the dossier label or selected address without replacing a custom name."""
 
     current = st.session_state.get("saved_property_name")
-    if isinstance(current, str) and current.strip():
+    if isinstance(current, str) and current.strip() and current != st.session_state.get(SAVED_AUTO_NAME_KEY):
         return
     dossier_name = _property_name()
     if isinstance(dossier_name, str) and dossier_name.strip():
         st.session_state["saved_property_name"] = dossier_name.strip()
+        st.session_state[SAVED_AUTO_NAME_KEY] = dossier_name.strip()
         return
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if isinstance(state, AddressFormState) and state.address:
         address = state.address
-        st.session_state["saved_property_name"] = ", ".join(
+        label = ", ".join(
             part for part in (address.street, address.city) if part
         )
+        st.session_state["saved_property_name"] = label
+        st.session_state[SAVED_AUTO_NAME_KEY] = label
+
+
+def _remember_saved_property_name() -> None:
+    if st.session_state.get("saved_property_name") != st.session_state.get(SAVED_AUTO_NAME_KEY):
+        st.session_state.pop(SAVED_AUTO_NAME_KEY, None)
 
 
 def _generated_immovalue() -> dict | None:
@@ -1876,6 +1935,7 @@ def _return_to_summary_inputs() -> None:
     st.session_state.pop("analysis_calculation_signature", None)
     st.session_state.pop("analysis_calculation_errors", None)
     st.session_state["analysis_calculation_requested"] = False
+    st.session_state[FINANCIAL_RESTORE_KEY] = True
 
 
 def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, address_lookup: dict | None = None) -> None:
@@ -1973,6 +2033,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         property_name = st.text_input(
             "Nom court du dossier (facultatif si une adresse est sélectionnée)",
             key="saved_property_name", placeholder="Ex. Projet résidentiel",
+            on_change=_remember_saved_property_name,
         )
         st.caption("Votre dossier reste privé à votre compte. Les alertes par courriel exigent toujours un consentement séparé dans Mon compte.")
         action_save, action_edit, action_premium = st.columns(3) if not has_premium_follow_up else (*st.columns(2), None)

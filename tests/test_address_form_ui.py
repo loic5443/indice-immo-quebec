@@ -342,6 +342,12 @@ class AddressFormUiTests(unittest.TestCase):
             "import components.property_analysis as page\n"
             "st.session_state.setdefault('address_form_consent', True)\n"
             "st.session_state.setdefault('address_form_street_input', '123 rue Ex')\n"
+            "if st.session_state.pop('switch_address_after_calculation', False):\n"
+            "    st.session_state['address_form_street_input'] = '124 rue Ex'\n"
+            "    page._set_address_editor_street('124 rue Ex')\n"
+            "if st.session_state.pop('switch_address_back', False):\n"
+            "    st.session_state['address_form_street_input'] = '123 rue Ex'\n"
+            "    page._set_address_editor_street('123 rue Ex')\n"
             "page.show_property_analysis()\n"
         )
         app = AppTest.from_string(source, default_timeout=20).run()
@@ -356,9 +362,12 @@ class AddressFormUiTests(unittest.TestCase):
         app.number_input(key="mortgage_rate").set_value(5.0)
         app.run()
         app.button(key="calculate_analysis").click().run()
+        self.assertEqual(app.session_state["analysis_financial_values"]["property_price"], 400000.0)
+        self.assertEqual(app.session_state["property_price"], 400000.0)
         self.assertEqual(app.text_input(key="saved_property_name").value, "123 Rue Exemple, Ville-exemple")
         app.button(key="save_analysis").click().run()
         self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["analysis_financial_values"]["property_price"], 400000.0)
         saved = SQLiteRepository(self.db).list_analyses(user["id"])
         self.assertEqual(len(saved), 1)
         role = json.loads(saved[0]["official_role_snapshot_json"])
@@ -369,7 +378,33 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertNotEqual(saved[0]["price"], role["total_value"])
         app.run()
         self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["analysis_financial_values"]["property_price"], 400000.0)
         self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        app.session_state["switch_address_after_calculation"] = True
+        app.run()
+        self.assertEqual(app.session_state["address_form_state"].values["street"], "124 rue Ex")
+        selected_button = next(button for button in app.button if button.label.startswith("124 Rue Exemple"))
+        selected_index = int(selected_button.key.rsplit("_", 1)[1])
+        self.assertEqual(app.session_state["address_form_suggestions"].suggestions[selected_index].street, "124 Rue Exemple")
+        selected_button.click().run()
+        self.assertEqual(app.session_state["address_form_state"].address.street, "124 Rue Exemple")
+        self.assertEqual(app.session_state["analysis_property_name_value"], "124 Rue Exemple, Ville-exemple")
+        self.assertEqual(app.session_state["analysis_property_type_value"], "Maison")
+        self.assertEqual(app.session_state["analysis_financial_values"]["property_price"], 400000.0)
+        self.assertEqual(app.text_input(key="saved_property_name").value, "124 Rue Exemple, Ville-exemple")
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        app.button(key="save_analysis").click().run()
+        saved_after_switch = SQLiteRepository(self.db).list_analyses(user["id"])
+        self.assertEqual(len(saved_after_switch), 2)
+        switched = next(item for item in saved_after_switch if item["property_name"] == "124 Rue Exemple, Ville-exemple")
+        self.assertEqual(switched["price"], 400000.0)
+        self.assertEqual(json.loads(switched["official_role_snapshot_json"])["total_value"], 405000.0)
+        self.assertEqual(json.loads(switched["financial_inputs_json"])["_property_type"], "Maison")
+        app.text_input(key="saved_property_name").set_value("Dossier personnel").run()
+        app.session_state["switch_address_back"] = True
+        app.run()
+        next(button for button in app.button if button.label.startswith("123 Rue Exemple")).click().run()
+        self.assertEqual(app.text_input(key="saved_property_name").value, "Dossier personnel")
 
     def test_auto_dossier_name_tracks_a_new_official_selection(self):
         """An auto-filled label must not stay on a previously selected unit."""
@@ -399,7 +434,7 @@ class AddressFormUiTests(unittest.TestCase):
         app.run()
         self.assertFalse(app.exception)
         self.assertNotIn("Total au rôle", [metric.label for metric in app.metric])
-        app.button(key="address_suggestion_select_0").click().run()
+        next(button for button in app.button if button.label.startswith("124 Rue Exemple")).click().run()
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state["address_form_state"].address.street, "124 Rue Exemple")
         self.assertEqual(app.session_state["analysis_property_auto_name"], "124 Rue Exemple, Ville-exemple")
@@ -431,8 +466,43 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertNotIn("analysis_property_auto_name", app.session_state)
         app.session_state["switch_address_once"] = True
         app.run()
-        app.button(key="address_suggestion_select_0").click().run()
+        next(button for button in app.button if button.label.startswith("124 Rue Exemple")).click().run()
         self.assertEqual(app.text_input(key="workflow_property_name").value, "Mon projet")
+
+    def test_financial_figures_do_not_follow_a_different_account(self):
+        """A signed-out user's figures are not restored for another owner."""
+        from data.database import authenticate_user
+
+        owners = []
+        for email in ("first@example.invalid", "second@example.invalid"):
+            created, _ = create_user("Compte test", email, "test-password-only-456", self.db)
+            self.assertTrue(created)
+            owners.append(authenticate_user(email, "test-password-only-456", self.db)["id"])
+        overrides = {
+            "DATABASE_PATH": self.db,
+            "is_authenticated": lambda: True,
+            "current_user": lambda: {"id": property_analysis.st.session_state["test_active_owner"], "user_type": "Investisseur locatif"},
+        }
+        for name, value in overrides.items():
+            active_patch = patch.object(property_analysis, name, value)
+            active_patch.start()
+            self.addCleanup(active_patch.stop)
+        app = AppTest.from_string(
+            "import components.property_analysis as page\npage.show_property_analysis()\n",
+            default_timeout=20,
+        )
+        app.session_state["test_active_owner"] = owners[0]
+        app.run()
+        app.session_state["analysis_financial_values"]["property_price"] = 400000.0
+        app.session_state["analysis_property_name_value"] = "Ancien dossier"
+        app.session_state["analysis_property_type_value"] = "Maison"
+        app.session_state["test_active_owner"] = owners[1]
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["analysis_financial_values"]["property_price"], 0.0)
+        self.assertEqual(app.session_state["property_price"], 0.0)
+        self.assertEqual(app.text_input(key="workflow_property_name").value, "")
+        self.assertEqual(app.selectbox(key="workflow_property_type").value, "")
 
     def test_selected_address_never_overwrites_a_custom_dossier_name(self):
         source = (
@@ -497,15 +567,25 @@ class AddressFormUiTests(unittest.TestCase):
             "st.session_state.setdefault('address_form_owner', None)\n"
             "st.session_state.setdefault('address_form_state', submit_address_form('123 rue Exemple', 'Ville-exemple', '', consent=True, allow_missing_postal=True, metadata={'official_source':'role','postal_optional':True}))\n"
             "st.session_state.setdefault('address_form_consent', True)\n"
-            "page._enrich_local_suggestion = lambda *_: page.AddressSuggestion('123 Rue Exemple', 'Ville-exemple', 'H2X 1Y4', '', '123 Rue Exemple · Ville-exemple · H2X 1Y4', longitude=-73.57, latitude=45.50)\n"
-            "page.fetch_aerial_image = lambda *_: type('Aerial', (), {'status':'unavailable','image_bytes':None,'mime_type':'image/png','acquisition_year':None,'message':''})()\n"
             "page.show_property_analysis()\n"
         )
-        app = AppTest.from_string(source).run(timeout=20)
-        self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
-        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
-        app.run(timeout=20)
-        self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
+        enriched = property_analysis.AddressSuggestion(
+            "123 Rue Exemple", "Ville-exemple", "H2X 1Y4", "",
+            "123 Rue Exemple · Ville-exemple · H2X 1Y4", longitude=-73.57, latitude=45.50,
+        )
+        unavailable_aerial = lambda *_: type("Aerial", (), {
+            "status": "unavailable", "image_bytes": None, "mime_type": "image/png",
+            "acquisition_year": None, "message": "",
+        })()
+        with (
+            patch.object(property_analysis, "_enrich_local_suggestion", return_value=enriched),
+            patch.object(property_analysis, "fetch_aerial_image", side_effect=unavailable_aerial),
+        ):
+            app = AppTest.from_string(source).run(timeout=20)
+            self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
+            self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+            app.run(timeout=20)
+            self.assertEqual(app.text_input(key="address_form_postal").value, "H2X 1Y4")
 
     def test_street_only_submission_keeps_city_postal_and_consent_canonical(self):
         app = self._app()
