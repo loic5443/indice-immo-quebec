@@ -39,4 +39,4 @@ class ProductStructureTests(unittest.TestCase):
             source = (Path("components") / filename).read_text(encoding="utf-8")
             self.assertNotIn("#reveler-la-valeur-et-analyser-votre-projet", source)
         self.assertIn("hero-title", (Path("components") / "home.py").read_text(encoding="utf-8"))
-        self.assertIn("st.title", (Path("components") / "account.py").read_text(encoding="utf-8"))
+        self.assertIn('st.html("<h1>Mon compte</h1>")', (Path("components") / "account.py").read_text(encoding="utf-8"))

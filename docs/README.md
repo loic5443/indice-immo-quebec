@@ -24,6 +24,7 @@ La vue aérienne officielle facultative, son attribution et ses protections de c
 - [Rapport de clôture](SPRINT6_COMPLETION_REPORT.md)
 - [Guide du parcours d'analyse](GUIDE_PARCOURS_ANALYSE.md)
 - [Checklist bêta privée](CHECKLIST_LANCEMENT_BETA.md)
+- [Revue technique des sources et de la confidentialité — 23 septembre 2026](AUDIT_TECHNIQUE_SOURCES_SECURITE_2026-09-23.md)
 
 ## Clôture de la refonte bêta
 

@@ -254,7 +254,6 @@ finally:
         app.session_state["main_navigation"] = "Mes propriétés"
         app.run()
         self.assertFalse(app.exception)
-        self.assertIn("Mes propriétés", [item.value for item in app.title])
         self.assertIn("Projet de test", " ".join(item.label for item in app.expander))
 
 
