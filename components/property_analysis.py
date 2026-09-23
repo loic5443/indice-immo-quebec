@@ -1617,7 +1617,7 @@ def show_property_analysis() -> None:
     st.session_state[FINANCIAL_STATE_KEY] = financial_values
     reopen_notice = _apply_reopen_draft()
     st.markdown("<p class='eyebrow'>DOSSIER IMMOBILIER 360</p>", unsafe_allow_html=True)
-    st.markdown("<h1>Révéler la valeur et analyser votre projet</h1>", unsafe_allow_html=True)
+    st.html("<h1>Révéler la valeur et analyser votre projet</h1>")
     st.markdown("<p class='section-intro'>Adresse, renseignements publics autorisés, valeur disponible, finances et suivi : un seul dossier, sans transformer les données manquantes en conclusions.</p>", unsafe_allow_html=True)
     if reopen_notice:
         st.success(reopen_notice)

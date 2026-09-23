@@ -29,7 +29,7 @@ class PublicUiRegressionTests(unittest.TestCase):
                     node for node in ast.walk(tree)
                     if isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "markdown"
+                    and node.func.attr == "html"
                     and isinstance(node.func.value, ast.Name)
                     and node.func.value.id == "st"
                     and node.args
@@ -38,11 +38,6 @@ class PublicUiRegressionTests(unittest.TestCase):
                     and node.args[0].value.startswith("<h1>")
                 ]
                 self.assertEqual(len(titles), 1)
-                self.assertTrue(all(
-                    any(keyword.arg == "unsafe_allow_html" and isinstance(keyword.value, ast.Constant)
-                        and keyword.value.value is True for keyword in call.keywords)
-                    for call in titles
-                ))
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)

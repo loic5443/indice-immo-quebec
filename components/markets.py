@@ -86,7 +86,7 @@ def _show_indicator(rows: list[dict], code: str) -> None:
 
 def show_markets() -> None:
     st.markdown("<p class='eyebrow'>MARCHÉ</p>", unsafe_allow_html=True)
-    st.markdown("<h1>Comparer les municipalités</h1>", unsafe_allow_html=True)
+    st.html("<h1>Comparer les municipalités</h1>")
     st.markdown(
         "<p class='section-intro'>Des repères municipaux officiels pour situer un territoire, sans prix de vente, rendement ou risque inventés.</p>",
         unsafe_allow_html=True,

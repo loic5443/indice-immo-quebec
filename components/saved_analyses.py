@@ -409,7 +409,7 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
 def show_saved_analyses() -> None:
     """Show the active user's saved analyses and management actions."""
     st.markdown("<p class='eyebrow'>VOS DOSSIERS</p>", unsafe_allow_html=True)
-    st.markdown("<h1>Mes propriétés</h1>", unsafe_allow_html=True)
+    st.html("<h1>Mes propriétés</h1>")
     st.markdown("<p class='section-intro'>Retrouvez vos dossiers sauvegardés, leurs points de repère et le suivi disponible.</p>", unsafe_allow_html=True)
     if not is_authenticated():
         st.markdown(

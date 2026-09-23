@@ -10,7 +10,7 @@ from services.feedback_service import list_feedback, submit_feedback
 
 def show_feedback() -> None:
     st.markdown("<p class='eyebrow'>VOTRE AVIS</p>", unsafe_allow_html=True)
-    st.markdown("<h1>Aidez-nous à améliorer ImmoRadar</h1>", unsafe_allow_html=True)
+    st.html("<h1>Aidez-nous à améliorer ImmoRadar</h1>")
     st.markdown("<p class='section-intro'>Décrivez ce qui vous a aidé, surpris ou bloqué. Votre retour reste associé à votre compte et sert uniquement à améliorer le produit pendant la bêta.</p>", unsafe_allow_html=True)
     if not is_authenticated():
         st.info("Connectez-vous pour envoyer et retrouver vos retours.")
