@@ -2236,6 +2236,10 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
             and saved.get("owner_id") == current_user()["id"]
             and saved.get("property_name") == property_name.strip()
             and isinstance(saved.get("id"), int)
+            and _unchanged_snapshot_is_saved(
+                current_user()["id"],
+                _save_snapshot_signature(property_name, inputs, engine_result.profile, address_lookup, immovalue),
+            )
         ):
             if can_use(current_user(), "alerts"):
                 followed = dossier_fingerprint(current_user()["id"], property_name) in tracked_dossier_fingerprints(
