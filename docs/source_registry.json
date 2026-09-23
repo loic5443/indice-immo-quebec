@@ -1,6 +1,6 @@
 {
   "registry_version": "1.0.0",
-  "updated_at": "2026-08-24",
+  "updated_at": "2026-09-23",
   "sources": [
     {
       "source_id": "bank_of_canada_valet",
@@ -76,7 +76,7 @@
       "metrics": ["aerial_context_image"],
       "official_url": "https://servicesmatriciels.mern.gouv.qc.ca/erdas-iws/ogc/wms/Imagerie_Aeroportee_Forestiere_Historique?service=WMS&request=GetCapabilities",
       "human_url": "https://www.donneesquebec.ca/recherche/dataset/3eec3d05-61c1-4bcb-bf22-2d4bd71e2c0d",
-      "license_summary": "Attribution CC BY 4.0 selon la fiche officielle Données Québec. Attribution affichée : MRNF — Imagerie orthorectifiée du Québec.",
+      "license_summary": "Attribution MRNF — Imagerie orthorectifiée du Québec. La licence et les conditions de la ressource exacte doivent être confirmées sur la fiche officielle avant une diffusion commerciale; ne pas inférer un droit à partir de la seule licence du jeu de données.",
       "refresh_frequency": "on_demand_consent_only",
       "retention": "Image uniquement dans la session en mémoire après consentement et sélection; ni image, ni coordonnées, ni adresse ne sont sauvegardées, exportées, journalisées ou envoyées à la télémétrie.",
       "quality_rules": "HTTPS, hôte officiel strict, délai maximal de 4 secondes, redirections refusées, PNG seulement, 512 × 360 pixels au maximum, 1,5 Mo au maximum, rendu uniforme refusé. Aucune couverture est signalée comme indisponible.",

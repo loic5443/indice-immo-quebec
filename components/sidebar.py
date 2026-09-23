@@ -38,12 +38,12 @@ def show_sidebar() -> str:
         "<p class='sidebar-tagline'>Valeur, analyse et suivi immobilier.</p>",
         unsafe_allow_html=True,
     )
-    if current in PRIMARY_PAGES:
-        st.session_state["primary_navigation"] = current
-    st.session_state.setdefault("primary_navigation", "Accueil")
+    # A secondary page must not leave the previous primary destination selected:
+    # clicking that already-selected radio would otherwise have no effect.
+    st.session_state["primary_navigation"] = current if current in PRIMARY_PAGES else None
     st.sidebar.radio(
         "Navigation principale", PRIMARY_PAGES,
-        key="primary_navigation", on_change=_primary_changed,
+        index=None, key="primary_navigation", on_change=_primary_changed,
         label_visibility="collapsed",
     )
 
@@ -59,17 +59,15 @@ def show_sidebar() -> str:
         f"<span>{account_hint}</span></div>",
         unsafe_allow_html=True,
     )
-    if st.sidebar.button(f"👤 {account_label} et alertes", key="secondary_account", width="stretch"):
-        _secondary("Mon compte")
+    st.sidebar.button(
+        f"👤 {account_label} et alertes", key="secondary_account", width="stretch",
+        on_click=_secondary, args=("Mon compte",),
+    )
     with st.sidebar.expander("Informations et aide"):
-        if st.button("À propos", key="secondary_about", width="stretch"):
-            _secondary("À propos")
-        if st.button("Confidentialité", key="secondary_privacy", width="stretch"):
-            _secondary("Confidentialité")
-        if st.button("Donner mon avis", key="secondary_feedback", width="stretch"):
-            _secondary("Donner mon avis")
+        st.button("À propos", key="secondary_about", width="stretch", on_click=_secondary, args=("À propos",))
+        st.button("Confidentialité", key="secondary_privacy", width="stretch", on_click=_secondary, args=("Confidentialité",))
+        st.button("Donner mon avis", key="secondary_feedback", width="stretch", on_click=_secondary, args=("Donner mon avis",))
     if st.session_state.get("current_user", {}).get("role") == "admin":
-        if st.sidebar.button("Administration", key="secondary_admin", width="stretch"):
-            _secondary("Administration")
+        st.sidebar.button("Administration", key="secondary_admin", width="stretch", on_click=_secondary, args=("Administration",))
     st.sidebar.caption("Bêta privée · Aucun paiement réel n’est activé.")
     return st.session_state.get("main_navigation", "Accueil")
