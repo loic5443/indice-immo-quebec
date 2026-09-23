@@ -135,6 +135,37 @@ finally:
         self.assertIsNone(self._user())
         self.assertEqual(validate_invitation(self.invitation, self.database_path), "active")
 
+    def test_guest_analysis_requires_an_explicit_calculation(self):
+        source = f'''
+from pathlib import Path
+import components.property_analysis as page
+original_database_path = page.DATABASE_PATH
+original_is_authenticated = page.is_authenticated
+try:
+    page.DATABASE_PATH = Path({str(self.database_path)!r})
+    page.is_authenticated = lambda: False
+    page.show_property_analysis()
+finally:
+    page.DATABASE_PATH = original_database_path
+    page.is_authenticated = original_is_authenticated
+'''
+        app = AppTest.from_string(source, default_timeout=20).run()
+        self.assertFalse(app.exception)
+        self.assertIn("Continuer vers les finances", [item.label for item in app.button])
+        self.assertNotIn("ImmoScore", [item.label for item in app.metric])
+        app.text_input(key="workflow_property_name").set_value("Projet de test")
+        app.selectbox(key="workflow_property_type").set_value("Maison")
+        self._click(app, "Continuer vers les finances")
+        self.assertIn("Calculer mon analyse", [item.label for item in app.button])
+        self.assertNotIn("ImmoScore", [item.label for item in app.metric])
+        app.number_input(key="property_price").set_value(400000.0)
+        app.number_input(key="down_payment").set_value(80000.0)
+        app.number_input(key="mortgage_rate").set_value(5.0)
+        app.run()
+        self._click(app, "Calculer mon analyse")
+        self.assertIn("ImmoScore", [item.label for item in app.metric])
+        self.assertIn("Créer mon espace gratuit", [item.label for item in app.button])
+
 
 if __name__ == "__main__":
     unittest.main()
