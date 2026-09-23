@@ -4,6 +4,7 @@ from dataclasses import asdict
 from datetime import date
 import hashlib
 import json
+import math
 import re
 import unicodedata
 
@@ -215,6 +216,7 @@ def _apply_reopen_draft() -> str | None:
         # date when opening it as a fresh editable dossier.
         st.session_state["mortgage_renewal_date"] = None
     financial_values["mortgage_renewal_date"] = st.session_state["mortgage_renewal_date"]
+    _persist_financial_draft()
     st.session_state["analysis_step"] = 1
     st.session_state["analysis_completed_steps"] = {1}
     st.session_state["analysis_reopen_show_property_stage"] = True
@@ -1108,6 +1110,62 @@ def _workflow_values() -> dict:
     }
 
 
+def _financial_draft_values() -> dict:
+    """Serialize only the known local form fields, never telemetry or provider data."""
+
+    values = {key: st.session_state.get(key, default) for key, default in DEFAULTS.items()}
+    renewal_date = values["mortgage_renewal_date"]
+    values["mortgage_renewal_date"] = renewal_date.isoformat() if isinstance(renewal_date, date) else None
+    return values
+
+
+def _persist_financial_draft() -> None:
+    owner_id = _address_owner_id()
+    if owner_id is None:
+        return
+    values = _financial_draft_values()
+    st.session_state[FINANCIAL_STATE_KEY] = {
+        **values,
+        "mortgage_renewal_date": st.session_state.get("mortgage_renewal_date"),
+    }
+    draft, step = load_draft(owner_id, DATABASE_PATH)
+    if draft.get("financial_values") == values:
+        return
+    draft["financial_values"] = values
+    save_draft(owner_id, draft, step, DATABASE_PATH)
+
+
+def _restore_financial_draft(draft: dict) -> None:
+    """Ignore malformed legacy values instead of breaking a resumed form."""
+
+    raw = draft.get("financial_values")
+    if not isinstance(raw, dict):
+        return
+    restored = dict(DEFAULTS)
+    bounds = {
+        "mortgage_rate": (0, 25), "amortization_years": (5, 30),
+        "vacancy_rate": (0, 100), "rent_growth": (-25, 25),
+        "expense_growth": (-25, 25), "holding_period": (1, 40),
+    }
+    for key, default in DEFAULTS.items():
+        value = raw.get(key)
+        if key == "mortgage_renewal_date":
+            if isinstance(value, str):
+                try:
+                    restored[key] = date.fromisoformat(value)
+                except ValueError:
+                    pass
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            continue
+        lower, upper = bounds.get(key, (0, float("inf")))
+        if not lower <= value <= upper or (isinstance(default, int) and not float(value).is_integer()):
+            continue
+        restored[key] = int(value) if isinstance(default, int) else float(value)
+    st.session_state.update(restored)
+    st.session_state[FINANCIAL_STATE_KEY] = restored
+
+
 def _persist_workflow(step: int, completed: set[int]) -> None:
     if not is_authenticated():
         return
@@ -1122,6 +1180,7 @@ def _ensure_workflow_state() -> tuple[int, set[int]]:
     owner_id = _address_owner_id()
     if st.session_state.get("workflow_owner") != owner_id:
         draft, saved_step = load_draft(owner_id, DATABASE_PATH) if owner_id is not None else ({}, 1)
+        _restore_financial_draft(draft)
         st.session_state["workflow_owner"] = owner_id
         st.session_state["analysis_step"] = normalize_step(saved_step)
         st.session_state["analysis_completed_steps"] = set(draft.get("workflow_completed", [1])) or {1}
@@ -1663,6 +1722,7 @@ def show_property_analysis() -> None:
         _show_property_stage()
     elif visible_stage == 2:
         _show_finance_stage()
+        _persist_financial_draft()
     else:
         st.markdown("<div class='section-space compact-space'></div><h2>3. Résultats et rapport</h2><p class='section-intro'>Votre analyse est prête. Consultez la vue d’ensemble, puis sauvegardez votre dossier ou produisez votre rapport.</p>", unsafe_allow_html=True)
     _show_technical_workflow(step)
