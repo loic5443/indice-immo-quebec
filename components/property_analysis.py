@@ -274,6 +274,13 @@ def _address_state_for_current_user() -> AddressFormState:
     # not only equality, or a fresh anonymous session would skip its first
     # canonical hydration (including the Accueil → Analyser hand-off).
     if not start_empty and (ADDRESS_OWNER_KEY not in st.session_state or st.session_state.get(ADDRESS_OWNER_KEY) != owner_id):
+        previous_owner_known = ADDRESS_OWNER_KEY in st.session_state
+        previous_owner = st.session_state.get(ADDRESS_OWNER_KEY)
+        previous_state = st.session_state.get(ADDRESS_STATE_KEY)
+        guest_handoff = bool(
+            previous_owner_known and previous_owner is None and owner_id is not None
+            and isinstance(previous_state, AddressFormState) and previous_state.valid
+        )
         state = empty_address_form_state()
         restored_draft = False
         if owner_id is not None:
@@ -284,22 +291,31 @@ def _address_state_for_current_user() -> AddressFormState:
         # canonical state has been initialized.  This also prevents a rerun
         # from turning an already selected manual mode or consent back off.
         if not restored_draft:
-            values = dict(state.values)
-            for field, key in ADDRESS_WIDGET_KEYS.items():
-                if key in st.session_state:
-                    values[field] = st.session_state[key]
-            if ADDRESS_EDITOR_STREET_KEY in st.session_state:
-                values["street"] = st.session_state[ADDRESS_EDITOR_STREET_KEY]
-            elif ADDRESS_STREET_INPUT_KEY in st.session_state:
-                values["street"] = st.session_state[ADDRESS_STREET_INPUT_KEY]
-            state = AddressFormState(values=values, address=None, errors={})
+            if guest_handoff:
+                state = previous_state
+            elif not previous_owner_known or previous_owner is None:
+                values = dict(state.values)
+                for field, key in ADDRESS_WIDGET_KEYS.items():
+                    if key in st.session_state:
+                        values[field] = st.session_state[key]
+                if ADDRESS_EDITOR_STREET_KEY in st.session_state:
+                    values["street"] = st.session_state[ADDRESS_EDITOR_STREET_KEY]
+                elif ADDRESS_STREET_INPUT_KEY in st.session_state:
+                    values["street"] = st.session_state[ADDRESS_STREET_INPUT_KEY]
+                state = AddressFormState(values=values, address=None, errors={})
         st.session_state[ADDRESS_OWNER_KEY] = owner_id
         st.session_state[ADDRESS_STATE_KEY] = state
         st.session_state[ADDRESS_HYDRATE_KEY] = True
-        st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+        if not guest_handoff or restored_draft:
+            st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
         st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
         st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
+        if previous_owner is not None and previous_owner != owner_id:
+            st.session_state[ADDRESS_MANUAL_MODE_KEY] = False
+            st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
         _clear_address_suggestions()
+        if guest_handoff and not restored_draft:
+            _persist_address_draft(state)
     state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
     # The Accueil hand-off must work even when this anonymous session already
     # visited Analyser.  It is therefore applied independently of owner/draft

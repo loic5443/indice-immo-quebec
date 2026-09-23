@@ -53,6 +53,41 @@ class AddressFormUiTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_guest_public_result_survives_login_but_not_account_switch(self):
+        """The same guest may keep a chosen role; another account never inherits it."""
+        create_user("Compte A", "account-a@example.test", "Motdepasse123", self.db)
+        create_user("Compte B", "account-b@example.test", "Motdepasse123", self.db)
+        source = (
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            f"page.DATABASE_PATH = Path({str(self.db)!r})\n"
+            "page.is_authenticated = lambda: bool(st.session_state.get('test_owner'))\n"
+            "page.current_user = lambda: {'id': st.session_state['test_owner'], 'plan': 'free', 'user_type': 'Investisseur locatif'}\n"
+            "page.show_property_analysis()\n"
+        )
+        source = "from pathlib import Path\n" + source
+        app = AppTest.from_string(source, default_timeout=20).run()
+        app.session_state["address_form_consent"] = True
+        app.session_state["address_form_street_input"] = "123 rue Ex"
+        app.run()
+        app.button(key="address_suggestion_select_0").click().run()
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        self.assertEqual(app.session_state["address_form_state"].address.city, "Ville-exemple")
+
+        app.session_state["test_owner"] = 2
+        app.run()
+        self.assertTrue(app.session_state["address_form_consent"])
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        self.assertEqual(app.session_state["address_form_state"].address.city, "Ville-exemple")
+        app.run()
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+
+        app.session_state["test_owner"] = 3
+        app.run()
+        self.assertNotIn("Total au rôle", [metric.label for metric in app.metric])
+        self.assertFalse(app.session_state["address_form_consent"])
+        self.assertEqual(app.session_state["address_form_state"].values["street"], "")
+
     def _app(self, authenticated=False):
         source = self.app_source
         if authenticated:
