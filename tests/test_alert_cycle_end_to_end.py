@@ -128,6 +128,69 @@ class AlertCycleEndToEndTests(unittest.TestCase):
         self.assertTrue(any("Dossier suivi de test" in item.value for item in app.caption))
         self.assertIn("Gérer mes alertes par courriel", [button.label for button in app.button])
 
+    def test_my_properties_shows_real_alert_before_opt_in_and_sends_only_after_opt_in(self):
+        # Render the actual Mes propriétés page, not only its alert subcomponent.
+        # The sender is local and records no recipient address in test state.
+        with sqlite3.connect(self.database_path) as connection:
+            connection.execute("UPDATE users SET plan = 'free' WHERE id = ?", (self.user["id"],))
+            connection.commit()
+        source = f'''
+from pathlib import Path
+import streamlit as st
+import components.saved_analyses as saved_page
+import components.alerts as alert_page
+from data.database import authenticate_user
+from services.alert_delivery_service import deliver_alerts_for_user
+database_path = Path({str(self.database_path)!r})
+user = authenticate_user("alert-cycle@example.test", "Motdepasse1", database_path)
+st.session_state.setdefault("test_email_contents", [])
+originals = (
+    saved_page.DATABASE_PATH, saved_page.is_authenticated, saved_page.current_user,
+    alert_page.DATABASE_PATH, alert_page.deliver_alerts_for_user,
+)
+try:
+    saved_page.DATABASE_PATH = database_path
+    saved_page.is_authenticated = lambda: True
+    saved_page.current_user = lambda: user
+    alert_page.DATABASE_PATH = database_path
+    alert_page.deliver_alerts_for_user = lambda owner, path: deliver_alerts_for_user(
+        owner, path, environment={SAFE_ENVIRONMENT!r},
+        sender=lambda _recipient, subject, content, **_kwargs:
+            st.session_state["test_email_contents"].append((subject, content)),
+    )
+    saved_page.show_saved_analyses()
+finally:
+    saved_page.DATABASE_PATH, saved_page.is_authenticated, saved_page.current_user, \\
+        alert_page.DATABASE_PATH, alert_page.deliver_alerts_for_user = originals
+'''
+        app = AppTest.from_string(source, default_timeout=25).run()
+        self.assertFalse(app.exception)
+        self.assertIn("Suivi des changements vérifiables", " ".join(item.value for item in app.markdown))
+        self.assertFalse(any("rôle municipal" in item.value for item in app.subheader))
+        self.assertEqual(app.session_state["test_email_contents"], [])
+
+        with sqlite3.connect(self.database_path) as connection:
+            connection.execute("UPDATE users SET plan = 'premium' WHERE id = ?", (self.user["id"],))
+            connection.commit()
+        app.run()
+        self.assertFalse(app.exception)
+        titles = [item.value for item in app.subheader]
+        self.assertIn("Centre d’alertes", " ".join(item.value for item in app.markdown))
+        self.assertTrue(any("rôle municipal" in title for title in titles))
+        self.assertEqual(app.session_state["test_email_contents"], [])
+
+        self.assertTrue(set_alert_email_consent(self.user["id"], True, self.database_path))
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(len(app.session_state["test_email_contents"]), 1)
+        subject, content = app.session_state["test_email_contents"][0]
+        self.assertEqual(subject, "ImmoRadar — une alerte est disponible")
+        self.assertNotIn("Dossier suivi de test", content)
+        self.assertNotIn("420 000", content)
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(len(app.session_state["test_email_contents"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
