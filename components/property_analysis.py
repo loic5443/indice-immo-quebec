@@ -2059,6 +2059,7 @@ def _show_summary_value_cards(address_lookup: dict | None, immovalue: dict | Non
 def _show_summary_scenarios(inputs: PropertyInputs, profile: str) -> None:
     """Compact preview of existing deterministic scenarios; no formula changes."""
 
+    has_rental_context = bool(inputs.rental_income_monthly or inputs.other_income_monthly)
     base = next(item for item in build_standard_scenarios(inputs, profile) if item.name == "Scénario de base")
     rate_up = next(item for item in build_resilience_tests(inputs, profile)[0] if item.name == "Taux +1 point")
     prudent = next(item for item in build_standard_scenarios(inputs, profile) if item.name == "Prudent")
@@ -2066,8 +2067,12 @@ def _show_summary_scenarios(inputs: PropertyInputs, profile: str) -> None:
         with column:
             with st.container(border=True):
                 st.markdown(f"**{scenario.name}**")
-                st.metric("Flux mensuel", _money(scenario.financial.cash_flow_monthly))
-                st.caption(f"DSCR {scenario.financial.debt_service_coverage_ratio:.2f}x · {scenario.description}")
+                if has_rental_context:
+                    st.metric("Flux mensuel", _money(scenario.financial.cash_flow_monthly))
+                    st.caption(f"DSCR {scenario.financial.debt_service_coverage_ratio:.2f}x · {scenario.description}")
+                else:
+                    st.metric("Coût mensuel", _money(scenario.financial.total_monthly_expenses))
+                    st.caption(f"Sans revenu locatif déclaré · {scenario.description}")
 
 
 def _return_to_summary_inputs() -> None:

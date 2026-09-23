@@ -100,6 +100,9 @@ class PropertySummaryUiTests(unittest.TestCase):
         values = {metric.label: metric.value for metric in app.metric}
         self.assertEqual(values["Revenus locatifs"], "Non applicable")
         self.assertEqual(values["Flux de trésorerie"], "Non applicable")
+        scenario_metrics = [metric for metric in app.metric if metric.label in {"Flux mensuel", "Coût mensuel"}]
+        self.assertEqual([metric.label for metric in scenario_metrics], ["Coût mensuel"] * 3)
+        self.assertTrue(all(metric.value != "Non applicable" for metric in scenario_metrics))
 
     def test_value_comparison_explains_the_fiscal_role_limit(self):
         app = AppTest.from_string(
