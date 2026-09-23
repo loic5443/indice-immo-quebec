@@ -38,6 +38,8 @@ class FinancialDraftUiTests(unittest.TestCase):
         app = AppTest.from_string(self.source, default_timeout=20).run()
         app.text_input(key="workflow_property_name").set_value("Dossier exemple").run()
         app.selectbox(key="workflow_property_type").set_value("Maison").run()
+        app.radio(key="workflow_objective_choice").set_value("Investir et louer").run()
+        app.number_input(key="iv_asking").set_value(425000.0).run()
         app.button(key="continue_to_finances").click().run()
         app.number_input(key="property_price").set_value(400000.0)
         app.number_input(key="down_payment").set_value(80000.0)
@@ -58,6 +60,10 @@ class FinancialDraftUiTests(unittest.TestCase):
         self.assertEqual(resumed.number_input(key="down_payment").value, 80000.0)
         self.assertEqual(resumed.number_input(key="mortgage_rate").value, 5.0)
         self.assertEqual(resumed.date_input(key="mortgage_renewal_date").value, date(2028, 6, 1))
+        self.assertEqual(resumed.session_state["analysis_property_name_value"], "Dossier exemple")
+        self.assertEqual(resumed.session_state["analysis_property_type_value"], "Maison")
+        self.assertEqual(resumed.session_state["workflow_objective"], "Investir et louer")
+        self.assertEqual(resumed.session_state["iv_asking"], 425000.0)
 
     def test_drafts_are_owner_scoped_and_malformed_values_are_ignored(self):
         first = AppTest.from_string(self.source, default_timeout=20).run()

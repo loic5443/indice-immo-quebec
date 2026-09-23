@@ -217,6 +217,7 @@ def _apply_reopen_draft() -> str | None:
         st.session_state["mortgage_renewal_date"] = None
     financial_values["mortgage_renewal_date"] = st.session_state["mortgage_renewal_date"]
     _persist_financial_draft()
+    _persist_property_draft()
     st.session_state["analysis_step"] = 1
     st.session_state["analysis_completed_steps"] = {1}
     st.session_state["analysis_reopen_show_property_stage"] = True
@@ -1110,6 +1111,54 @@ def _workflow_values() -> dict:
     }
 
 
+def _property_draft_values() -> dict:
+    name = _property_name()
+    return {
+        "name": name,
+        "type": _property_type(),
+        "objective": st.session_state.get("workflow_objective", ""),
+        "profile": st.session_state.get("workflow_profile", ""),
+        "asking_price": st.session_state.get("iv_asking", 0.0),
+        "auto_name": name if name == st.session_state.get(PROPERTY_AUTO_NAME_KEY) else None,
+    }
+
+
+def _persist_property_draft() -> None:
+    owner_id = _address_owner_id()
+    if owner_id is None:
+        return
+    details = _property_draft_values()
+    draft, step = load_draft(owner_id, DATABASE_PATH)
+    if draft.get("property_details") == details:
+        return
+    draft["property_details"] = details
+    save_draft(owner_id, draft, step, DATABASE_PATH)
+
+
+def _restore_property_draft(draft: dict) -> None:
+    details = draft.get("property_details")
+    if not isinstance(details, dict):
+        return
+    name = details.get("name")
+    kind = details.get("type")
+    objective = details.get("objective")
+    if isinstance(name, str) and len(name) <= 300:
+        st.session_state["workflow_property_name"] = name
+        st.session_state[PROPERTY_NAME_STATE_KEY] = name
+        if details.get("auto_name") == name:
+            st.session_state[PROPERTY_AUTO_NAME_KEY] = name
+    if isinstance(kind, str) and kind in {"", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"}:
+        st.session_state["workflow_property_type"] = kind
+        st.session_state[PROPERTY_TYPE_STATE_KEY] = kind
+    if isinstance(objective, str) and objective in ANALYSIS_OBJECTIVES:
+        st.session_state["workflow_objective"] = objective
+        st.session_state["workflow_objective_choice"] = objective
+        st.session_state["workflow_profile"] = ANALYSIS_OBJECTIVES[objective]
+    asking = details.get("asking_price")
+    if isinstance(asking, (int, float)) and not isinstance(asking, bool) and math.isfinite(asking) and asking >= 0:
+        st.session_state["iv_asking"] = float(asking)
+
+
 def _financial_draft_values() -> dict:
     """Serialize only the known local form fields, never telemetry or provider data."""
 
@@ -1172,6 +1221,7 @@ def _persist_workflow(step: int, completed: set[int]) -> None:
     owner_id = current_user()["id"]
     draft, _ = load_draft(owner_id, DATABASE_PATH)
     draft["workflow_completed"] = sorted(completed)
+    draft["property_details"] = _property_draft_values()
     save_draft(owner_id, draft, step, DATABASE_PATH)
 
 
@@ -1181,6 +1231,7 @@ def _ensure_workflow_state() -> tuple[int, set[int]]:
     if st.session_state.get("workflow_owner") != owner_id:
         draft, saved_step = load_draft(owner_id, DATABASE_PATH) if owner_id is not None else ({}, 1)
         _restore_financial_draft(draft)
+        _restore_property_draft(draft)
         st.session_state["workflow_owner"] = owner_id
         st.session_state["analysis_step"] = normalize_step(saved_step)
         st.session_state["analysis_completed_steps"] = set(draft.get("workflow_completed", [1])) or {1}
@@ -1413,6 +1464,7 @@ def _show_property_stage() -> None:
     _remember_property_details()
     with asking:
         st.number_input("Prix demandé (facultatif)", min_value=0.0, step=5_000.0, key="iv_asking")
+    _persist_property_draft()
     st.caption("Le prix demandé sert uniquement à comparer le rôle municipal et ImmoValue lorsqu’elle est disponible. Il ne remplace pas le prix retenu pour vos calculs financiers.")
     st.caption("Ces renseignements servent à organiser votre dossier et à personnaliser la suite. Ils ne modifient ni la recherche publique ni la valeur au rôle municipal.")
     st.button("Continuer vers les finances", type="primary", key="continue_to_finances", on_click=_continue_to_finances)
