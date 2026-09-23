@@ -102,6 +102,15 @@ class AddressFormUiTests(unittest.TestCase):
         app.run(timeout=20)
         return app
 
+    def test_public_lookup_consent_stays_checked_after_its_own_rerun(self):
+        """The first standalone consent click must survive Streamlit's rerun."""
+        app = self._app()
+        app.checkbox(key="address_form_consent").set_value(True).run(timeout=20)
+        self.assertTrue(app.checkbox(key="address_form_consent").value)
+        self.assertTrue(app.session_state["address_form_state"].values["consent"])
+        app.run(timeout=20)
+        self.assertTrue(app.checkbox(key="address_form_consent").value)
+
     @staticmethod
     def _submit_exact(app):
         app.session_state["address_form_editor_street"] = "123 rue Exemple, Ville-exemple, QC, Canada"
