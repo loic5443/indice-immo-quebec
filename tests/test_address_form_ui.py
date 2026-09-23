@@ -1,5 +1,6 @@
 """Real Streamlit form regressions for canonical address-state synchronization."""
 
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -24,6 +25,10 @@ XML = (
     b'<RLM02A>2026</RLM02A><RLUEx><RL0101><RL0101Ax>123</RL0101Ax>'
     b'<RL0101Gx>RUE EXEMPLE</RL0101Gx></RL0101><RL0104><RL0104A>1</RL0104A>'
     b'</RL0104><RL0402A>125400</RL0402A><RL0403A>278700</RL0403A><RL0404A>404100</RL0404A>'
+    b'<RL0401A>2024-07-01</RL0401A></RLUEx>'
+    b'<RLUEx><RL0101><RL0101Ax>124</RL0101Ax>'
+    b'<RL0101Gx>RUE EXEMPLE</RL0101Gx></RL0101><RL0104><RL0104A>2</RL0104A>'
+    b'</RL0104><RL0402A>125500</RL0402A><RL0403A>279500</RL0403A><RL0404A>405000</RL0404A>'
     b'<RL0401A>2024-07-01</RL0401A></RLUEx></RL>'
 )
 
@@ -305,6 +310,129 @@ class AddressFormUiTests(unittest.TestCase):
         self.assertEqual(app.selectbox(key="analysis_step_selector").value, 3)
         self.assertNotIn("Nom/adresse descriptive et type requis.", [item.value for item in app.error])
         self.assertEqual(list(app.error), [])
+
+    def test_selected_role_survives_finances_and_is_saved_as_a_separate_fiscal_value(self):
+        """One public selection must survive calculation, save and a rerun."""
+        from data.database import authenticate_user, save_analysis
+        from repositories.sqlite_repository import SQLiteRepository
+
+        created, _ = create_user("Visiteur test", "visitor@example.invalid", "test-password-only-456", self.db)
+        self.assertTrue(created)
+        user = authenticate_user("visitor@example.invalid", "test-password-only-456", self.db)
+        self.assertIsNotNone(user)
+        unavailable = lambda *_args, **_kwargs: property_analysis.SuggestionResponse(
+            "unavailable", message="Service externe indisponible"
+        )
+        overrides = {
+            "DATABASE_PATH": self.db,
+            "is_authenticated": lambda: True,
+            "current_user": lambda: user,
+            "save_analysis": lambda owner, name, values, **kwargs: save_analysis(
+                owner, name, values, self.db, **kwargs
+            ),
+            "suggest_addresses": unavailable,
+            "resolve_freeform_address": unavailable,
+        }
+        for name, value in overrides.items():
+            active_patch = patch.object(property_analysis, name, value)
+            active_patch.start()
+            self.addCleanup(active_patch.stop)
+        source = (
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "st.session_state.setdefault('address_form_street_input', '123 rue Ex')\n"
+            "page.show_property_analysis()\n"
+        )
+        app = AppTest.from_string(source, default_timeout=20).run()
+        self.assertFalse(app.exception)
+        app.button(key="address_suggestion_select_0").click().run()
+        self.assertFalse(app.exception)
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+        app.selectbox(key="workflow_property_type").set_value("Maison").run()
+        app.button(key="continue_to_finances").click().run()
+        app.number_input(key="property_price").set_value(400000.0)
+        app.number_input(key="down_payment").set_value(80000.0)
+        app.number_input(key="mortgage_rate").set_value(5.0)
+        app.run()
+        app.button(key="calculate_analysis").click().run()
+        self.assertEqual(app.text_input(key="saved_property_name").value, "123 Rue Exemple, Ville-exemple")
+        app.button(key="save_analysis").click().run()
+        self.assertFalse(app.exception)
+        saved = SQLiteRepository(self.db).list_analyses(user["id"])
+        self.assertEqual(len(saved), 1)
+        role = json.loads(saved[0]["official_role_snapshot_json"])
+        self.assertEqual((role["land_value"], role["building_value"], role["total_value"]), (125400.0, 278700.0, 404100.0))
+        self.assertEqual(role["role_year"], 2026)
+        self.assertEqual(role["source"], "MAMH / Données Québec")
+        self.assertEqual(saved[0]["price"], 400000.0)
+        self.assertNotEqual(saved[0]["price"], role["total_value"])
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertIn("Total au rôle", [metric.label for metric in app.metric])
+
+    def test_auto_dossier_name_tracks_a_new_official_selection(self):
+        """An auto-filled label must not stay on a previously selected unit."""
+        for name, value in {
+            "DATABASE_PATH": self.db,
+            "suggest_addresses": lambda *_args, **_kwargs: property_analysis.SuggestionResponse("unavailable"),
+            "resolve_freeform_address": lambda *_args, **_kwargs: property_analysis.SuggestionResponse("unavailable"),
+        }.items():
+            active_patch = patch.object(property_analysis, name, value)
+            active_patch.start()
+            self.addCleanup(active_patch.stop)
+        source = (
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "st.session_state.setdefault('address_form_street_input', '123 rue Ex')\n"
+            "if st.session_state.pop('switch_address_once', False):\n"
+            "    st.session_state['address_form_street_input'] = '124 rue Ex'\n"
+            "    page._set_address_editor_street('124 rue Ex')\n"
+            "page.show_property_analysis()\n"
+        )
+        app = AppTest.from_string(source, default_timeout=20).run()
+        app.button(key="address_suggestion_select_0").click().run()
+        self.assertEqual(app.text_input(key="workflow_property_name").value, "123 Rue Exemple, Ville-exemple")
+        self.assertEqual(app.session_state["analysis_property_auto_name"], "123 Rue Exemple, Ville-exemple")
+        app.session_state["switch_address_once"] = True
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertNotIn("Total au rôle", [metric.label for metric in app.metric])
+        app.button(key="address_suggestion_select_0").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["address_form_state"].address.street, "124 Rue Exemple")
+        self.assertEqual(app.session_state["analysis_property_auto_name"], "124 Rue Exemple, Ville-exemple")
+        self.assertEqual(app.text_input(key="workflow_property_name").value, "124 Rue Exemple, Ville-exemple")
+
+    def test_custom_name_after_auto_fill_survives_another_selection(self):
+        """Editing the suggested label makes it the user's own dossier name."""
+        for name, value in {
+            "DATABASE_PATH": self.db,
+            "suggest_addresses": lambda *_args, **_kwargs: property_analysis.SuggestionResponse("unavailable"),
+            "resolve_freeform_address": lambda *_args, **_kwargs: property_analysis.SuggestionResponse("unavailable"),
+        }.items():
+            active_patch = patch.object(property_analysis, name, value)
+            active_patch.start()
+            self.addCleanup(active_patch.stop)
+        source = (
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "st.session_state.setdefault('address_form_consent', True)\n"
+            "st.session_state.setdefault('address_form_street_input', '123 rue Ex')\n"
+            "if st.session_state.pop('switch_address_once', False):\n"
+            "    st.session_state['address_form_street_input'] = '124 rue Ex'\n"
+            "    page._set_address_editor_street('124 rue Ex')\n"
+            "page.show_property_analysis()\n"
+        )
+        app = AppTest.from_string(source, default_timeout=20).run()
+        app.button(key="address_suggestion_select_0").click().run()
+        app.text_input(key="workflow_property_name").set_value("Mon projet").run()
+        self.assertNotIn("analysis_property_auto_name", app.session_state)
+        app.session_state["switch_address_once"] = True
+        app.run()
+        app.button(key="address_suggestion_select_0").click().run()
+        self.assertEqual(app.text_input(key="workflow_property_name").value, "Mon projet")
 
     def test_selected_address_never_overwrites_a_custom_dossier_name(self):
         source = (

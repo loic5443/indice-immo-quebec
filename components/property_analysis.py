@@ -136,6 +136,7 @@ ADDRESS_WIDGET_KEYS = {
 # dossier label and type in separate, non-widget state across the three stages.
 PROPERTY_NAME_STATE_KEY = "analysis_property_name_value"
 PROPERTY_TYPE_STATE_KEY = "analysis_property_type_value"
+PROPERTY_AUTO_NAME_KEY = "analysis_property_auto_name"
 
 
 def _property_name() -> str:
@@ -147,12 +148,16 @@ def _property_type() -> str:
 
 
 def _remember_property_details() -> None:
-    st.session_state[PROPERTY_NAME_STATE_KEY] = st.session_state.get("workflow_property_name", "")
+    name = st.session_state.get("workflow_property_name", "")
+    if name != st.session_state.get(PROPERTY_AUTO_NAME_KEY):
+        st.session_state.pop(PROPERTY_AUTO_NAME_KEY, None)
+    st.session_state[PROPERTY_NAME_STATE_KEY] = name
     st.session_state[PROPERTY_TYPE_STATE_KEY] = st.session_state.get("workflow_property_type", "")
 
 
 def reset_analysis() -> None:
     st.session_state.update(DEFAULTS)
+    st.session_state.pop(PROPERTY_AUTO_NAME_KEY, None)
     st.session_state.pop("analysis_calculation_signature", None)
     st.session_state.pop("analysis_calculation_requested", None)
     st.session_state.pop("analysis_calculation_errors", None)
@@ -179,6 +184,7 @@ def _apply_reopen_draft() -> str | None:
     st.session_state["iv_asking"] = payload.get("asking_price") or 0.0
     st.session_state["workflow_property_name"] = str(payload.get("property_name") or "")
     st.session_state["workflow_property_type"] = str(payload.get("property_type") or "")
+    st.session_state.pop(PROPERTY_AUTO_NAME_KEY, None)
     _remember_property_details()
     objective = str(payload.get("objective") or "")
     st.session_state["workflow_objective"] = objective if objective in ANALYSIS_OBJECTIVES else ""
@@ -1284,7 +1290,8 @@ def _show_visible_stage_progress(active_stage: int) -> None:
 def _hydrate_dossier_name_from_selected_address() -> None:
     """Use a selected official address as the optional dossier label, never overwriting a custom name."""
 
-    if useful_query(_property_name()):
+    current_name = _property_name()
+    if useful_query(current_name) and current_name != st.session_state.get(PROPERTY_AUTO_NAME_KEY):
         return
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if not isinstance(state, AddressFormState) or not state.address:
@@ -1292,7 +1299,9 @@ def _hydrate_dossier_name_from_selected_address() -> None:
     if state.metadata.get("official_source") not in {"role", "rqa", "external"}:
         return
     address = state.address
-    st.session_state["workflow_property_name"] = ", ".join(part for part in (address.street, address.city) if part)
+    label = ", ".join(part for part in (address.street, address.city) if part)
+    st.session_state[PROPERTY_AUTO_NAME_KEY] = label
+    st.session_state["workflow_property_name"] = label
     _remember_property_details()
 
 
