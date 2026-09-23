@@ -3,6 +3,7 @@
 import sqlite3
 import tempfile
 import unittest
+import ast
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -19,6 +20,25 @@ def _row(code, municipality):
 
 
 class PublicUiRegressionTests(unittest.TestCase):
+    def test_page_titles_do_not_reuse_a_previous_page_anchor(self):
+        root = Path(__file__).resolve().parents[1] / "components"
+        for name in ("account", "admin", "markets", "feedback", "property_analysis", "saved_analyses"):
+            with self.subTest(page=name):
+                tree = ast.parse((root / f"{name}.py").read_text(encoding="utf-8"))
+                titles = (
+                    node for node in ast.walk(tree)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "title"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "st"
+                )
+                self.assertTrue(all(
+                    any(keyword.arg == "anchor" and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is False for keyword in call.keywords)
+                    for call in titles
+                ))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.db = Path(self.tmp.name) / "ui.sqlite"
