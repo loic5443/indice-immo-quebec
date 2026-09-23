@@ -1841,10 +1841,12 @@ def _official_role_snapshot(address_lookup: dict | None) -> dict:
 def _save_snapshot_signature(property_name: str, inputs: PropertyInputs, profile: str, address_lookup: dict | None, immovalue: dict | None) -> str:
     """Identify one unchanged save action without retaining its inputs in the key."""
 
+    renewal_date = st.session_state.get("mortgage_renewal_date")
     payload = {
         "name": property_name.strip(), "inputs": asdict(inputs), "profile": profile,
         "property_type": _property_type(),
         "objective": st.session_state.get("workflow_objective", ""),
+        "mortgage_renewal_date": renewal_date.isoformat() if isinstance(renewal_date, date) else None,
         "role": _official_role_snapshot(address_lookup),
         "immovalue": _immovalue_snapshot_for_save(immovalue),
     }
