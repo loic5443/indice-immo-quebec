@@ -31,6 +31,32 @@ def _money(value: float) -> str:
     return f"{value:,.0f} $".replace(",", " ")
 
 
+def _saved_financial_presentation(analysis: dict) -> dict[str, str | bool]:
+    """Label an immutable snapshot without treating missing rent as a rental loss."""
+    try:
+        inputs = json.loads(analysis.get("financial_inputs_json") or "{}")
+    except (TypeError, json.JSONDecodeError):
+        inputs = {}
+    if not isinstance(inputs, dict):
+        inputs = {}
+    rental = inputs.get("rental_income_monthly", analysis.get("rental_income", 0))
+    other = inputs.get("other_income_monthly", 0)
+    declared_income = sum(
+        float(value) for value in (rental, other)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+    )
+    has_income = declared_income > 0
+    monthly = analysis.get("cash_flow") if has_income else analysis.get("monthly_expenses")
+    dscr = analysis.get("debt_service_coverage_ratio")
+    return {
+        "monthly_label": "Flux mensuel" if has_income else "Coût mensuel",
+        "monthly_value": _money(monthly) if isinstance(monthly, (int, float)) else "Non disponible",
+        "income_value": _money(declared_income) if has_income else "Non applicable",
+        "dscr_value": f"{dscr:.2f}x" if has_income and isinstance(dscr, (int, float)) else "Non applicable",
+        "has_income": has_income,
+    }
+
+
 def _comparison_value(key: str, value: float | None) -> str:
     """Format a stored value without replacing an absence with a misleading zero."""
     if value is None:
@@ -500,16 +526,17 @@ def show_saved_analyses() -> None:
             snapshots = list(history.snapshots) if history else [analysis]
             _show_dossier_tracking_status(user, snapshots, followed=followed)
             _show_saved_value_context(analysis)
+            financial_display = _saved_financial_presentation(analysis)
             first, second, third = st.columns(3)
             first.metric("Prix retenu pour les calculs", _money(analysis["price"]))
-            second.metric("Flux mensuel", _money(analysis["cash_flow"]))
+            second.metric(financial_display["monthly_label"], financial_display["monthly_value"])
             third.metric("Score ImmoRadar", f"{analysis['immo_score']:.0f} / 100" if analysis["immo_score"] is not None else "Indisponible")
             st.markdown(
                 f"**Date :** {analysis['created_at']}  \n"
                 f"**Mise de fonds :** {_money(analysis['down_payment'])}  \n"
-                f"**Revenus mensuels :** {_money(analysis['rental_income'])}  \n"
+                f"**Revenus mensuels déclarés :** {financial_display['income_value']}  \n"
                 f"**Dépenses mensuelles :** {_money(analysis['monthly_expenses'])}  \n"
-                f"**Couverture de dette :** {analysis['debt_service_coverage_ratio']:.2f}x  \n"
+                f"**Couverture de dette :** {financial_display['dscr_value']}  \n"
                 f"**Moteur :** {analysis['engine_version']}  \n"
                 f"**Provenance :** {analysis['data_provenance']}"
             )
@@ -541,9 +568,16 @@ def show_saved_analyses() -> None:
             resilience = json.loads(analysis.get("resilience_json", "{}"))
             if scenarios:
                 st.markdown("**Scénarios sauvegardés**")
+                scenario_amount = "cash_flow_monthly" if financial_display["has_income"] else "total_monthly_expenses"
                 st.dataframe([
-                    {"Scénario": item["name"], "Flux mensuel": _money(item["financial"]["cash_flow_monthly"]),
-                     "DSCR": f"{item['financial']['debt_service_coverage_ratio']:.2f}x", "Verdict": item["engine"]["verdict"]}
+                    {"Scénario": item["name"], financial_display["monthly_label"]: (
+                        _money(item["financial"][scenario_amount])
+                        if isinstance(item.get("financial", {}).get(scenario_amount), (int, float))
+                        else "Non disponible"
+                    ), "DSCR": (
+                        f"{item['financial']['debt_service_coverage_ratio']:.2f}x"
+                        if financial_display["has_income"] else "Non applicable"
+                    ), "Verdict": item["engine"]["verdict"]}
                     for item in scenarios
                 ], hide_index=True, width="stretch")
             if resilience:

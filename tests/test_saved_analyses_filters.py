@@ -6,6 +6,7 @@ from components.saved_analyses import (
     _dossier_tracking_summary,
     _filter_saved_analyses,
     _saved_immovalue,
+    _saved_financial_presentation,
     _saved_official_role,
     _snapshot_history_rows,
     _tracking_overview,
@@ -15,6 +16,30 @@ from streamlit.testing.v1 import AppTest
 
 
 class SavedAnalysisFiltersTests(unittest.TestCase):
+    def test_owner_occupied_dossier_does_not_present_rental_ratios_as_results(self):
+        snapshot = {
+            "rental_income": 0, "cash_flow": -2211, "monthly_expenses": 2211,
+            "debt_service_coverage_ratio": -0.19,
+            "financial_inputs_json": '{"rental_income_monthly": 0, "other_income_monthly": 0}',
+        }
+        display = _saved_financial_presentation(snapshot)
+        self.assertEqual(display["monthly_label"], "Coût mensuel")
+        self.assertEqual(display["monthly_value"], "2 211 $")
+        self.assertEqual(display["income_value"], "Non applicable")
+        self.assertEqual(display["dscr_value"], "Non applicable")
+
+    def test_saved_rental_income_keeps_cash_flow_and_debt_coverage(self):
+        snapshot = {
+            "rental_income": 3000, "cash_flow": 789, "monthly_expenses": 2211,
+            "debt_service_coverage_ratio": 1.40,
+            "financial_inputs_json": '{"rental_income_monthly": 3000, "other_income_monthly": 0}',
+        }
+        display = _saved_financial_presentation(snapshot)
+        self.assertEqual(display["monthly_label"], "Flux mensuel")
+        self.assertEqual(display["monthly_value"], "789 $")
+        self.assertEqual(display["income_value"], "3 000 $")
+        self.assertEqual(display["dscr_value"], "1.40x")
+
     def setUp(self):
         self.user_id = 7
         self.analyses = [
