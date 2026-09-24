@@ -166,6 +166,8 @@ class QuebecAddressRepositoryTests(unittest.TestCase):
         with (
             patch.object(page, "DATABASE_PATH", self.db),
             patch.object(page, "suggest_addresses", side_effect=AssertionError("no external lookup")),
+            patch.object(page, "resolve_freeform_address", side_effect=AssertionError("postal code already supplied")),
+            patch.object(page, "_remember_aerial_image", return_value=None),
             patch.object(page, "synchronize_selected_territory", return_value=AutoSyncResult("available", "Renseignements officiels disponibles.", "01023")) as sync,
         ):
             app = AppTest.from_string(source).run(timeout=20)

@@ -650,7 +650,10 @@ def _enrich_local_suggestion(selected: AddressSuggestion, consent: bool) -> Addr
     remains valid public information and must never be replaced by an error.
     """
 
-    if not consent:
+    # A complete official RQA/role address needs no geocoder round trip.
+    # Besides avoiding latency, this keeps a selected local result usable
+    # when the external service is unavailable.
+    if not consent or selected.postal_code:
         return None
     try:
         enabled = source_enabled(SOURCE_ID, DATABASE_PATH)
@@ -700,6 +703,8 @@ def _refresh_selected_local_enrichment() -> None:
     if not isinstance(state, AddressFormState) or not state.valid or not state.address:
         return
     if state.metadata.get("official_source") not in {"role", "rqa"} or not state.values.get("consent"):
+        return
+    if state.address.postal_code:
         return
     signature = (state.address.street, state.address.city, state.address.postal_code)
     if st.session_state.get(ADDRESS_ENRICHMENT_KEY) == signature:
