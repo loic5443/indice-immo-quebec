@@ -17,8 +17,19 @@ class ProductStructureTests(unittest.TestCase):
 
         app = AppTest.from_string("import components.sidebar as page\npage.show_sidebar()").run(timeout=20)
         self.assertEqual(app.radio(key="primary_navigation").options, PRIMARY_PAGES)
+        self.assertIn("👤 Se connecter et alertes", [button.label for button in app.button])
         app.radio(key="primary_navigation").set_value("Analyser").run(timeout=20)
         self.assertEqual(app.session_state["main_navigation"], "Analyser")
+
+    def test_secondary_page_does_not_trap_the_previously_selected_primary_page(self):
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_string("import components.sidebar as page\npage.show_sidebar()").run(timeout=20)
+        app.button(key="secondary_account").click().run(timeout=20)
+        self.assertEqual(app.session_state["main_navigation"], "Mon compte")
+        self.assertIsNone(app.radio(key="primary_navigation").value)
+        app.radio(key="primary_navigation").set_value("Accueil").run(timeout=20)
+        self.assertEqual(app.session_state["main_navigation"], "Accueil")
 
     def test_dossier_keeps_municipal_role_distinct_from_market_value(self):
         source = (Path("components") / "property_analysis.py").read_text(encoding="utf-8")
@@ -38,4 +49,4 @@ class ProductStructureTests(unittest.TestCase):
             source = (Path("components") / filename).read_text(encoding="utf-8")
             self.assertNotIn("#reveler-la-valeur-et-analyser-votre-projet", source)
         self.assertIn("hero-title", (Path("components") / "home.py").read_text(encoding="utf-8"))
-        self.assertIn("st.title", (Path("components") / "account.py").read_text(encoding="utf-8"))
+        self.assertIn('st.html("<h1>Mon compte</h1>")', (Path("components") / "account.py").read_text(encoding="utf-8"))

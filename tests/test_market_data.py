@@ -7,6 +7,7 @@ from pathlib import Path
 from data.database import initialize_database
 from domain.market_data import MarketObservation
 from providers.official_data import ProviderError
+from providers.source_registry import integrated_sources, load_source_registry
 from repositories.market_data_repository import MarketDataRepository
 from services.market_data_service import cached_policy_rate, refresh_source
 
@@ -30,6 +31,11 @@ def observation(value=4.5, observed_at="2026-07-20"):
 
 
 class MarketDataTests(unittest.TestCase):
+    def test_unlicensed_city_prices_are_not_marked_as_integrated(self):
+        source = load_source_registry()["quebec_city_market_indicators"]
+        self.assertEqual(source["status"], "deferred")
+        self.assertNotIn(source, integrated_sources())
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.database = Path(self.directory.name) / "market.db"

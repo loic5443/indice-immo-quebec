@@ -4,6 +4,7 @@ from dataclasses import asdict
 from datetime import date
 import hashlib
 import json
+import math
 import re
 import unicodedata
 
@@ -18,6 +19,7 @@ from components.scenarios import show_scenarios
 from components.sidebar import go_to
 from data.database import save_analysis
 from data.database import DATABASE_PATH
+from repositories.sqlite_repository import SQLiteRepository
 from domain.immoengine import PROFILE_WEIGHTS, evaluate_immoengine
 from domain.scenarios import build_resilience_tests, build_standard_scenarios
 from services.market_data_service import market_context_snapshot
@@ -32,6 +34,7 @@ from services.comparable_workspace import (
     today_iso,
 )
 from services.analysis_workflow import STEPS, load_draft, save_draft, normalize_step, transition
+from services.alert_delivery_service import deliver_alerts_for_user
 from services.entitlements_service import can_use, quota_is_enforced, quota_status, consume_estimation
 from services.dossier_tracking_service import (
     DossierTrackingAccessError,
@@ -41,8 +44,14 @@ from services.dossier_tracking_service import (
 )
 from services.address_lookup_service import lookup
 from services.quebec_role_importer import display_role_address,search_role_units,role_street_variants,suggest_role_units
-from services.quebec_role_admin_service import territory_for_municipality
-from services.quebec_role_auto_sync import AutoSyncResult, municipal_coverage_status, synchronize_selected_municipality
+from services.quebec_role_admin_service import territory_for_code, territory_for_municipality
+from services.quebec_role_auto_sync import (
+    AutoSyncResult,
+    municipal_coverage_status,
+    municipal_coverage_status_for_territory,
+    synchronize_selected_municipality,
+    synchronize_selected_territory,
+)
 from services.address_form_service import (
     AddressFormState,
     empty_address_form_state,
@@ -60,6 +69,13 @@ from services.quebec_address_geocoder import (
     suggest_addresses,
     useful_query,
 )
+from services.quebec_address_repository import (
+    SOURCE_ID as RQA_SOURCE_ID,
+    present_rqa_text,
+    rqa_status,
+    suggest_rqa_addresses,
+)
+from services.quebec_aerial_imagery import SOURCE_LABEL as AERIAL_SOURCE_LABEL, fetch_aerial_image
 from domain.address import normalize_canadian_postal_code
 from services.diagnostics_service import source_enabled
 
@@ -105,6 +121,8 @@ ADDRESS_RESOLUTION_SELECTION_KEY = "address_form_resolution_selection"
 ADDRESS_LOCAL_SELECTED_KEY = "address_form_local_selected"
 ADDRESS_AUTO_SYNC_PENDING_KEY = "address_form_auto_sync_pending"
 ADDRESS_AUTO_SYNC_STATUS_KEY = "address_form_auto_sync_status"
+ADDRESS_AERIAL_IMAGE_KEY = "address_form_aerial_image"
+ADDRESS_ENRICHMENT_KEY = "address_form_official_enrichment"
 ANALYSIS_REOPEN_PENDING_KEY = "analysis_reopen_pending"
 LAST_SAVED_ANALYSIS_KEY = "last_saved_analysis"
 MAX_ADDRESS_SUGGESTIONS = 6
@@ -116,9 +134,40 @@ ADDRESS_WIDGET_KEYS = {
     "consent": "address_form_consent",
 }
 
+# Streamlit drops widget keys when their stage is no longer rendered. Keep the
+# dossier label and type in separate, non-widget state across the three stages.
+PROPERTY_NAME_STATE_KEY = "analysis_property_name_value"
+PROPERTY_TYPE_STATE_KEY = "analysis_property_type_value"
+PROPERTY_AUTO_NAME_KEY = "analysis_property_auto_name"
+SAVED_AUTO_NAME_KEY = "analysis_saved_auto_name"
+FINANCIAL_STATE_KEY = "analysis_financial_values"
+FINANCIAL_RESTORE_KEY = "analysis_financial_restore"
+FINANCIAL_OWNER_KEY = "analysis_financial_owner"
+
+
+def _property_name() -> str:
+    return st.session_state.get(PROPERTY_NAME_STATE_KEY, st.session_state.get("workflow_property_name", ""))
+
+
+def _property_type() -> str:
+    return st.session_state.get(PROPERTY_TYPE_STATE_KEY, st.session_state.get("workflow_property_type", ""))
+
+
+def _remember_property_details() -> None:
+    name = st.session_state.get("workflow_property_name", "")
+    if name != st.session_state.get(PROPERTY_AUTO_NAME_KEY):
+        st.session_state.pop(PROPERTY_AUTO_NAME_KEY, None)
+    st.session_state[PROPERTY_NAME_STATE_KEY] = name
+    if "workflow_property_type" in st.session_state:
+        st.session_state[PROPERTY_TYPE_STATE_KEY] = st.session_state["workflow_property_type"]
+
 
 def reset_analysis() -> None:
     st.session_state.update(DEFAULTS)
+    st.session_state[FINANCIAL_STATE_KEY] = dict(DEFAULTS)
+    st.session_state.pop(FINANCIAL_RESTORE_KEY, None)
+    st.session_state.pop(PROPERTY_AUTO_NAME_KEY, None)
+    st.session_state.pop(SAVED_AUTO_NAME_KEY, None)
     st.session_state.pop("analysis_calculation_signature", None)
     st.session_state.pop("analysis_calculation_requested", None)
     st.session_state.pop("analysis_calculation_errors", None)
@@ -139,12 +188,20 @@ def _apply_reopen_draft() -> str | None:
         return None
     if payload.get("owner_id") != current_user().get("id"):
         return None
+    financial_values = dict(DEFAULTS)
     for key, value in payload.get("financial_values", {}).items():
         if key in DEFAULTS and isinstance(value, (int, float)) and not isinstance(value, bool):
-            st.session_state[key] = value
+            financial_values[key] = value
+    st.session_state.update(financial_values)
+    st.session_state[FINANCIAL_STATE_KEY] = financial_values
+    st.session_state[FINANCIAL_RESTORE_KEY] = True
     st.session_state["iv_asking"] = payload.get("asking_price") or 0.0
     st.session_state["workflow_property_name"] = str(payload.get("property_name") or "")
     st.session_state["workflow_property_type"] = str(payload.get("property_type") or "")
+    st.session_state.pop(PROPERTY_AUTO_NAME_KEY, None)
+    st.session_state.pop(SAVED_AUTO_NAME_KEY, None)
+    st.session_state.pop("saved_property_name", None)
+    _remember_property_details()
     objective = str(payload.get("objective") or "")
     st.session_state["workflow_objective"] = objective if objective in ANALYSIS_OBJECTIVES else ""
     st.session_state["workflow_objective_choice"] = st.session_state["workflow_objective"]
@@ -159,6 +216,9 @@ def _apply_reopen_draft() -> str | None:
         # An older snapshot has no renewal date. Never keep the prior draft's
         # date when opening it as a fresh editable dossier.
         st.session_state["mortgage_renewal_date"] = None
+    financial_values["mortgage_renewal_date"] = st.session_state["mortgage_renewal_date"]
+    _persist_financial_draft()
+    _persist_property_draft()
     st.session_state["analysis_step"] = 1
     st.session_state["analysis_completed_steps"] = {1}
     st.session_state["analysis_reopen_show_property_stage"] = True
@@ -207,11 +267,20 @@ def _address_state_for_current_user() -> AddressFormState:
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
         st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
         st.session_state.pop(ADDRESS_RESOLUTION_KEY, None)
+        st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+        st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
         _clear_address_suggestions()
     # Anonymous sessions use ``None`` as their owner id.  Test key presence,
     # not only equality, or a fresh anonymous session would skip its first
     # canonical hydration (including the Accueil → Analyser hand-off).
     if not start_empty and (ADDRESS_OWNER_KEY not in st.session_state or st.session_state.get(ADDRESS_OWNER_KEY) != owner_id):
+        previous_owner_known = ADDRESS_OWNER_KEY in st.session_state
+        previous_owner = st.session_state.get(ADDRESS_OWNER_KEY)
+        previous_state = st.session_state.get(ADDRESS_STATE_KEY)
+        guest_handoff = bool(
+            previous_owner_known and previous_owner is None and owner_id is not None
+            and isinstance(previous_state, AddressFormState) and previous_state.valid
+        )
         state = empty_address_form_state()
         restored_draft = False
         if owner_id is not None:
@@ -222,20 +291,31 @@ def _address_state_for_current_user() -> AddressFormState:
         # canonical state has been initialized.  This also prevents a rerun
         # from turning an already selected manual mode or consent back off.
         if not restored_draft:
-            values = dict(state.values)
-            for field, key in ADDRESS_WIDGET_KEYS.items():
-                if key in st.session_state:
-                    values[field] = st.session_state[key]
-            if ADDRESS_EDITOR_STREET_KEY in st.session_state:
-                values["street"] = st.session_state[ADDRESS_EDITOR_STREET_KEY]
-            elif ADDRESS_STREET_INPUT_KEY in st.session_state:
-                values["street"] = st.session_state[ADDRESS_STREET_INPUT_KEY]
-            state = AddressFormState(values=values, address=None, errors={})
+            if guest_handoff:
+                state = previous_state
+            elif not previous_owner_known or previous_owner is None:
+                values = dict(state.values)
+                for field, key in ADDRESS_WIDGET_KEYS.items():
+                    if key in st.session_state:
+                        values[field] = st.session_state[key]
+                if ADDRESS_EDITOR_STREET_KEY in st.session_state:
+                    values["street"] = st.session_state[ADDRESS_EDITOR_STREET_KEY]
+                elif ADDRESS_STREET_INPUT_KEY in st.session_state:
+                    values["street"] = st.session_state[ADDRESS_STREET_INPUT_KEY]
+                state = AddressFormState(values=values, address=None, errors={})
         st.session_state[ADDRESS_OWNER_KEY] = owner_id
         st.session_state[ADDRESS_STATE_KEY] = state
         st.session_state[ADDRESS_HYDRATE_KEY] = True
-        st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+        if not guest_handoff or restored_draft:
+            st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+        st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+        st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
+        if previous_owner is not None and previous_owner != owner_id:
+            st.session_state[ADDRESS_MANUAL_MODE_KEY] = False
+            st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
         _clear_address_suggestions()
+        if guest_handoff and not restored_draft:
+            _persist_address_draft(state)
     state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
     # The Accueil hand-off must work even when this anonymous session already
     # visited Analyser.  It is therefore applied independently of owner/draft
@@ -248,6 +328,8 @@ def _address_state_for_current_user() -> AddressFormState:
         st.session_state[ADDRESS_STATE_KEY] = state
         st.session_state[ADDRESS_HYDRATE_KEY] = True
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
+        st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+        st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
         _clear_address_suggestions()
     if st.session_state.pop(ADDRESS_HYDRATE_KEY, False):
         _hydrate_address_widgets(state)
@@ -255,7 +337,7 @@ def _address_state_for_current_user() -> AddressFormState:
     # public record. It never calls the external geocoder again.
     if (
         state.valid
-        and state.metadata.get("official_source") == "role"
+        and state.metadata.get("official_source") in {"role", "rqa"}
         and ADDRESS_LOOKUP_KEY not in st.session_state
     ):
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup_fields(
@@ -287,9 +369,16 @@ def _queue_auto_role_sync(state: AddressFormState) -> None:
     if not state.valid or not state.address or not state.values.get("consent"):
         return
     # An imported local-role match is already authoritative; never redownload it.
+    # RQA is a provincial address record, not a role record: its verified
+    # geographic code may still authorize one controlled MAMH import.
     if state.metadata.get("official_source") == "role":
         return
-    st.session_state[ADDRESS_AUTO_SYNC_PENDING_KEY] = {"street": state.address.street, "city": state.address.city}
+    territory_code = str(state.metadata.get("territory_code") or "")
+    st.session_state[ADDRESS_AUTO_SYNC_PENDING_KEY] = {
+        "street": state.address.street,
+        "city": state.address.city,
+        "territory_code": territory_code,
+    }
 
 
 def _run_queued_auto_role_sync() -> AutoSyncResult | None:
@@ -302,7 +391,12 @@ def _run_queued_auto_role_sync() -> AutoSyncResult | None:
     if pending.get("street") != state.address.street or pending.get("city") != state.address.city:
         return None
     with st.status("Vérification des données officielles", expanded=False) as status:
-        result = synchronize_selected_municipality(DATABASE_PATH, state.address.city, bool(state.values.get("consent")))
+        territory_code = str(pending.get("territory_code") or "")
+        result = (
+            synchronize_selected_territory(DATABASE_PATH, territory_code, bool(state.values.get("consent")))
+            if territory_code
+            else synchronize_selected_municipality(DATABASE_PATH, state.address.city, bool(state.values.get("consent")))
+        )
         if result.status in {"available", "synchronized"}:
             status.update(label="Renseignements disponibles", state="complete")
             st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(state)
@@ -335,6 +429,8 @@ def _edit_address_field(field: str) -> None:
     st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     st.session_state.pop(ADDRESS_AUTO_SYNC_PENDING_KEY, None)
+    st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+    st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
 
 
 def _set_address_editor_street(value: str) -> None:
@@ -349,7 +445,7 @@ def _set_address_editor_street(value: str) -> None:
     # the selected street, but still invalidate it for a genuinely different
     # address typed by the person.
     if (
-        state.metadata.get("official_source") in {"role", "external"}
+        state.metadata.get("official_source") in {"role", "rqa", "external"}
         and _street_query_matches_selection(value, current_street)
     ):
         st.session_state[ADDRESS_EDITOR_STREET_KEY] = current_street
@@ -366,6 +462,8 @@ def _set_address_editor_street(value: str) -> None:
     st.session_state.pop(ADDRESS_LOCAL_SELECTED_KEY, None)
     st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     st.session_state.pop(ADDRESS_AUTO_SYNC_PENDING_KEY, None)
+    st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+    st.session_state.pop(ADDRESS_ENRICHMENT_KEY, None)
 
 
 def _street_query_matches_selection(query: str, selected: str) -> bool:
@@ -382,7 +480,14 @@ def _street_query_matches_selection(query: str, selected: str) -> bool:
 
 
 def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
-    """Return live MRNF options after debounce; never transmit without consent."""
+    """Return live options without making a local result wait on MRNF.
+
+    A synchronized municipal role is already an authorized official source and
+    can answer from SQLite immediately.  Calling MRNF first made the visible
+    list wait for two network timeouts even when those local suggestions were
+    available.  MRNF remains the fallback for other municipalities and can
+    still enrich a selected local result with a postal code after its click.
+    """
 
     query = useful_query(query)
     _set_address_editor_street(query)
@@ -397,18 +502,52 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
         # A local diagnostic-store problem must never prevent manual analysis
         # and must not generate an address-bearing diagnostic.
         enabled = False
-    external = (
-        suggest_addresses(query, True)
-        if enabled else SuggestionResponse("unavailable", message="La source publique d’adresses est désactivée.")
-    )
-    local = [
+    role_suggestions = [
         AddressSuggestion(
             street=row["street"], city=row["city"], postal_code=row["postal_code"],
             unit=row["unit"], label=" · ".join(part for part in (row["street"], row["city"]) if part), source="role",
         )
         for row in suggest_role_units(DATABASE_PATH, query, limit=MAX_ADDRESS_SUGGESTIONS)
     ]
-    combined = _merge_address_suggestions(external.suggestions, local)
+    try:
+        rqa_enabled = source_enabled(RQA_SOURCE_ID, DATABASE_PATH)
+    except Exception:
+        rqa_enabled = False
+    rqa_suggestions = [
+        AddressSuggestion(
+            street=" ".join(part for part in (str(row.get("civic_number") or ""), present_rqa_text(row.get("street_name"))) if part),
+            city=present_rqa_text(row.get("municipality")),
+            postal_code=str(row.get("postal_code") or ""),
+            unit=str(row.get("unit") or ""),
+            label=" · ".join(
+                part for part in (
+                    " ".join(part for part in (str(row.get("civic_number") or ""), present_rqa_text(row.get("street_name"))) if part),
+                    f"Unité {str(row.get('unit') or '')}" if str(row.get("unit") or "") else "",
+                    present_rqa_text(row.get("municipality")),
+                    str(row.get("postal_code") or ""),
+                ) if part
+            ),
+            source="rqa",
+            longitude=row.get("longitude") if isinstance(row.get("longitude"), (int, float)) else None,
+            latitude=row.get("latitude") if isinstance(row.get("latitude"), (int, float)) else None,
+            territory_code=str(row.get("municipality_code") or ""),
+        )
+        for row in suggest_rqa_addresses(DATABASE_PATH, query, limit=MAX_ADDRESS_SUGGESTIONS)
+    ] if rqa_enabled else []
+    # Keep a municipal-role result linked to its public values, while an
+    # equivalent RQA entry can fill its official postal code and coordinates.
+    local = _merge_address_suggestions((), [*role_suggestions, *rqa_suggestions])
+    if local:
+        # Do not delay a local official address behind the network type-ahead.
+        response = SuggestionResponse("ok", tuple(local[:MAX_ADDRESS_SUGGESTIONS]))
+        st.session_state[ADDRESS_SUGGESTIONS_KEY] = response
+        st.session_state[ADDRESS_SUGGESTION_QUERY_KEY] = query
+        return [(suggestion.label, suggestion.to_option()) for suggestion in response.suggestions]
+    external = (
+        suggest_addresses(query, True)
+        if enabled else SuggestionResponse("unavailable", message="La source publique d’adresses est désactivée.")
+    )
+    combined = _merge_address_suggestions(external.suggestions, [])
     if combined:
         response = SuggestionResponse("ok", tuple(combined))
     elif external.status == "ok":
@@ -457,10 +596,12 @@ def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: l
         current = merged[position]
         # A role unit is directly linked to its municipal values. Preserve that
         # link while adding an official postal code exposed by MRNF's label.
-        if current.source == "role" and suggestion.source != "role" and not current.postal_code:
+        if current.source == "role" and suggestion.source != "role":
             postal_match = re.search(r"\b[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d\b", suggestion.label, re.I)
-            postal = normalize_canadian_postal_code(postal_match.group(0)) if postal_match else ""
-            if postal:
+            postal = current.postal_code or (normalize_canadian_postal_code(postal_match.group(0)) if postal_match else "")
+            longitude = suggestion.longitude if suggestion.longitude is not None else current.longitude
+            latitude = suggestion.latitude if suggestion.latitude is not None else current.latitude
+            if postal != current.postal_code or longitude != current.longitude or latitude != current.latitude:
                 merged[position] = AddressSuggestion(
                     street=current.street,
                     city=current.city,
@@ -468,6 +609,9 @@ def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: l
                     unit=current.unit,
                     label=" · ".join(part for part in (current.street, current.city, postal) if part),
                     source="role",
+                    longitude=longitude,
+                    latitude=latitude,
+                    territory_code=current.territory_code or suggestion.territory_code,
                 )
     return merged[:MAX_ADDRESS_SUGGESTIONS]
 
@@ -506,7 +650,10 @@ def _enrich_local_suggestion(selected: AddressSuggestion, consent: bool) -> Addr
     remains valid public information and must never be replaced by an error.
     """
 
-    if not consent:
+    # A complete official RQA/role address needs no geocoder round trip.
+    # Besides avoiding latency, this keeps a selected local result usable
+    # when the external service is unavailable.
+    if not consent or selected.postal_code:
         return None
     try:
         enabled = source_enabled(SOURCE_ID, DATABASE_PATH)
@@ -521,6 +668,94 @@ def _enrich_local_suggestion(selected: AddressSuggestion, consent: bool) -> Addr
         if _same_public_address(selected, candidate):
             return candidate
     return None
+
+
+def _remember_aerial_image(selected: AddressSuggestion, consent: bool) -> None:
+    """Fetch a selected point's official aerial image only into this session.
+
+    The selected address is already covered by the public-search consent.  No
+    location is saved in Streamlit state: only a small image response and its
+    public attribution remain available for the current session.
+    """
+
+    if selected.longitude is None or selected.latitude is None:
+        st.session_state.pop(ADDRESS_AERIAL_IMAGE_KEY, None)
+        return
+    response = fetch_aerial_image(selected.longitude, selected.latitude, consent)
+    st.session_state[ADDRESS_AERIAL_IMAGE_KEY] = {
+        "status": response.status,
+        "image_bytes": response.image_bytes,
+        "mime_type": response.mime_type,
+        "acquisition_year": response.acquisition_year,
+        "message": response.message,
+    }
+
+
+def _refresh_selected_local_enrichment() -> None:
+    """Complete one already-selected local role after an app reload.
+
+    A local role deliberately remains useful even if it has no postal code.
+    When the person already consented, make one idempotent MRNF enrichment
+    attempt so a server reload never forces them to type or select again.
+    """
+
+    state = st.session_state.get(ADDRESS_STATE_KEY)
+    if not isinstance(state, AddressFormState) or not state.valid or not state.address:
+        return
+    if state.metadata.get("official_source") not in {"role", "rqa"} or not state.values.get("consent"):
+        return
+    if state.address.postal_code:
+        return
+    signature = (state.address.street, state.address.city, state.address.postal_code)
+    if st.session_state.get(ADDRESS_ENRICHMENT_KEY) == signature:
+        return
+    st.session_state[ADDRESS_ENRICHMENT_KEY] = signature
+    selected = AddressSuggestion(
+        street=state.address.street,
+        city=state.address.city,
+        postal_code=state.address.postal_code,
+        unit=state.address.unit,
+        label="",
+        source=str(state.metadata.get("official_source")),
+    )
+    enriched = _enrich_local_suggestion(selected, True)
+    if enriched is None:
+        return
+    values = dict(state.values)
+    values.update(
+        {
+            "street": enriched.street or values["street"],
+            "city": enriched.city or values["city"],
+            "postal": enriched.postal_code or values["postal"],
+        }
+    )
+    updated = submit_address_form(
+        values["street"], values["city"], values["postal"], values["unit"], True,
+        allow_missing_postal=not bool(values["postal"]),
+        metadata={
+            "official_source": state.metadata.get("official_source"),
+            "postal_optional": not bool(values["postal"]),
+            # Keep the previously selected public RQA code across a rerun so
+            # an interrupted/resumed consented lookup retains its exact
+            # single-territory route.
+            "territory_code": state.metadata.get("territory_code", ""),
+        },
+    )
+    if not updated.valid:
+        return
+    st.session_state[ADDRESS_STATE_KEY] = updated
+    st.session_state[ADDRESS_ENRICHMENT_KEY] = (
+        updated.address.street,
+        updated.address.city,
+        updated.address.postal_code,
+    )
+    st.session_state[ADDRESS_EDITOR_STREET_KEY] = updated.values["street"]
+    st.session_state[ADDRESS_STREET_INPUT_KEY] = updated.values["street"]
+    st.session_state[ADDRESS_WIDGET_KEYS["city"]] = updated.values["city"]
+    st.session_state[ADDRESS_WIDGET_KEYS["postal"]] = updated.values["postal"]
+    st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(updated)
+    _remember_aerial_image(enriched, True)
+    _persist_address_draft(updated)
 
 
 def _on_address_city_change() -> None:
@@ -548,6 +783,35 @@ def _on_manual_mode_change() -> None:
     _clear_address_suggestions()
 
 
+def _address_coverage_message() -> str:
+    """Describe the address source actually loaded in this installation.
+
+    The provincial RQA archive is intentionally an explicit local cache.  A
+    new installation may not have imported it yet, so the UI must not claim
+    complete local coverage merely because the source is enabled.
+    """
+
+    try:
+        snapshot = rqa_status(DATABASE_PATH)
+    except Exception:
+        snapshot = {"status": "not_loaded"}
+    if snapshot.get("status") == "ready":
+        address_count = int(snapshot.get("addresses") or 0)
+        updated_at = str(snapshot.get("updated_at") or "")[:10]
+        count_label = f"{address_count:,}".replace(",", " ")
+        freshness = f" · index local mis à jour le {updated_at}" if updated_at else ""
+        return (
+            f"Le répertoire public local contient {count_label} adresse(s) québécoise(s){freshness}. "
+            "Les suggestions couvrent le Québec grâce à ce répertoire officiel. "
+            "La valeur au rôle municipal dépend toutefois de la disponibilité officielle de chaque municipalité; "
+            "vous pouvez toujours poursuivre manuellement."
+        )
+    return (
+        "Les suggestions en ligne dépendent du service public MRNF. Le répertoire provincial local n’est pas "
+        "chargé dans cet environnement; vous pouvez toujours saisir l’adresse manuellement."
+    )
+
+
 def _show_municipal_coverage_hint() -> None:
     """Show a local-only, actionable coverage state before a lookup.
 
@@ -559,11 +823,17 @@ def _show_municipal_coverage_hint() -> None:
         return
     if st.session_state.get(ADDRESS_MANUAL_MODE_KEY, False):
         return
+    state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
+    territory_code = str(state.metadata.get("territory_code") or "") if isinstance(state, AddressFormState) else ""
     city = useful_query(st.session_state.get(ADDRESS_WIDGET_KEYS["city"], ""))
-    if not city:
+    if not territory_code and not city:
         return
     try:
-        status = municipal_coverage_status(DATABASE_PATH, city)["status"]
+        coverage = (
+            municipal_coverage_status_for_territory(DATABASE_PATH, territory_code)
+            if territory_code else municipal_coverage_status(DATABASE_PATH, city)
+        )
+        status = coverage["status"]
     except Exception:
         # A local cache issue must never block the manual path or expose a
         # city name in a technical diagnostic.
@@ -594,6 +864,9 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         label=suggestion.get("label", ""),
         lookup_key=suggestion.get("lookup_key", ""),
         source=suggestion.get("source", "external"),
+        longitude=suggestion.get("longitude") if isinstance(suggestion.get("longitude"), (int, float)) else None,
+        latitude=suggestion.get("latitude") if isinstance(suggestion.get("latitude"), (int, float)) else None,
+        territory_code=str(suggestion.get("territory_code") or ""),
     )
     if selected.source == "empty":
         return
@@ -602,6 +875,11 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     # click. A local role result is already authoritative; an exact MRNF match
     # can enrich it with a postal code but failure must not remove the role.
     if selected.source == "role":
+        resolved = _enrich_local_suggestion(selected, consent) or selected
+    elif selected.source == "rqa":
+        # RQA is already a structured official address. Keep it even when
+        # enrichment is unavailable, but use MRNF after a consented click if
+        # the official RQA row omitted its postal code.
         resolved = _enrich_local_suggestion(selected, consent) or selected
     else:
         resolved = resolve_suggestion(selected, consent)
@@ -637,8 +915,12 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     )
     metadata = {
         "official_source": selected.source,
-        "postal_optional": selected.source == "role" and not bool(resolved.postal_code),
+        "postal_optional": selected.source in {"role", "rqa"} and not bool(resolved.postal_code),
     }
+    if selected.source == "rqa" and selected.territory_code:
+        # Public territory metadata only; it is validated once more against
+        # MAMH before it can authorize a single-territory synchronization.
+        metadata["territory_code"] = selected.territory_code
     selected_state = submit_address_form(
         values["street"],
         values["city"],
@@ -649,6 +931,8 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         metadata=metadata,
     )
     st.session_state[ADDRESS_STATE_KEY] = selected_state
+    if selected_state.valid:
+        _hydrate_dossier_name_from_selected_address()
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = resolved.street
     st.session_state[ADDRESS_STREET_INPUT_KEY] = resolved.street
     # This callback runs before the adjacent editors are instantiated in the
@@ -665,6 +949,7 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     if selected_state.valid:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(selected_state)
         _queue_auto_role_sync(selected_state)
+        _remember_aerial_image(resolved, consent)
     _persist_address_draft(selected_state)
     _clear_address_suggestions()
 
@@ -691,6 +976,8 @@ def _select_resolved_address() -> None:
         bool(values.get("consent")), metadata={"official_source": "external"},
     )
     st.session_state[ADDRESS_STATE_KEY] = selected_state
+    if selected_state.valid:
+        _hydrate_dossier_name_from_selected_address()
     st.session_state[ADDRESS_HYDRATE_KEY] = True
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = values["street"]
     st.session_state[ADDRESS_WIDGET_KEYS["city"]] = values["city"]
@@ -698,6 +985,7 @@ def _select_resolved_address() -> None:
     if selected_state.valid:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(selected_state)
         _queue_auto_role_sync(selected_state)
+        _remember_aerial_image(candidate, bool(values.get("consent")))
         _persist_address_draft(selected_state)
 
 
@@ -708,7 +996,8 @@ def _submit_address_lookup() -> None:
     postal = st.session_state.get(ADDRESS_WIDGET_KEYS["postal"], "")
     consent = bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False))
     current_state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
-    local_selection = bool(current_state.metadata.get("official_source") == "role")
+    local_selection = bool(current_state.metadata.get("official_source") in {"role", "rqa"})
+    aerial_candidate: AddressSuggestion | None = None
     st.session_state.pop(ADDRESS_RESOLUTION_KEY, None)
     # A copied address from Accueil often has no separate city/postal fields.
     # Resolve it only here, after an explicit consented action; ambiguity is
@@ -726,6 +1015,7 @@ def _submit_address_lookup() -> None:
         st.session_state[ADDRESS_RESOLUTION_KEY] = resolution
         if resolution.status == "ok" and len(resolution.suggestions) == 1:
             candidate = resolution.suggestions[0]
+            aerial_candidate = candidate
             street = candidate.street or street
             city = candidate.city or city
             postal = candidate.postal_code or postal
@@ -747,6 +1037,8 @@ def _submit_address_lookup() -> None:
     if state.valid:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(state)
         _queue_auto_role_sync(state)
+        if aerial_candidate is not None:
+            _remember_aerial_image(aerial_candidate, consent)
     else:
         st.session_state.pop(ADDRESS_LOOKUP_KEY, None)
     st.session_state[ADDRESS_HYDRATE_KEY] = True
@@ -763,6 +1055,7 @@ def _official_lookup(state: AddressFormState) -> dict:
         state.address.city,
         state.values["consent"],
         postal_available=not bool(state.metadata.get("postal_optional", False)),
+        territory_code=str(state.metadata.get("territory_code") or ""),
     )
     if result is not None:
         response["message"] = result["message"]
@@ -773,7 +1066,14 @@ def _official_lookup(state: AddressFormState) -> dict:
     return response
 
 
-def _official_lookup_fields(street: str, city: str, consent: bool, *, postal_available: bool = True) -> dict:
+def _official_lookup_fields(
+    street: str,
+    city: str,
+    consent: bool,
+    *,
+    postal_available: bool = True,
+    territory_code: str = "",
+) -> dict:
     """Match public role fields without treating municipal data as an estimate."""
 
     response = {
@@ -784,7 +1084,11 @@ def _official_lookup_fields(street: str, city: str, consent: bool, *, postal_ava
     }
     if not consent:
         return response
-    territory = territory_for_municipality(DATABASE_PATH, city)
+    # An RQA geographic code is used only after it has been matched exactly
+    # to an active, official MAMH territory.  Manual/external entries retain
+    # the existing exact municipal-name route.
+    territory = territory_for_code(DATABASE_PATH, territory_code) if territory_code else None
+    territory = territory or territory_for_municipality(DATABASE_PATH, city)
     matches = search_role_units(DATABASE_PATH, territory, street) if territory else []
     response.update({
         "coverage": bool(territory),
@@ -822,11 +1126,115 @@ def _workflow_values() -> dict:
     return {
         "profile": st.session_state.get("workflow_profile", ""),
         "objective": st.session_state.get("workflow_objective", ""),
-        "property_name": st.session_state.get("workflow_property_name", ""),
-        "property_type": st.session_state.get("workflow_property_type", ""),
+        "property_name": _property_name(),
+        "property_type": _property_type(),
         "price": st.session_state.get("property_price", 0),
         "down_payment": st.session_state.get("down_payment", 0),
     }
+
+
+def _property_draft_values() -> dict:
+    name = _property_name()
+    return {
+        "name": name,
+        "type": _property_type(),
+        "objective": st.session_state.get("workflow_objective", ""),
+        "profile": st.session_state.get("workflow_profile", ""),
+        "asking_price": st.session_state.get("iv_asking", 0.0),
+        "auto_name": name if name == st.session_state.get(PROPERTY_AUTO_NAME_KEY) else None,
+    }
+
+
+def _persist_property_draft() -> None:
+    owner_id = _address_owner_id()
+    if owner_id is None:
+        return
+    details = _property_draft_values()
+    draft, step = load_draft(owner_id, DATABASE_PATH)
+    if draft.get("property_details") == details:
+        return
+    draft["property_details"] = details
+    save_draft(owner_id, draft, step, DATABASE_PATH)
+
+
+def _restore_property_draft(draft: dict) -> None:
+    details = draft.get("property_details")
+    if not isinstance(details, dict):
+        return
+    name = details.get("name")
+    kind = details.get("type")
+    objective = details.get("objective")
+    if isinstance(name, str) and len(name) <= 300:
+        st.session_state["workflow_property_name"] = name
+        st.session_state[PROPERTY_NAME_STATE_KEY] = name
+        if details.get("auto_name") == name:
+            st.session_state[PROPERTY_AUTO_NAME_KEY] = name
+    if isinstance(kind, str) and kind in {"", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"}:
+        st.session_state["workflow_property_type"] = kind
+        st.session_state[PROPERTY_TYPE_STATE_KEY] = kind
+    if isinstance(objective, str) and objective in ANALYSIS_OBJECTIVES:
+        st.session_state["workflow_objective"] = objective
+        st.session_state["workflow_objective_choice"] = objective
+        st.session_state["workflow_profile"] = ANALYSIS_OBJECTIVES[objective]
+    asking = details.get("asking_price")
+    if isinstance(asking, (int, float)) and not isinstance(asking, bool) and math.isfinite(asking) and asking >= 0:
+        st.session_state["iv_asking"] = float(asking)
+
+
+def _financial_draft_values() -> dict:
+    """Serialize only the known local form fields, never telemetry or provider data."""
+
+    values = {key: st.session_state.get(key, default) for key, default in DEFAULTS.items()}
+    renewal_date = values["mortgage_renewal_date"]
+    values["mortgage_renewal_date"] = renewal_date.isoformat() if isinstance(renewal_date, date) else None
+    return values
+
+
+def _persist_financial_draft() -> None:
+    owner_id = _address_owner_id()
+    if owner_id is None:
+        return
+    values = _financial_draft_values()
+    st.session_state[FINANCIAL_STATE_KEY] = {
+        **values,
+        "mortgage_renewal_date": st.session_state.get("mortgage_renewal_date"),
+    }
+    draft, step = load_draft(owner_id, DATABASE_PATH)
+    if draft.get("financial_values") == values:
+        return
+    draft["financial_values"] = values
+    save_draft(owner_id, draft, step, DATABASE_PATH)
+
+
+def _restore_financial_draft(draft: dict) -> None:
+    """Ignore malformed legacy values instead of breaking a resumed form."""
+
+    raw = draft.get("financial_values")
+    if not isinstance(raw, dict):
+        return
+    restored = dict(DEFAULTS)
+    bounds = {
+        "mortgage_rate": (0, 25), "amortization_years": (5, 30),
+        "vacancy_rate": (0, 100), "rent_growth": (-25, 25),
+        "expense_growth": (-25, 25), "holding_period": (1, 40),
+    }
+    for key, default in DEFAULTS.items():
+        value = raw.get(key)
+        if key == "mortgage_renewal_date":
+            if isinstance(value, str):
+                try:
+                    restored[key] = date.fromisoformat(value)
+                except ValueError:
+                    pass
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            continue
+        lower, upper = bounds.get(key, (0, float("inf")))
+        if not lower <= value <= upper or (isinstance(default, int) and not float(value).is_integer()):
+            continue
+        restored[key] = int(value) if isinstance(default, int) else float(value)
+    st.session_state.update(restored)
+    st.session_state[FINANCIAL_STATE_KEY] = restored
 
 
 def _persist_workflow(step: int, completed: set[int]) -> None:
@@ -835,6 +1243,7 @@ def _persist_workflow(step: int, completed: set[int]) -> None:
     owner_id = current_user()["id"]
     draft, _ = load_draft(owner_id, DATABASE_PATH)
     draft["workflow_completed"] = sorted(completed)
+    draft["property_details"] = _property_draft_values()
     save_draft(owner_id, draft, step, DATABASE_PATH)
 
 
@@ -843,6 +1252,8 @@ def _ensure_workflow_state() -> tuple[int, set[int]]:
     owner_id = _address_owner_id()
     if st.session_state.get("workflow_owner") != owner_id:
         draft, saved_step = load_draft(owner_id, DATABASE_PATH) if owner_id is not None else ({}, 1)
+        _restore_financial_draft(draft)
+        _restore_property_draft(draft)
         st.session_state["workflow_owner"] = owner_id
         st.session_state["analysis_step"] = normalize_step(saved_step)
         st.session_state["analysis_completed_steps"] = set(draft.get("workflow_completed", [1])) or {1}
@@ -858,8 +1269,8 @@ def _ensure_workflow_state() -> tuple[int, set[int]]:
     st.session_state.setdefault("workflow_profile", default_profile)
     st.session_state.setdefault("workflow_objective", default_objective)
     st.session_state.setdefault("workflow_objective_choice", default_objective)
-    st.session_state.setdefault("workflow_property_name", "")
-    st.session_state.setdefault("workflow_property_type", "")
+    st.session_state.setdefault(PROPERTY_NAME_STATE_KEY, st.session_state.get("workflow_property_name", ""))
+    st.session_state.setdefault(PROPERTY_TYPE_STATE_KEY, st.session_state.get("workflow_property_type", ""))
     return step, completed
 
 
@@ -892,6 +1303,8 @@ def _next_workflow_step() -> None:
 def _continue_to_finances() -> None:
     """Advance the compatible nine-step draft through the first visible stage."""
 
+    _remember_property_details()
+    st.session_state[FINANCIAL_RESTORE_KEY] = True
     _move_workflow(2)
     if not st.session_state.get("workflow_errors"):
         _move_workflow(3)
@@ -909,6 +1322,35 @@ def _visible_analysis_stage(step: int, calculated: bool, has_financial_data: boo
     if calculated:
         return 3
     return 1 if step <= 2 and not has_financial_data else 2
+
+
+def _address_lookup_readiness(editor_street: str, consent: bool, manual_mode: bool, revealed: bool) -> tuple[str, str, bool]:
+    """Give a new visitor one actionable next step before any public lookup.
+
+    This is presentation-only: validation and all source access remain in the
+    existing explicit submission action.  Keeping it pure also makes the
+    consent-first sequence easy to regress-test.
+    """
+    if manual_mode:
+        return "manual", "Mode manuel actif : vous pouvez continuer avec vos chiffres sans effectuer de recherche publique.", False
+    if revealed:
+        return "revealed", "Les renseignements publics disponibles sont déjà révélés pour cette adresse.", False
+    if not consent:
+        return "consent", "1. Cochez l’accord de recherche publique. Aucun appel n’est effectué avant votre accord.", False
+    if len(useful_query(editor_street)) < 3:
+        # Keep the explicit action available after consent: a copied complete
+        # address may be held by the canonical form state while the live
+        # editor is restoring after a Streamlit rerun.  Submission still runs
+        # the single central validation and never calls a source without a
+        # useful address.
+        return "address", "2. Saisissez au moins trois caractères utiles de l’adresse pour obtenir des suggestions.", True
+    return "ready", "3. Choisissez une suggestion ou lancez la recherche des renseignements publics disponibles.", True
+
+
+def _address_panel_title(revealed: bool) -> str:
+    """Keep the active public result visible while preserving easy address editing."""
+
+    return "Modifier l’adresse et les renseignements publics" if revealed else "Commencer par une adresse"
 
 
 def _current_role_match(address_lookup: dict | None) -> dict | None:
@@ -948,7 +1390,7 @@ def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict 
             if role_match:
                 st.metric("Valeur au rôle municipal", _money(role_match["total_value"] or 0))
                 st.caption(f"Rôle {role_match['role_year']} · MAMH / Données Québec")
-                st.caption("Repère fiscal officiel : il peut différer du prix du marché actuel.")
+                st.caption("Repère fiscal officiel — ce n’est pas un prix de vente ni une estimation marchande.")
             else:
                 st.metric("Valeur au rôle municipal", "Données nécessaires")
                 st.caption("Choisissez une adresse couverte ou poursuivez manuellement.")
@@ -971,13 +1413,19 @@ def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict 
                 st.metric("Score ImmoRadar", "À calculer")
                 st.caption("Ajoutez les chiffres de votre projet puis lancez l’analyse.")
 
-    if role_match and calculated:
-        orientation = "La valeur municipale et votre analyse sont prêtes. Consultez ensuite les résultats et les vérifications."
-    elif role_match:
-        orientation = "La valeur municipale est disponible. Ajoutez vos chiffres pour comprendre les finances de votre projet."
-    else:
-        orientation = "Ajoutez ou choisissez une propriété pour révéler les renseignements publics disponibles, puis complétez vos chiffres."
-    st.info(orientation)
+    with st.container(border=True):
+        st.markdown("### La prochaine étape utile")
+        if role_match and calculated and immovalue:
+            st.success("Votre dossier contient maintenant un repère fiscal, une estimation ImmoValue et vos résultats financiers. Consultez la synthèse, puis sauvegardez-le si vous voulez y revenir.")
+        elif role_match and calculated:
+            st.info("Vos chiffres financiers sont calculés. Pour comparer un prix demandé à une estimation de marché, ajoutez ensuite trois ventes comparables dont vous confirmez la provenance.")
+        elif role_match:
+            st.info("Le rôle municipal est révélé. Ajoutez maintenant les chiffres que vous connaissez pour comprendre les finances de votre projet. ImmoValue restera distincte et ne sera proposée qu’avec trois comparables admissibles.")
+            st.markdown("**Pour poursuivre simplement :** choisissez le type de propriété, ajoutez le prix demandé seulement si vous le connaissez, puis passez aux chiffres de financement et aux revenus ou dépenses de votre projet.")
+            st.caption("Le type de propriété personnalise la lecture de votre dossier. Le prix demandé est facultatif : il servira uniquement à comparer votre point de départ avec ImmoValue lorsqu’elle pourra être calculée.")
+        else:
+            st.info("Choisissez une adresse couverte ou poursuivez manuellement. Vous pouvez ensuite ajouter vos chiffres pour calculer l’analyse financière.")
+        st.caption("Le prix demandé, si vous l’avez, sert seulement à comparer votre point de départ avec ImmoValue lorsqu’elle est produite. Il n’est jamais remplacé automatiquement par la valeur au rôle.")
 
 
 def _show_visible_stage_progress(active_stage: int) -> None:
@@ -994,52 +1442,101 @@ def _show_visible_stage_progress(active_stage: int) -> None:
 def _hydrate_dossier_name_from_selected_address() -> None:
     """Use a selected official address as the optional dossier label, never overwriting a custom name."""
 
-    if useful_query(st.session_state.get("workflow_property_name", "")):
+    current_name = _property_name()
+    if useful_query(current_name) and current_name != st.session_state.get(PROPERTY_AUTO_NAME_KEY):
         return
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if not isinstance(state, AddressFormState) or not state.address:
         return
-    if state.metadata.get("official_source") not in {"role", "external"}:
+    if state.metadata.get("official_source") not in {"role", "rqa", "external"}:
         return
     address = state.address
-    st.session_state["workflow_property_name"] = ", ".join(part for part in (address.street, address.city) if part)
+    label = ", ".join(part for part in (address.street, address.city) if part)
+    st.session_state[PROPERTY_AUTO_NAME_KEY] = label
+    st.session_state["workflow_property_name"] = label
+    _remember_property_details()
 
 
 def _show_property_stage() -> None:
     """Render the simple first stage while retaining the existing workflow values."""
 
-    st.markdown("<div class='section-space compact-space'></div><h2>1. Propriété et valeur</h2><p class='section-intro'>Choisissez votre objectif, puis recherchez la propriété dans le bloc ci-dessus.</p>", unsafe_allow_html=True)
+    st.session_state.setdefault("workflow_property_name", _property_name())
+    st.session_state.setdefault("workflow_property_type", _property_type())
+    st.markdown("<div class='section-space compact-space'></div><h2>1. Propriété et valeur</h2><p class='section-intro'>La recherche d’adresse ci-dessus suffit pour révéler un rôle municipal disponible. Les choix ci-dessous servent ensuite à personnaliser votre analyse.</p>", unsafe_allow_html=True)
     # Keep the established first-run default so the first visible step is
     # immediately usable.  Reopened dossiers provide their original objective
     # before this widget is created, therefore it remains selected there.
-    st.selectbox("Votre objectif", list(ANALYSIS_OBJECTIVES), key="workflow_objective_choice")
+    st.radio(
+        "Quel est votre projet?",
+        list(ANALYSIS_OBJECTIVES),
+        key="workflow_objective_choice",
+        help="Ce choix adapte la lecture ImmoRadar à votre objectif. Il ne modifie jamais les renseignements publics affichés.",
+    )
     chosen_objective = st.session_state.get("workflow_objective_choice", "")
     if chosen_objective:
         st.session_state["workflow_objective"] = chosen_objective
         st.session_state["workflow_profile"] = ANALYSIS_OBJECTIVES[chosen_objective]
+    st.caption("Vous pourrez modifier ce choix plus tard. Il sert à expliquer votre analyse, pas à formuler une recommandation d’achat.")
     _hydrate_dossier_name_from_selected_address()
     name, kind, asking = st.columns(3)
     with name:
-        st.text_input("Nom court du dossier (facultatif si une adresse est sélectionnée)", key="workflow_property_name", placeholder="Ex. Projet résidentiel")
+        st.text_input("Nom court du dossier (facultatif si une adresse est sélectionnée)", key="workflow_property_name", placeholder="Ex. Projet résidentiel", on_change=_remember_property_details)
     with kind:
-        st.selectbox("Type de propriété (requis)", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type")
+        st.selectbox("Type de propriété (requis)", ["", "Maison", "Condo", "Duplex", "Triplex", "Immeuble"], key="workflow_property_type", on_change=_remember_property_details)
+    _remember_property_details()
     with asking:
         st.number_input("Prix demandé (facultatif)", min_value=0.0, step=5_000.0, key="iv_asking")
+    _persist_property_draft()
     st.caption("Le prix demandé sert uniquement à comparer le rôle municipal et ImmoValue lorsqu’elle est disponible. Il ne remplace pas le prix retenu pour vos calculs financiers.")
-    st.caption("Ces renseignements servent à organiser votre dossier. La recherche publique et les calculs restent séparés.")
+    st.caption("Ces renseignements servent à organiser votre dossier et à personnaliser la suite. Ils ne modifient ni la recherche publique ni la valeur au rôle municipal.")
     st.button("Continuer vers les finances", type="primary", key="continue_to_finances", on_click=_continue_to_finances)
 
 
 def _show_finance_stage() -> None:
     """Render the useful financial inputs first; less common inputs stay available."""
 
-    st.markdown("<div class='section-space compact-space'></div><h2>2. Vos chiffres</h2><p class='section-intro'>Ajoutez les montants que vous connaissez. Les résultats ne sont affichés qu’après votre calcul.</p>", unsafe_allow_html=True)
+    objective = st.session_state.get("workflow_objective_choice", "")
+    finance_copy = {
+        "Acheter pour y habiter": (
+            "Vérifiez vos chiffres de financement et le coût mensuel de votre projet. "
+            "Les revenus locatifs sont facultatifs.",
+            "Prix d’achat envisagé ($)",
+        ),
+        "Investir et louer": (
+            "Ajoutez vos hypothèses de financement, de loyers et de dépenses pour lire le flux de trésorerie. "
+            "Les résultats apparaissent seulement après votre calcul.",
+            "Prix d’acquisition envisagé ($)",
+        ),
+        "Connaître la valeur de ma propriété": (
+            "Ajoutez seulement les chiffres utiles pour étudier votre situation. "
+            "La valeur au rôle municipal reste distincte de ce prix de référence.",
+            "Valeur de référence pour vos chiffres ($)",
+        ),
+        "Préparer une vente": (
+            "Ajoutez les chiffres utiles pour examiner votre situation avant une vente. "
+            "Le prix demandé et la valeur au rôle restent des repères distincts.",
+            "Prix de référence pour vos chiffres ($)",
+        ),
+    }
+    intro, price_label = finance_copy.get(
+        objective,
+        ("Ajoutez les montants que vous connaissez. Les résultats ne sont affichés qu’après votre calcul.", "Prix retenu pour vos calculs ($)"),
+    )
+    st.markdown(f"<div class='section-space compact-space'></div><h2>2. Vos chiffres</h2><p class='section-intro'>{intro}</p>", unsafe_allow_html=True)
+    rental_objective = objective == "Investir et louer"
+    rental_already_entered = bool(st.session_state.get("rental_income", 0))
     acquisition, financing = st.columns(2)
     with acquisition:
-        st.number_input("Prix retenu pour vos calculs ($)", min_value=0.0, step=5_000.0, key="property_price")
+        st.number_input(price_label, min_value=0.0, step=5_000.0, key="property_price")
         st.number_input("Mise de fonds ($)", min_value=0.0, step=5_000.0, key="down_payment")
-        st.number_input("Revenus locatifs mensuels ($)", min_value=0.0, step=100.0, key="rental_income")
-        st.number_input("Autres dépenses mensuelles ($)", min_value=0.0, step=25.0, key="other_expenses")
+        if rental_objective or rental_already_entered:
+            st.number_input("Revenus locatifs mensuels prévus ($)", min_value=0.0, step=100.0, key="rental_income")
+            st.caption("Indiquez les loyers prévus avant vacance. Les résultats locatifs restent non applicables tant qu’aucun revenu n’est saisi.")
+        else:
+            st.caption("Votre projet ne nécessite pas de revenu locatif. Ajoutez-en seulement si la propriété sera louée, en tout ou en partie.")
+            with st.expander("Ajouter des revenus locatifs (facultatif)", expanded=False):
+                st.number_input("Revenus locatifs mensuels prévus ($)", min_value=0.0, step=100.0, key="rental_income")
+        st.number_input("Autres dépenses mensuelles liées au projet ($, facultatif)", min_value=0.0, step=25.0, key="other_expenses")
     with financing:
         st.number_input("Taux hypothécaire annuel (%)", min_value=0.0, max_value=25.0, step=0.05, format="%.2f", key="mortgage_rate")
         st.number_input("Amortissement (années)", min_value=5, max_value=30, step=1, key="amortization_years")
@@ -1069,7 +1566,7 @@ def _show_finance_stage() -> None:
             st.number_input("Croissance annuelle hypothétique des dépenses (%)", min_value=-25.0, max_value=25.0, step=0.25, key="expense_growth")
             st.number_input("Horizon de détention (années)", min_value=1, max_value=40, step=1, key="holding_period")
             st.date_input("Date de renouvellement hypothécaire (facultatif)", value=None, key="mortgage_renewal_date")
-            st.caption("Elle sert seulement à afficher un rappel local dans vos alertes suivies. Aucun courriel n’est envoyé.")
+            st.caption("Elle sert à afficher un rappel vérifiable dans vos alertes suivies. Vous pouvez autoriser les avis par courriel séparément dans Mon compte.")
             st.caption("Les projections utilisent uniquement les taux que vous saisissez. Elles ne prévoient pas le marché ni une valeur future.")
         st.button("Réinitialiser les chiffres", on_click=reset_analysis, type="secondary", key="reset_analysis")
 
@@ -1090,16 +1587,55 @@ def _show_technical_workflow(step: int) -> None:
 
 
 def show_property_analysis() -> None:
+    # Streamlit removes widget keys while their stage is hidden. Keep a
+    # non-widget copy so calculated results and later edits use the same
+    # submitted figures after every rerun.
+    owner_id = _address_owner_id()
+    previous_owner = st.session_state.get(FINANCIAL_OWNER_KEY, owner_id)
+    if previous_owner is not None and previous_owner != owner_id:
+        # Signing out or switching accounts must not carry private figures
+        # into the next visitor's draft. Guest-to-account keeps that guest's
+        # own in-progress analysis as before.
+        st.session_state.update(DEFAULTS)
+        st.session_state[FINANCIAL_STATE_KEY] = dict(DEFAULTS)
+        st.session_state.pop("analysis_calculation_signature", None)
+        st.session_state.pop("analysis_calculation_requested", None)
+        for key in (
+            PROPERTY_NAME_STATE_KEY, PROPERTY_TYPE_STATE_KEY, PROPERTY_AUTO_NAME_KEY,
+            SAVED_AUTO_NAME_KEY, "workflow_property_name", "workflow_property_type",
+            "saved_property_name", LAST_SAVED_ANALYSIS_KEY,
+            "workflow_profile", "workflow_objective", "workflow_objective_choice",
+        ):
+            st.session_state.pop(key, None)
+    st.session_state[FINANCIAL_OWNER_KEY] = owner_id
+    financial_values = st.session_state.setdefault(FINANCIAL_STATE_KEY, dict(DEFAULTS))
+    restore_financial_values = bool(st.session_state.get("analysis_calculation_signature")) or bool(
+        st.session_state.pop(FINANCIAL_RESTORE_KEY, False)
+    )
     for key, value in DEFAULTS.items():
-        st.session_state.setdefault(key, value)
+        if restore_financial_values:
+            st.session_state[key] = financial_values.get(key, value)
+        elif key in st.session_state:
+            financial_values[key] = st.session_state[key]
+        else:
+            st.session_state[key] = financial_values.get(key, value)
+    st.session_state[FINANCIAL_STATE_KEY] = financial_values
     reopen_notice = _apply_reopen_draft()
     st.markdown("<p class='eyebrow'>DOSSIER IMMOBILIER 360</p>", unsafe_allow_html=True)
-    st.title("Révéler la valeur et analyser votre projet")
+    st.html("<h1>Révéler la valeur et analyser votre projet</h1>")
     st.markdown("<p class='section-intro'>Adresse, renseignements publics autorisés, valeur disponible, finances et suivi : un seul dossier, sans transformer les données manquantes en conclusions.</p>", unsafe_allow_html=True)
     if reopen_notice:
         st.success(reopen_notice)
     address_state = _address_state_for_current_user()
-    with st.expander("Commencer par une adresse", expanded=True):
+    _refresh_selected_local_enrichment()
+    address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)
+    existing_public_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
+    public_information_revealed = _has_revealed_public_information(existing_public_lookup)
+    with st.expander(
+        _address_panel_title(public_information_revealed),
+        expanded=not public_information_revealed,
+    ):
+        st.markdown("**Votre première valeur, en trois gestes :** autorisez la recherche publique, saisissez l’adresse, puis choisissez une suggestion. Vous pouvez aussi poursuivre entièrement en mode manuel.")
         st.checkbox(
             "J’accepte qu’ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",
             key=ADDRESS_WIDGET_KEYS["consent"],
@@ -1140,7 +1676,7 @@ def show_property_analysis() -> None:
             st.caption("Mode manuel actif : aucune recherche externe n’est effectuée.")
         else:
             st.caption("Les suggestions apparaissent automatiquement pendant la saisie.")
-            st.caption("La couverture des rôles municipaux officiels n’est pas encore complète pour tout le Québec. Si aucun rôle n’est disponible, vous pouvez poursuivre manuellement.")
+            st.caption(_address_coverage_message())
         _show_municipal_coverage_hint()
         resolution = st.session_state.get(ADDRESS_RESOLUTION_KEY)
         if isinstance(resolution, SuggestionResponse):
@@ -1163,7 +1699,7 @@ def show_property_analysis() -> None:
         # that transient blank overwrite a verified public selection.
         if (
             current_state.valid
-            and current_state.metadata.get("official_source") in {"role", "external"}
+            and current_state.metadata.get("official_source") in {"role", "rqa", "external"}
             and not useful_query(editor_street)
         ):
             editor_street = selected_street
@@ -1172,7 +1708,7 @@ def show_property_analysis() -> None:
         current_query = useful_query(editor_street)
         if (
             current_state.valid
-            and current_state.metadata.get("official_source") in {"role", "external"}
+            and current_state.metadata.get("official_source") in {"role", "rqa", "external"}
             and useful_query(editor_street) == useful_query(selected_street)
         ):
             _clear_address_suggestions()
@@ -1190,8 +1726,10 @@ def show_property_analysis() -> None:
                 sources = {suggestion.source for suggestion in suggestion_response.suggestions}
                 if sources == {"role"}:
                     st.caption("Source : rôles municipaux officiels synchronisés · résultats publics, non enregistrés automatiquement.")
-                elif "role" in sources:
-                    st.caption(f"Sources : {SOURCE_LABEL} et rôles municipaux officiels synchronisés · résultats publics, non enregistrés automatiquement.")
+                elif sources == {"rqa"}:
+                    st.caption("Source : MRNF — Référentiel québécois des adresses · résultats publics, non enregistrés automatiquement.")
+                elif "role" in sources or "rqa" in sources:
+                    st.caption(f"Sources : {SOURCE_LABEL}, Référentiel québécois des adresses et rôles municipaux officiels synchronisés · résultats publics, non enregistrés automatiquement.")
                 else:
                     st.caption(f"Source : {SOURCE_LABEL} · résultats publics, non enregistrés automatiquement.")
                 # The live component opens a list while typing. Keep an
@@ -1207,10 +1745,23 @@ def show_property_analysis() -> None:
                             key=f"address_suggestion_select_{index}",
                             on_click=_select_address_suggestion,
                             args=(suggestion.to_option(),),
-                            use_container_width=True,
+                            width="stretch",
                         )
         address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
-        if not _has_revealed_public_information(address_lookup):
+        manual_mode = bool(st.session_state.get(ADDRESS_MANUAL_MODE_KEY, False))
+        lookup_state, lookup_message, _ = _address_lookup_readiness(
+            editor_street,
+            bool(st.session_state.get(ADDRESS_WIDGET_KEYS["consent"], False)),
+            manual_mode,
+            _has_revealed_public_information(address_lookup),
+        )
+        if not _has_revealed_public_information(address_lookup) and not manual_mode:
+            # The action intentionally remains available.  Streamlit can be
+            # restoring the live address editor while the canonical form state
+            # already contains a copied address.  Central validation in the
+            # callback remains the authority for whether a lookup may run.
+            if lookup_state != "ready":
+                st.info(lookup_message)
             st.caption("Après votre consentement, cette action peut d’abord révéler la valeur au rôle municipal; ImmoValue reste une estimation marchande distincte, calculable avec au moins trois comparables autorisés.")
             st.button(
                 "Rechercher et révéler les renseignements disponibles",
@@ -1218,6 +1769,8 @@ def show_property_analysis() -> None:
                 type="primary",
                 on_click=_submit_address_lookup,
             )
+        elif manual_mode:
+            st.caption(lookup_message)
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
     _run_queued_auto_role_sync()
     address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)
@@ -1232,6 +1785,7 @@ def show_property_analysis() -> None:
     calculated = _analysis_is_calculated(inputs)
     _show_dossier_summary(address_state, address_lookup, inputs, profile)
     _show_role_overview(address_lookup)
+    _show_aerial_view(address_lookup)
     visible_stage = (
         1
         if st.session_state.get("analysis_reopen_show_property_stage")
@@ -1242,6 +1796,7 @@ def show_property_analysis() -> None:
         _show_property_stage()
     elif visible_stage == 2:
         _show_finance_stage()
+        _persist_financial_draft()
     else:
         st.markdown("<div class='section-space compact-space'></div><h2>3. Résultats et rapport</h2><p class='section-intro'>Votre analyse est prête. Consultez la vue d’ensemble, puis sauvegardez votre dossier ou produisez votre rapport.</p>", unsafe_allow_html=True)
     _show_technical_workflow(step)
@@ -1304,6 +1859,56 @@ def _official_role_snapshot(address_lookup: dict | None) -> dict:
     }
 
 
+def _save_snapshot_signature(property_name: str, inputs: PropertyInputs, profile: str, address_lookup: dict | None, immovalue: dict | None) -> str:
+    """Identify one unchanged save action without retaining its inputs in the key."""
+
+    renewal_date = st.session_state.get("mortgage_renewal_date")
+    payload = {
+        "name": property_name.strip(), "inputs": asdict(inputs), "profile": profile,
+        "property_type": _property_type(),
+        "objective": st.session_state.get("workflow_objective", ""),
+        "mortgage_renewal_date": renewal_date.isoformat() if isinstance(renewal_date, date) else None,
+        "role": _official_role_snapshot(address_lookup),
+        "immovalue": _immovalue_snapshot_for_save(immovalue),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+
+
+def _unchanged_snapshot_is_saved(owner_id: int, signature: str) -> bool:
+    last = st.session_state.get(LAST_SAVED_ANALYSIS_KEY)
+    return bool(
+        isinstance(last, dict)
+        and last.get("owner_id") == owner_id
+        and last.get("signature") == signature
+        and isinstance(last.get("id"), int)
+        and SQLiteRepository(DATABASE_PATH).get_owned_analysis(owner_id, last["id"]) is not None
+    )
+
+
+def _show_aerial_view(address_lookup: dict | None) -> None:
+    """Render a transient official aerial context after a revealed lookup.
+
+    The image stays beside public-record data, never beside ImmoValue, so it
+    cannot be mistaken for a price calculation or appraisal input.
+    """
+
+    if not _has_revealed_public_information(address_lookup):
+        return
+    aerial = st.session_state.get(ADDRESS_AERIAL_IMAGE_KEY)
+    if not isinstance(aerial, dict):
+        return
+    if aerial.get("status") == "available" and isinstance(aerial.get("image_bytes"), bytes):
+        st.markdown("<div class='official-result-heading'><p class='eyebrow'>CONTEXTE VISUEL OFFICIEL</p><h2>Vue aérienne</h2></div>", unsafe_allow_html=True)
+        st.image(aerial["image_bytes"], caption="Image aérienne officielle — contexte visuel seulement", width="stretch")
+        year = aerial.get("acquisition_year")
+        st.caption(
+            f"Source : {AERIAL_SOURCE_LABEL} · licence CC BY 4.0 · acquisition {year if year else 'à confirmer selon la couverture'}. "
+            "Cette image ne sert pas à calculer ImmoValue, ImmoScore ou vos chiffres financiers."
+        )
+    elif aerial.get("status") == "unavailable":
+        st.caption(aerial.get("message") or "Vue aérienne officielle indisponible pour cette adresse. Vous pouvez continuer votre analyse.")
+
+
 def _show_role_overview(address_lookup: dict | None) -> None:
     """Show official assessment data only as a clearly labelled fiscal reference."""
 
@@ -1363,22 +1968,34 @@ def _summary_dossier_label() -> tuple[str, str]:
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if isinstance(state, AddressFormState) and state.address:
         address = state.address
-        return ", ".join(part for part in (address.street, address.city) if part), st.session_state.get("workflow_property_type", "")
-    return st.session_state.get("workflow_property_name") or "Dossier immobilier", st.session_state.get("workflow_property_type", "")
+        return ", ".join(part for part in (address.street, address.city) if part), _property_type()
+    return _property_name() or "Dossier immobilier", _property_type()
 
 
 def _prepare_saved_property_name() -> None:
-    """Suggest the selected public address without replacing a custom dossier name."""
+    """Reuse the dossier label or selected address without replacing a custom name."""
 
     current = st.session_state.get("saved_property_name")
-    if isinstance(current, str) and current.strip():
+    if isinstance(current, str) and current.strip() and current != st.session_state.get(SAVED_AUTO_NAME_KEY):
+        return
+    dossier_name = _property_name()
+    if isinstance(dossier_name, str) and dossier_name.strip():
+        st.session_state["saved_property_name"] = dossier_name.strip()
+        st.session_state[SAVED_AUTO_NAME_KEY] = dossier_name.strip()
         return
     state = st.session_state.get(ADDRESS_STATE_KEY)
     if isinstance(state, AddressFormState) and state.address:
         address = state.address
-        st.session_state["saved_property_name"] = ", ".join(
+        label = ", ".join(
             part for part in (address.street, address.city) if part
         )
+        st.session_state["saved_property_name"] = label
+        st.session_state[SAVED_AUTO_NAME_KEY] = label
+
+
+def _remember_saved_property_name() -> None:
+    if st.session_state.get("saved_property_name") != st.session_state.get(SAVED_AUTO_NAME_KEY):
+        st.session_state.pop(SAVED_AUTO_NAME_KEY, None)
 
 
 def _generated_immovalue() -> dict | None:
@@ -1386,6 +2003,25 @@ def _generated_immovalue() -> dict | None:
 
     value = st.session_state.get("immovalue_generated_result")
     return value if isinstance(value, dict) and value.get("available") else None
+
+
+def _immovalue_snapshot_for_save(immovalue: dict | None) -> dict:
+    """Keep the declared asking price with a saved result, never an address.
+
+    ImmoValue remains its own stored result.  The small subject snapshot lets a
+    reopened dossier compare the user's declared asking price without treating
+    the municipal role as a price or silently reconstructing the entry.
+    """
+
+    snapshot = dict(immovalue) if isinstance(immovalue, dict) else {}
+    asking = st.session_state.get("iv_asking")
+    asking_price = float(asking) if isinstance(asking, (int, float)) and asking > 0 else None
+    property_type = _property_type()
+    snapshot["subject"] = {
+        "asking_price": asking_price,
+        "property_type": property_type if isinstance(property_type, str) else "",
+    }
+    return snapshot
 
 
 def _show_summary_financial_cards(inputs: PropertyInputs, result: AnalysisResult) -> None:
@@ -1444,6 +2080,7 @@ def _show_summary_value_cards(address_lookup: dict | None, immovalue: dict | Non
 def _show_summary_scenarios(inputs: PropertyInputs, profile: str) -> None:
     """Compact preview of existing deterministic scenarios; no formula changes."""
 
+    has_rental_context = bool(inputs.rental_income_monthly or inputs.other_income_monthly)
     base = next(item for item in build_standard_scenarios(inputs, profile) if item.name == "Scénario de base")
     rate_up = next(item for item in build_resilience_tests(inputs, profile)[0] if item.name == "Taux +1 point")
     prudent = next(item for item in build_standard_scenarios(inputs, profile) if item.name == "Prudent")
@@ -1451,14 +2088,19 @@ def _show_summary_scenarios(inputs: PropertyInputs, profile: str) -> None:
         with column:
             with st.container(border=True):
                 st.markdown(f"**{scenario.name}**")
-                st.metric("Flux mensuel", _money(scenario.financial.cash_flow_monthly))
-                st.caption(f"DSCR {scenario.financial.debt_service_coverage_ratio:.2f}x · {scenario.description}")
+                if has_rental_context:
+                    st.metric("Flux mensuel", _money(scenario.financial.cash_flow_monthly))
+                    st.caption(f"DSCR {scenario.financial.debt_service_coverage_ratio:.2f}x · {scenario.description}")
+                else:
+                    st.metric("Coût mensuel", _money(scenario.financial.total_monthly_expenses))
+                    st.caption(f"Sans revenu locatif déclaré · {scenario.description}")
 
 
 def _return_to_summary_inputs() -> None:
     st.session_state.pop("analysis_calculation_signature", None)
     st.session_state.pop("analysis_calculation_errors", None)
     st.session_state["analysis_calculation_requested"] = False
+    st.session_state[FINANCIAL_RESTORE_KEY] = True
 
 
 def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, address_lookup: dict | None = None) -> None:
@@ -1500,35 +2142,16 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         "Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources",
     ])
     with overview_tab:
+        st.subheader("Estimation marchande ImmoValue")
+        st.caption("Cette estimation expérimentale reste distincte du rôle municipal et de vos calculs financiers. Elle n’est disponible qu’avec trois comparables admissibles dont vous confirmez la provenance.")
         immovalue = _show_immovalue(address_lookup)
-        score, confidence, verdict = st.columns(3)
-        score.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Indisponible")
-        confidence.metric("Confiance", f"{engine_result.confidence_index} / 100")
-        verdict.metric("Lecture", engine_result.verdict.capitalize())
-        st.caption("La confiance décrit la qualité et la complétude des renseignements saisis; elle ne garantit pas une décision.")
-        strengths, checks = st.columns(2)
-        with strengths:
-            st.subheader("Points forts")
-            for item in engine_result.positive_factors[:3] or ["Indisponible tant que les hypothèses requises ne sont pas fournies."]:
-                st.success(item)
-        with checks:
-            st.subheader("À vérifier")
-            for item in (engine_result.negative_factors + engine_result.missing_data)[:3] or ["Ajoutez des renseignements pour obtenir des vérifications ciblées."]:
-                st.warning(item)
     with finances_tab:
-        st.subheader("Les chiffres de votre projet")
-        first, second, third = st.columns(3)
-        first.metric("Paiement hypothécaire", _money(result.monthly_payment))
-        second.metric("Revenus effectifs mensuels", _money(result.effective_rental_income_monthly))
-        third.metric("Flux de trésorerie mensuel", _money(result.cash_flow_monthly))
+        st.subheader("Détails de vos calculs")
+        st.caption("Les indicateurs essentiels sont déjà résumés plus haut. Voici les repères complémentaires fondés sur les chiffres que vous avez saisis.")
         a, b, c = st.columns(3)
         a.metric("Revenus nets annuels (RNE)", _money(result.net_operating_income_annual))
         b.metric("Capital réellement investi", _money(result.actual_capital_invested))
-        c.metric("Rendement sur capital", f"{result.cash_on_cash_return:.2f} %")
-        d, e, f = st.columns(3)
-        d.metric("Taux de capitalisation", f"{result.capitalization_rate:.2f} %")
-        e.metric("Capacité à couvrir la dette (DSCR)", f"{result.debt_service_coverage_ratio:.2f}x")
-        f.metric("Marge mensuelle de sécurité", _money(result.monthly_safety_margin))
+        c.metric("Marge mensuelle de sécurité", _money(result.monthly_safety_margin))
         if result.housing_cost_ratio is not None:
             st.info(f"Part déclarée du revenu consacrée au logement et aux dettes : {result.housing_cost_ratio:.1f} %. Calcul : paiement hypothécaire + revenus et dépenses du projet + autres dettes, divisé par le revenu brut mensuel. Ce n’est pas un critère officiel de prêteur.")
         else:
@@ -1542,29 +2165,58 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         st.write("ImmoValue est une fourchette expérimentale issue des comparables que vous fournissez. Le rôle municipal est une valeur fiscale officielle, distincte d’une valeur marchande. ImmoScore mesure l’adéquation de vos hypothèses à votre profil; il ne constitue pas une recommandation.")
         st.caption("Chaque renseignement officiel affiché indique sa provenance, son année et sa fraîcheur. Une donnée absente reste indisponible.")
 
-    st.markdown(
-        "<div class='save-analysis-panel'><h3>Votre prochaine étape</h3>"
-        "<p>Conservez ce dossier pour y revenir avec les mêmes chiffres. Premium ajoute ensuite le suivi, "
-        "les comparaisons et le rapport complet — sans paiement pendant la bêta privée.</p>",
-        unsafe_allow_html=True,
-    )
+    user = current_user() if is_authenticated() else None
+    has_premium_follow_up = bool(user and can_use(user, "alerts"))
+    if has_premium_follow_up:
+        next_step_copy = (
+            "<div class='save-analysis-panel'><p class='eyebrow'>VOTRE DOSSIER</p>"
+            "<h3>Gardez votre analyse à portée de main</h3>"
+            "<p>Sauvegardez vos chiffres pour comparer les prochaines versions et activer un suivi "
+            "fondé uniquement sur des changements vérifiables.</p>"
+            "<div class='next-step-benefits'>"
+            "<span>✓ Dossier et scénarios conservés</span>"
+            "<span>✓ Suivi de changements calculables</span>"
+            "<span>✓ Rapport et comparaison disponibles</span>"
+            "</div></div>"
+        )
+    else:
+        next_step_copy = (
+            "<div class='save-analysis-panel'><p class='eyebrow'>VOTRE DOSSIER</p>"
+            "<h3>Commencez avec une analyse, poursuivez avec le suivi</h3>"
+            "<p>Sauvegardez gratuitement ce dossier. Premium ajoute le suivi de changements vérifiables, "
+            "les comparaisons et le rapport complet.</p>"
+            "<div class='next-step-benefits'>"
+            "<span>✓ Sauvegarde privée possible</span>"
+            "<span>🔒 Alertes factuelles et suivi Premium</span>"
+            "<span>🔒 Comparaisons et rapport complet</span>"
+            "</div><p class='premium-next-step-note'>Premium est en préparation commerciale. "
+            "Aucun paiement n’est demandé pendant la bêta privée.</p></div>"
+        )
+    st.markdown(next_step_copy, unsafe_allow_html=True)
     if is_authenticated():
         _prepare_saved_property_name()
         property_name = st.text_input(
             "Nom court du dossier (facultatif si une adresse est sélectionnée)",
             key="saved_property_name", placeholder="Ex. Projet résidentiel",
+            on_change=_remember_saved_property_name,
         )
-        st.caption("Votre dossier reste privé à votre compte. Le rapport PDF et le suivi des changements vérifiables font partie de l’accès Premium bêta.")
-        action_save, action_edit, action_premium = st.columns(3)
+        st.caption("Votre dossier reste privé à votre compte. Les alertes par courriel exigent toujours un consentement séparé dans Mon compte.")
+        action_save, action_edit, action_premium = st.columns(3) if not has_premium_follow_up else (*st.columns(2), None)
         with action_save:
-            save_requested = st.button("Sauvegarder mon dossier", type="primary", key="save_analysis", use_container_width=True)
+            save_requested = st.button("Sauvegarder mon dossier", type="primary", key="save_analysis", width="stretch")
         with action_edit:
-            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="edit_analysis_hypotheses", use_container_width=True)
-        with action_premium:
-            st.button("Découvrir le suivi Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", use_container_width=True)
+            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="edit_analysis_hypotheses", width="stretch")
+        if action_premium is not None:
+            with action_premium:
+                st.button("Voir les avantages Premium", on_click=go_to, args=("Premium",), key="summary_premium_preview", width="stretch")
         if save_requested:
             if not property_name.strip():
                 st.error("Ajoutez un nom de dossier ou sélectionnez une adresse.")
+            elif _unchanged_snapshot_is_saved(
+                current_user()["id"],
+                _save_snapshot_signature(property_name, inputs, engine_result.profile, address_lookup, immovalue),
+            ):
+                st.info("Ce dossier inchangé est déjà sauvegardé dans Mes propriétés.")
             else:
                 analysis_id = save_analysis(current_user()["id"], property_name, {
                     "price": inputs.price, "down_payment": inputs.down_payment,
@@ -1575,7 +2227,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                     "financial_inputs": {
                         **asdict(inputs),
                         "_analysis_objective": st.session_state.get("workflow_objective", ""),
-                        "_property_type": st.session_state.get("workflow_property_type", ""),
+                        "_property_type": _property_type(),
                         "mortgage_renewal_date": (
                             st.session_state["mortgage_renewal_date"].isoformat()
                             if isinstance(st.session_state.get("mortgage_renewal_date"), date)
@@ -1583,21 +2235,39 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                         ),
                     },
                     "market_context": market_context_snapshot(str(DATABASE_PATH)),
-                    "immovalue": immovalue,
+                    "immovalue": _immovalue_snapshot_for_save(immovalue),
                     "official_role_snapshot": _official_role_snapshot(address_lookup),
                 }, profile=engine_result.profile, engine_result=engine_result)
                 st.session_state[LAST_SAVED_ANALYSIS_KEY] = {
                     "id": analysis_id,
                     "owner_id": current_user()["id"],
                     "property_name": property_name.strip(),
+                    "signature": _save_snapshot_signature(
+                        property_name, inputs, engine_result.profile, address_lookup, immovalue,
+                    ),
                 }
                 st.success("Dossier, scénarios et tests de résistance sauvegardés dans Mes propriétés.")
+                # A previously followed dossier may gain a new factual alert
+                # when this immutable snapshot is saved. The service reloads
+                # ownership and consent from SQLite and is rerun-safe.
+                if can_use(current_user(), "alerts"):
+                    tracked = dossier_fingerprint(current_user()["id"], property_name) in tracked_dossier_fingerprints(
+                        current_user()["id"], DATABASE_PATH
+                    )
+                    if tracked:
+                        delivery = deliver_alerts_for_user(current_user()["id"], DATABASE_PATH)
+                        if delivery.status == "sent":
+                            st.info("Un avis générique par courriel a été envoyé. Le détail reste dans Mes propriétés.")
         saved = st.session_state.get(LAST_SAVED_ANALYSIS_KEY, {})
         if (
             isinstance(saved, dict)
             and saved.get("owner_id") == current_user()["id"]
             and saved.get("property_name") == property_name.strip()
             and isinstance(saved.get("id"), int)
+            and _unchanged_snapshot_is_saved(
+                current_user()["id"],
+                _save_snapshot_signature(property_name, inputs, engine_result.profile, address_lookup, immovalue),
+            )
         ):
             if can_use(current_user(), "alerts"):
                 followed = dossier_fingerprint(current_user()["id"], property_name) in tracked_dossier_fingerprints(
@@ -1611,20 +2281,23 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                         st.error("Le dossier sauvegardé n’est plus disponible dans votre espace.")
                     else:
                         st.success("Suivi activé. Les alertes Premium liront seulement les changements vérifiables de ce dossier.")
+                        delivery = deliver_alerts_for_user(current_user()["id"], DATABASE_PATH)
+                        if delivery.status == "sent":
+                            st.info("Un avis générique par courriel a été envoyé. Le détail reste dans Mes propriétés.")
                         st.rerun()
                 if followed:
                     st.caption("Le suivi est actif. Vous pouvez le désactiver dans Mes propriétés.")
             else:
-                st.caption("Le suivi des changements vérifiables est inclus dans l’aperçu Premium. Aucun courriel n’est activé pendant la bêta.")
+                st.caption("Le suivi des changements vérifiables est inclus dans l’aperçu Premium. Les avis par courriel demandent un consentement séparé dans Mon compte.")
     else:
         st.info("Votre analyse reste disponible dans ce brouillon. Créez un espace gratuit pour la conserver, retrouver vos scénarios et y revenir plus tard.")
         create_account, edit_inputs, premium = st.columns(3)
         with create_account:
-            st.button("Créer mon espace gratuit", type="primary", on_click=_open_account_to_keep_analysis, key="save_analysis_login", use_container_width=True)
+            st.button("Créer mon espace gratuit", type="primary", on_click=_open_account_to_keep_analysis, key="save_analysis_login", width="stretch")
         with edit_inputs:
-            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="guest_edit_analysis_hypotheses", use_container_width=True)
+            st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="guest_edit_analysis_hypotheses", width="stretch")
         with premium:
-            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="guest_summary_premium", use_container_width=True)
+            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="guest_summary_premium", width="stretch")
         st.caption("Premium est en préparation commerciale. Aucun paiement n’est demandé pendant la bêta privée.")
     st.markdown("</div>", unsafe_allow_html=True)
 

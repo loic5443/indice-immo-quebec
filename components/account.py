@@ -6,13 +6,19 @@ import streamlit as st
 
 from components.sidebar import go_to
 from components.premium_teaser import show_premium_teaser
-from data.database import authenticate_user, count_analyses, create_user, get_user, validate_registration
+from data.database import authenticate_user, count_analyses, get_user, validate_registration
 from data.database import DATABASE_PATH
 from services.privacy_service import delete_account, export_user_data
 from services.onboarding_service import STEPS, complete, progress
-from services.beta_service import registration_allowed, consume_invitation
+from services.beta_service import register_beta_user
 from services.entitlements_service import can_use, quota_is_enforced, quota_status
-from services.alert_email_service import alert_email_readiness, set_alert_email_consent
+from services.alert_email_service import (
+    alert_email_delivery_status,
+    alert_email_readiness,
+    send_test_alert_email,
+    set_alert_email_consent,
+    verify_alert_email_configuration,
+)
 from services.auth_service import validate_login_submission
 from domain.objectives import ANALYSIS_OBJECTIVES
 
@@ -95,10 +101,78 @@ def _objective_options(saved_objective: str = "") -> list[str]:
     return options
 
 
+def _show_alert_email_preferences(user: dict) -> None:
+    """Show the independent alert-email preference before secondary settings."""
+
+    email_alerts_available = can_use(user, "alerts")
+    with st.container(border=True):
+        st.subheader("Alertes par courriel")
+        if not email_alerts_available:
+            st.markdown(
+                "<div class='premium-next-step'><p class='eyebrow'>APERÇU PREMIUM</p>"
+                "<p>Recevez un avis générique seulement lorsqu’un changement vérifiable "
+                "est détecté dans un dossier suivi. Les détails restent dans ImmoRadar.</p></div>",
+                unsafe_allow_html=True,
+            )
+            st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
+            st.button("Découvrir les alertes Premium", key="account_alerts_premium", on_click=go_to, args=("Premium",), width="stretch")
+            return
+
+        st.write("Choisissez séparément si les alertes vérifiables de vos dossiers peuvent vous être envoyées par courriel.")
+        delivery = alert_email_delivery_status(user["id"], DATABASE_PATH)
+        alert_email_consent = st.checkbox(
+            "Recevoir les alertes de mes dossiers par courriel (Premium)",
+            value=bool(st.session_state.get("current_user", user).get("alert_email_consent")),
+            key="account_alert_email_consent",
+        )
+        if delivery["readiness"] != "ready":
+            st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas configurée sur ce serveur pour le moment.")
+        elif delivery["latest_outcome"] == "failed":
+            st.warning("Le dernier essai de livraison n’a pas abouti. Vos alertes restent visibles dans ImmoRadar; vous pouvez refaire un test ci-dessous.")
+        elif delivery["latest_outcome"] == "sent":
+            st.caption("Livraison configurée · le dernier essai ou avis a été envoyé avec succès.")
+        else:
+            st.caption("Livraison configurée · aucun avis n’a encore été nécessaire.")
+        if st.button("Enregistrer mon choix d’alerte", key="save_alert_email_preference", type="primary"):
+            saved = set_alert_email_consent(user["id"], bool(alert_email_consent), DATABASE_PATH)
+            if saved:
+                st.session_state["current_user"] = {
+                    **st.session_state.get("current_user", user),
+                    "alert_email_consent": int(bool(alert_email_consent)),
+                }
+                st.success("Votre choix d’alerte par courriel est enregistré.")
+            else:
+                st.error("Votre choix n’a pas pu être enregistré. Réessayez plus tard.")
+
+        current_consent = bool(st.session_state.get("current_user", user).get("alert_email_consent"))
+        if current_consent and alert_email_readiness() == "ready":
+            st.success("La livraison des alertes par courriel est prête.")
+            with st.expander("Vérifier la configuration Brevo", expanded=False):
+                st.caption("Cette vérification ne transmet ni dossier, ni adresse, ni donnée financière et n’envoie aucun courriel.")
+                if st.button("Vérifier Brevo", key="verify_brevo_configuration"):
+                    configuration = verify_alert_email_configuration()
+                    if configuration == "verified":
+                        st.success("Brevo confirme que la configuration de courriel est valide.")
+                    elif configuration == "credentials_rejected":
+                        st.error("Brevo refuse actuellement la clé configurée. Créez ou remplacez la clé API dans les réglages locaux, puis vérifiez de nouveau.")
+                    else:
+                        st.warning("Brevo n’est pas joignable ou sa configuration est incomplète pour le moment. Aucun courriel n’a été envoyé.")
+            with st.expander("Tester la livraison par courriel", expanded=False):
+                st.caption("Un seul courriel de test sera envoyé à l’adresse de votre compte. Il ne contient aucune adresse de propriété ni donnée financière.")
+                if st.button("Envoyer un courriel test", key="send_alert_email_test"):
+                    outcome = send_test_alert_email(int(user["id"]), DATABASE_PATH)
+                    if outcome == "sent":
+                        st.success("Courriel de test envoyé. Vérifiez votre boîte de réception et les indésirables.")
+                    elif outcome == "already_sent":
+                        st.info("Un courriel de test a déjà été envoyé pour ce compte.")
+                    else:
+                        st.error("Le courriel de test n’a pas pu être envoyé. Vérifiez la configuration Brevo et réessayez plus tard.")
+
+
 def show_account() -> None:
     """Show account credentials forms or the signed-in account summary."""
     st.markdown("<p class='eyebrow'>ESPACE PERSONNEL</p>", unsafe_allow_html=True)
-    st.title("Mon compte")
+    st.html("<h1>Mon compte</h1>")
     if is_authenticated():
         user = current_user()
         if not user.get("onboarding_completed"):
@@ -111,10 +185,15 @@ def show_account() -> None:
         safe_profile = escape(str(user.get("user_type") or ""))
         safe_horizon = escape(str(user.get("investment_horizon") or ""))
         safe_risk = escape(str(user.get("risk_tolerance") or ""))
+        profile_details = [f"Profil : <b>{safe_profile or 'Non renseigné'}</b>"]
+        if safe_horizon:
+            profile_details.append(safe_horizon)
+        if safe_risk:
+            profile_details.append(f"risque {safe_risk}")
         st.markdown(
             f"<div class='account-summary'><span class='data-pill real'>Connecté</span>"
             f"<h2>{safe_name}</h2><p>{safe_email}</p><p>Forfait : <b>{'Premium' if user['plan'] == 'premium' else 'Gratuit'}</b></p>"
-            f"<p>Profil : <b>{safe_profile}</b> · {safe_horizon} · risque {safe_risk}</p></div>",
+            f"<p>{' · '.join(profile_details)}</p></div>",
             unsafe_allow_html=True,
         )
         analysis_count = count_analyses(user["id"])
@@ -128,11 +207,12 @@ def show_account() -> None:
             st.caption("Quota mensuel en aperçu pendant la bêta : aucune estimation n’est déduite automatiquement.")
         primary, sign_out, _ = st.columns([1, 1, 2])
         if analysis_count:
-            primary.button("Voir mes propriétés", type="primary", on_click=go_to, args=("Mes propriétés",), use_container_width=True)
+            primary.button("Voir mes propriétés", type="primary", on_click=go_to, args=("Mes propriétés",), width="stretch")
         else:
             st.info("Votre espace est prêt. Commencez par analyser une propriété : vous pourrez ensuite conserver votre dossier et vos scénarios ici.")
-            primary.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), use_container_width=True)
-        sign_out.button("Se déconnecter", on_click=logout, use_container_width=True)
+            primary.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
+        sign_out.button("Se déconnecter", on_click=logout, width="stretch")
+        _show_alert_email_preferences(user)
         with st.expander("Préférences pour mes nouvelles analyses", expanded=False):
             st.caption("Ces choix personnalisent vos prochains dossiers. Ils ne modifient jamais les analyses déjà sauvegardées.")
             objective_options = _objective_options(str(user.get("user_objective") or ""))
@@ -164,16 +244,6 @@ def show_account() -> None:
             marketing_consent = st.checkbox(
                 "Accepter les communications liées à ImmoRadar", value=bool(user.get("marketing_consent")), key="account_marketing_consent",
             )
-            email_alerts_available = can_use(user, "alerts")
-            alert_email_consent = st.checkbox(
-                "Recevoir les alertes de mes dossiers par courriel (Premium)",
-                value=bool(user.get("alert_email_consent")), key="account_alert_email_consent",
-                disabled=not email_alerts_available,
-            )
-            if not email_alerts_available:
-                st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
-            elif alert_email_readiness() != "ready":
-                st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas encore activée pendant la bêta.")
             if st.button("Enregistrer mes préférences", key="save_account_preferences", type="primary"):
                 if not profile or not objective:
                     st.error("Choisissez un profil et un objectif principal.")
@@ -183,14 +253,11 @@ def show_account() -> None:
                         investment_horizon=horizon, risk_tolerance=risk,
                         analytics_consent=int(analytics_consent), marketing_consent=int(marketing_consent),
                     )
-                    alert_email_saved = set_alert_email_consent(
-                        user["id"], bool(alert_email_consent) if email_alerts_available else False, DATABASE_PATH,
-                    )
                     st.session_state["current_user"] = {
                         **user, "user_type": profile, "user_objective": objective,
                         "investment_horizon": horizon, "risk_tolerance": risk,
                         "analytics_consent": int(analytics_consent), "marketing_consent": int(marketing_consent),
-                        "alert_email_consent": int(bool(alert_email_consent) if email_alerts_available and alert_email_saved else False),
+                        "alert_email_consent": int(bool(user.get("alert_email_consent"))),
                     }
                     st.success("Préférences enregistrées pour vos nouvelles analyses.")
         if not can_use(user, "advanced_comparisons"):
@@ -218,7 +285,7 @@ def show_account() -> None:
         with st.form("login_form"):
             email = st.text_input("Adresse courriel", key="login_email")
             password = st.text_input("Mot de passe", type="password", key="login_password")
-            submitted = st.form_submit_button("Se connecter", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Se connecter", type="primary", width="stretch")
         if submitted:
             errors = validate_login_submission(email, password)
             if errors:
@@ -239,31 +306,26 @@ def show_account() -> None:
             invitation_code = st.text_input("Code d'invitation bêta (si requis)")
             st.caption("Vous choisirez votre profil et vos préférences dans le court démarrage suivant."
                        " Ces choix peuvent être modifiés plus tard dans Mon compte.")
-            submitted = st.form_submit_button("Créer mon compte", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Créer mon compte", type="primary", width="stretch")
         if submitted:
             errors = validate_registration(name, email, password, confirmation)
             if errors:
                 for error in errors:
                     st.error(error)
             else:
-                allowed, beta_message = registration_allowed(invitation_code, DATABASE_PATH)
-                if not allowed:
-                    st.error(beta_message)
-                    return
-                created, message = create_user(name, email, password)
+                created, message = register_beta_user(
+                    name, email, password, DATABASE_PATH, invitation_code=invitation_code,
+                )
                 if created:
-                    if invitation_code and not consume_invitation(invitation_code, DATABASE_PATH):
-                        st.error("Compte créé, mais le code n'a pas pu être consommé. Contactez l'administrateur.")
+                    # The account and its invitation, when required, are now
+                    # committed together.  A failed code can never leave an
+                    # uncounted account or consume a beta place by itself.
+                    user = _start_new_account_session(email, password)
+                    if user is None:
+                        st.error("Compte créé, mais la connexion locale n’a pas pu démarrer. Connectez-vous avec vos identifiants.")
                     else:
-                        # The user has just proven control of the chosen password.
-                        # Start the local session directly; the mandatory onboarding
-                        # is still shown before any personal area is available.
-                        user = _start_new_account_session(email, password)
-                        if user is None:
-                            st.error("Compte créé, mais la connexion locale n’a pas pu démarrer. Connectez-vous avec vos identifiants.")
-                        else:
-                            st.session_state["account_creation_notice"] = message
-                            st.rerun()
+                        st.session_state["account_creation_notice"] = message
+                        st.rerun()
                 else:
                     st.error(message)
 

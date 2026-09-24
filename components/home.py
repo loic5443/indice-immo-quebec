@@ -41,10 +41,11 @@ def show_home() -> None:
         spacer, action, premium, tail = st.columns([1.1, 1.35, 1.2, 1.1])
         with action:
             st.write("")
-            st.button("Révéler la valeur", type="primary", on_click=_start_from_home, use_container_width=True)
+            st.button("Révéler la valeur", type="primary", on_click=_start_from_home, width="stretch")
         with premium:
             st.write("")
-            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), use_container_width=True)
+            st.button("Découvrir Premium", on_click=go_to, args=("Premium",), width="stretch")
+    st.caption("Commencez sans compte ni document. À l’étape suivante, vous choisissez si ImmoRadar peut consulter les renseignements publics disponibles.")
     st.caption(
         "Lorsqu’elle est disponible, la première valeur révélée est celle du rôle municipal officiel : un repère fiscal, "
         "pas un prix de vente. Elle peut différer du marché selon l’année du rôle et le secteur. ImmoValue est distincte "
@@ -78,7 +79,7 @@ def show_home() -> None:
     with notes:
         st.markdown("<article class='benefit-card'><h3>Ce que vous voyez</h3><p>• La valeur municipale reste distincte d’une valeur marchande.</p><p>• Les points forts et les vérifications viennent des données réellement disponibles.</p><p>• Aucun résultat d’exemple n’est présenté comme le vôtre.</p></article>", unsafe_allow_html=True)
 
-    st.markdown("<div class='section-space'></div><section class='premium-notice'><p class='eyebrow notranslate'>ALERTES PREMIUM</p><h2>Gardez une longueur d’avance</h2><p>Suivez les changements qui peuvent influencer vos décisions grâce aux alertes personnalisées ImmoRadar.</p><p><b>Aperçus verrouillés :</b> variation de valeur quand deux estimations fiables existent · impact d’un taux directeur sur un scénario · mise à jour du rôle municipal.</p><p>Les alertes non calculables restent indiquées « bientôt disponible ». Aucun courriel n’est envoyé pendant la bêta.</p></section>", unsafe_allow_html=True)
+    st.markdown("<div class='section-space'></div><section class='premium-notice'><p class='eyebrow notranslate'>ALERTES PREMIUM</p><h2>Gardez une longueur d’avance</h2><p>Suivez les changements qui peuvent influencer vos décisions grâce aux alertes personnalisées ImmoRadar.</p><p><b>Alertes vérifiables :</b> variation de valeur quand deux estimations fiables existent · impact d’un taux directeur sur un scénario · mise à jour du rôle municipal.</p><p>Avec votre consentement, ImmoRadar peut vous envoyer un avis générique par courriel. Les alertes non calculables restent indiquées « bientôt disponible ».</p></section>", unsafe_allow_html=True)
     st.button("Voir les alertes Premium", on_click=go_to, args=("Premium",), key="home_premium")
 
     st.markdown("<div class='section-space'></div><h2>Pourquoi ImmoRadar</h2>", unsafe_allow_html=True)
@@ -89,5 +90,5 @@ def show_home() -> None:
     ):
         with column:
             st.markdown(f"<article class='benefit-card'><h3>{title}</h3><p>{copy}</p></article>", unsafe_allow_html=True)
-    st.markdown("<div class='final-cta'><h2>Prêt à ouvrir votre dossier immobilier?</h2><p>Commencez avec une adresse ou les hypothèses que vous avez déjà.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='final-cta'><h2>Prêt à ouvrir votre dossier immobilier?</h2><p>Commencez avec une adresse. Vous ajouterez vos chiffres seulement lorsque vous serez prêt.</p></div>", unsafe_allow_html=True)
     st.button("Analyser une propriété", type="primary", on_click=_start_from_home, key="home_final_analysis")

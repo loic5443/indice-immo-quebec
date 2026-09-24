@@ -38,6 +38,8 @@ function onRender(event) {
   }
 
   if (!configured) {
+    // Send once after a short pause: this is still live type-ahead (no Enter
+    // or focus loss), while avoiding one official MRNF request per letter.
     input.addEventListener("input", scheduleValue);
     input.addEventListener("keyup", scheduleValue);
     Streamlit.setFrameHeight(74);

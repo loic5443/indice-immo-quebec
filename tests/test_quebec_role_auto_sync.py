@@ -3,6 +3,7 @@
 import sqlite3
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,14 +12,21 @@ from streamlit.testing.v1 import AppTest
 from services.quebec_role_auto_sync import (
     AutoSyncResult,
     municipal_coverage_status,
+    municipal_coverage_status_for_territory,
     resolve_official_territory,
+    resolve_official_territory_code,
     synchronize_selected_municipality,
+    synchronize_selected_territory,
 )
 
 
 INDEX = (
     "code géographique,nom du territoire,lien,date de modification\n"
     "01023,Ville test,https://mamh.gouv.qc.ca/role/RM01023.xml,2026-01-01\n"
+).encode()
+REFRESHED_INDEX = (
+    "code géographique,nom du territoire,lien,date de modification\n"
+    "02048,Ville fraîche,https://mamh.gouv.qc.ca/role/RM02048.xml,2026-08-24\n"
 ).encode()
 XML = (
     b'\xef\xbb\xbf<?xml version="1.0"?><RL><VERSION>2.9</VERSION><RLM01A>01023</RLM01A>'
@@ -52,16 +60,71 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
             history = connection.execute("SELECT detail FROM role_sync_history WHERE territory_code='01023'").fetchall()
         self.assertEqual(history[-1][0], "official_xml_validated")
 
+    def test_rqa_geographic_code_syncs_only_the_exact_official_territory(self):
+        result = synchronize_selected_territory(
+            self.db, "01023", True, fetcher=lambda _: XML,
+            index_fetcher=lambda _: INDEX, version_fetcher=lambda _: "2.9",
+        )
+        self.assertEqual((result.status, result.territory_code, result.imported_units), ("synchronized", "01023", 1))
+        with sqlite3.connect(self.db) as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(DISTINCT territory_code) FROM role_territory_imports").fetchone()[0], 1)
+
+    def test_rqa_code_is_validated_against_the_official_index(self):
+        self.assertIsNone(resolve_official_territory_code(self.db, "99999", index_fetcher=lambda _: INDEX))
+        result = synchronize_selected_territory(
+            self.db, "99999", True, fetcher=lambda _: self.fail("an unknown code must not download"),
+            index_fetcher=lambda _: INDEX,
+        )
+        self.assertEqual(result.status, "not_covered")
+
+    def test_rqa_code_never_refreshes_or_downloads_without_consent(self):
+        result = synchronize_selected_territory(
+            self.db, "01023", False,
+            index_fetcher=lambda _: self.fail("no-consent must not fetch the index"),
+            fetcher=lambda _: self.fail("no-consent must not fetch a territory"),
+        )
+        self.assertEqual(result.status, "consent_required")
+
     def test_existing_active_cache_never_downloads_again(self):
         self._sync()
         result = self._sync(lambda _: (_ for _ in ()).throw(AssertionError("must use cached territory")))
         self.assertEqual(result.status, "available")
         self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "available")
 
+    def test_newer_official_index_entry_refreshes_only_that_cached_territory(self):
+        self._sync()
+        with sqlite3.connect(self.db) as connection, connection:
+            connection.execute(
+                "UPDATE role_index_entries SET source_updated_at=? WHERE territory_code='01023'",
+                (datetime.now(timezone.utc).isoformat(),),
+            )
+        calls = []
+
+        def fetcher(_):
+            calls.append(1)
+            return XML
+
+        result = self._sync(fetcher)
+        self.assertEqual(result.status, "synchronized")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "available")
+
     def test_coverage_status_is_local_only_and_explains_possible_sync(self):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
         self.assertEqual(municipal_coverage_status(self.db, "Ville test")["status"], "sync_available")
         self.assertEqual(municipal_coverage_status(self.db, "Ville inconnue")["status"], "manual")
+        self.assertEqual(municipal_coverage_status_for_territory(self.db, "01023")["status"], "sync_available")
+        self.assertEqual(municipal_coverage_status_for_territory(self.db, "99999")["status"], "manual")
+
+    def test_stale_official_index_is_replaced_before_resolving_a_new_municipality(self):
+        resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
+        with sqlite3.connect(self.db) as connection, connection:
+            connection.execute("UPDATE role_index_entries SET index_synced_at='2025-01-01T00:00:00+00:00'")
+        entry = resolve_official_territory(self.db, "Ville fraîche", index_fetcher=lambda _: REFRESHED_INDEX)
+        self.assertEqual(entry["territory_code"], "02048")
+        with sqlite3.connect(self.db) as connection:
+            codes = [row[0] for row in connection.execute("SELECT territory_code FROM role_index_entries")]
+        self.assertEqual(codes, ["02048"])
 
     def test_disabled_territory_is_never_reactivated_or_downloaded(self):
         resolve_official_territory(self.db, "Ville test", index_fetcher=lambda _: INDEX)
@@ -143,6 +206,7 @@ class ControlledAutoRoleSyncTests(unittest.TestCase):
             "page.show_property_analysis()\n"
         )
         with (
+            patch.object(page, "DATABASE_PATH", self.db),
             patch.object(page, "suggest_addresses", return_value=SuggestionResponse("ok", (suggestion,))),
             patch.object(page, "resolve_suggestion", side_effect=lambda item, _: item),
             patch.object(

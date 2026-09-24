@@ -3,6 +3,7 @@
 import sqlite3
 import tempfile
 import unittest
+import ast
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -19,6 +20,25 @@ def _row(code, municipality):
 
 
 class PublicUiRegressionTests(unittest.TestCase):
+    def test_page_titles_do_not_reuse_a_previous_page_anchor(self):
+        root = Path(__file__).resolve().parents[1] / "components"
+        for name in ("account", "admin", "markets", "feedback", "property_analysis", "saved_analyses"):
+            with self.subTest(page=name):
+                tree = ast.parse((root / f"{name}.py").read_text(encoding="utf-8"))
+                titles = [
+                    node for node in ast.walk(tree)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "html"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "st"
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)
+                    and node.args[0].value.startswith("<h1>")
+                ]
+                self.assertEqual(len(titles), 1)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.db = Path(self.tmp.name) / "ui.sqlite"
@@ -60,7 +80,7 @@ class PublicUiRegressionTests(unittest.TestCase):
         app.run(timeout=20)
         self.assertEqual(list(app.metric), [])
         self.assertTrue(any("Aucune analyse personnelle" in item.value for item in app.info))
-        app.selectbox(key="workflow_objective_choice").set_value("Investir et louer")
+        app.radio(key="workflow_objective_choice").set_value("Investir et louer")
         self._button(app, "Suivant").click().run(timeout=20)
         self.assertEqual(app.selectbox(key="analysis_step_selector").value, 2)
         app.text_input(key="workflow_property_name").set_value("Duplex")
@@ -85,6 +105,7 @@ class PublicUiRegressionTests(unittest.TestCase):
         home.run(timeout=20)
         self.assertEqual(sum("Gardez une longueur" in item.value for item in home.get("markdown")), 1)
         self.assertTrue(any("repère fiscal" in item.value and "pas un prix de vente" in item.value for item in home.caption))
+        self.assertTrue(any("Commencez sans compte ni document" in item.value for item in home.caption))
         feedback = AppTest.from_string(
             "import components.feedback as page\n"
             "original_is_authenticated = page.is_authenticated\n"

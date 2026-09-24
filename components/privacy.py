@@ -46,7 +46,7 @@ def show_privacy() -> None:
 
     st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>VOS CONTRÔLES</p><div class='section-title' role='heading' aria-level='2'>Consultez, exportez ou supprimez vos données.</div><p class='section-intro'>Dans Mon compte, vous pouvez modifier vos consentements, télécharger vos données ou supprimer votre compte. L’export inclut votre profil et vos analyses, jamais votre mot de passe.</p>", unsafe_allow_html=True)
     account, analysis, _ = st.columns([1, 1, 2])
-    account.button("Gérer mes données", type="primary", on_click=go_to, args=("Mon compte",), use_container_width=True)
-    analysis.button("Analyser une propriété", on_click=go_to, args=("Analyser",), use_container_width=True)
+    account.button("Gérer mes données", type="primary", on_click=go_to, args=("Mon compte",), width="stretch")
+    analysis.button("Analyser une propriété", on_click=go_to, args=("Analyser",), width="stretch")
 
     st.caption("Cette page résume le fonctionnement du produit pendant la bêta privée; elle ne remplace pas les procédures internes de sécurité.")

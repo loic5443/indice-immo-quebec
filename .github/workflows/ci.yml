@@ -1,0 +1,32 @@
+name: Vérification ImmoRadar
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validation:
+    name: Compilation et tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Vérifier la compilation Python
+        run: python -m compileall -q calculations components data domain migrations providers repositories scripts services indice_immo.py
+
+      - name: Exécuter toute la suite de tests
+        run: python -m unittest discover -s tests -q

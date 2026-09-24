@@ -43,6 +43,8 @@ class SaveTrackingUiTests(unittest.TestCase):
         )
         try:
             app = AppTest.from_string(source).run(timeout=20)
+            self.assertNotIn("summary_premium_preview", [button.key for button in app.button])
+            self.assertTrue(any("Suivi de changements calculables" in item.value for item in app.markdown))
             app.text_input(key="saved_property_name").set_value("Dossier de suivi").run(timeout=20)
             app.button(key="save_analysis").click().run(timeout=20)
             self.assertIn("Activer le suivi de ce dossier", [button.label for button in app.button])
@@ -55,6 +57,92 @@ class SaveTrackingUiTests(unittest.TestCase):
             page.is_authenticated = original_is_authenticated
             page.current_user = original_current_user
             page.save_analysis = original_save_analysis
+
+    def test_free_summary_keeps_a_truthful_premium_follow_up_preview(self):
+        """Free accounts can save first and see only an explicit Premium preview."""
+        import components.property_analysis as page
+
+        original_database_path = page.DATABASE_PATH
+        original_is_authenticated = page.is_authenticated
+        original_current_user = page.current_user
+        free_user = {**self.user, "plan": "free"}
+        source = (
+            "from pathlib import Path\n"
+            "import components.property_analysis as page\n"
+            "from calculations.real_estate import PropertyInputs, calculate_analysis\n"
+            f"page.DATABASE_PATH = Path({str(self.database_path)!r})\n"
+            "page.is_authenticated = lambda: True\n"
+            f"page.current_user = lambda: {free_user!r}\n"
+            "inputs = PropertyInputs(price=400000, down_payment=80000, annual_interest_rate=5, amortization_years=25, municipal_taxes_annual=3000, school_taxes_annual=300, insurance_monthly=100, condo_fees_monthly=0, rental_income_monthly=2500, other_expenses_monthly=200)\n"
+            "page._show_results(inputs, calculate_analysis(inputs), 'Investisseur locatif')\n"
+        )
+        try:
+            app = AppTest.from_string(source).run(timeout=20)
+            self.assertIn("summary_premium_preview", [button.key for button in app.button])
+            self.assertEqual(app.button(key="summary_premium_preview").label, "Voir les avantages Premium")
+            self.assertTrue(any("Alertes factuelles et suivi Premium" in item.value for item in app.markdown))
+        finally:
+            page.DATABASE_PATH = original_database_path
+            page.is_authenticated = original_is_authenticated
+            page.current_user = original_current_user
+
+    def test_changed_unsaved_result_does_not_offer_tracking_old_snapshot(self):
+        """A new calculation must not attach follow-up to the prior save."""
+        import components.property_analysis as page
+
+        original_database_path = page.DATABASE_PATH
+        original_is_authenticated = page.is_authenticated
+        original_current_user = page.current_user
+        original_save_analysis = page.save_analysis
+        source = (
+            "from pathlib import Path\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "from calculations.real_estate import PropertyInputs, calculate_analysis\n"
+            "from data.database import save_analysis as persist_analysis\n"
+            f"page.DATABASE_PATH = Path({str(self.database_path)!r})\n"
+            "page.is_authenticated = lambda: True\n"
+            f"page.current_user = lambda: {self.user!r}\n"
+            f"page.save_analysis = lambda user_id, property_name, values, profile, engine_result: persist_analysis(user_id, property_name, values, Path({str(self.database_path)!r}), profile, engine_result)\n"
+            "inputs = PropertyInputs(price=st.session_state.get('test_price', 400000), down_payment=80000, annual_interest_rate=5, amortization_years=25, municipal_taxes_annual=3000, school_taxes_annual=300, insurance_monthly=100, condo_fees_monthly=0, rental_income_monthly=2500, other_expenses_monthly=200)\n"
+            "page._show_results(inputs, calculate_analysis(inputs), 'Investisseur locatif')\n"
+        )
+        try:
+            app = AppTest.from_string(source).run(timeout=20)
+            app.text_input(key="saved_property_name").set_value("Dossier de suivi").run(timeout=20)
+            app.button(key="save_analysis").click().run(timeout=20)
+            self.assertIn("activate_saved_dossier_tracking", [button.key for button in app.button])
+            app.session_state["test_price"] = 450000
+            app.run(timeout=20)
+            self.assertNotIn("activate_saved_dossier_tracking", [button.key for button in app.button])
+            app.button(key="save_analysis").click().run(timeout=20)
+            self.assertIn("activate_saved_dossier_tracking", [button.key for button in app.button])
+        finally:
+            page.DATABASE_PATH = original_database_path
+            page.is_authenticated = original_is_authenticated
+            page.current_user = original_current_user
+            page.save_analysis = original_save_analysis
+
+    def test_renewal_date_changes_saved_snapshot_identity(self):
+        """A renewal date affects follow-up and must make a new save possible."""
+        source = (
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "from calculations.real_estate import PropertyInputs\n"
+            "inputs = PropertyInputs(price=400000, down_payment=80000, annual_interest_rate=5, amortization_years=25, municipal_taxes_annual=3000, school_taxes_annual=300, insurance_monthly=100, condo_fees_monthly=0, rental_income_monthly=2500, other_expenses_monthly=200)\n"
+            "st.session_state['signature'] = page._save_snapshot_signature('Dossier test', inputs, 'Investisseur locatif', None, None)\n"
+        )
+        app = AppTest.from_string(source).run(timeout=20)
+        without_renewal = app.session_state["signature"]
+        from datetime import date
+
+        app.session_state["mortgage_renewal_date"] = date(2028, 6, 1)
+        app.run(timeout=20)
+        with_renewal = app.session_state["signature"]
+        self.assertNotEqual(without_renewal, with_renewal)
+        app.session_state["mortgage_renewal_date"] = date(2029, 6, 1)
+        app.run(timeout=20)
+        self.assertNotEqual(with_renewal, app.session_state["signature"])
 
 
 if __name__ == "__main__":

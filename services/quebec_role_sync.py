@@ -1,8 +1,20 @@
 """Controlled official role index parsing; downloads are explicit admin operations only."""
-import csv,hashlib,io
+import csv, hashlib, io, unicodedata
 from datetime import datetime
 INDEX_URL="https://www.mamh.gouv.qc.ca/role/indexRole.csv"
 REQUIRED={"code géographique","nom du territoire","lien","date de modification"}
+
+
+def municipality_key(value: str) -> str:
+ """Normalize typography only; territory matching remains exact after that.
+
+ Accents and incidental repeated spaces are presentation differences in names
+ returned by official services.  We deliberately keep words and punctuation:
+ this helper must never turn a similar municipality into a guessed match.
+ """
+ text=" ".join(str(value or "").split()).casefold()
+ text=unicodedata.normalize("NFD",text)
+ return "".join(char for char in text if not unicodedata.combining(char))
 def parse_index(content:bytes):
  rows=list(csv.DictReader(io.StringIO(content.decode("utf-8-sig"))))
  if not rows or not REQUIRED.issubset(rows[0]): raise ValueError("Index officiel incompatible.")

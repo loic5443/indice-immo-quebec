@@ -1,6 +1,7 @@
 """Focused Streamlit assertions for the unified property summary."""
 
 import unittest
+from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
@@ -38,10 +39,20 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertIn("Créer mon espace gratuit", buttons)
         self.assertIn("Modifier mes chiffres", buttons)
         self.assertIn("Découvrir Premium", buttons)
+        rendered = "\n".join(item.value for item in app.markdown)
+        self.assertIn("Sauvegarde privée possible", rendered)
+        self.assertNotIn("Dossier privé sauvegardé", rendered)
         self.assertEqual(
             [item.label for item in app.tabs],
             ["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"],
         )
+
+    def test_detail_tabs_extend_the_summary_without_repeating_it(self):
+        source = (Path("components") / "property_analysis.py").read_text(encoding="utf-8")
+        results_section = source[source.index("def _show_results"):source.index("def _show_immovalue")]
+        self.assertIn("Les indicateurs essentiels sont déjà résumés plus haut", results_section)
+        self.assertIn("Estimation marchande ImmoValue", results_section)
+        self.assertNotIn('score.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Indisponible")', results_section)
 
     def test_authenticated_summary_makes_saving_the_clear_primary_action(self):
         app = AppTest.from_string(
@@ -56,7 +67,7 @@ class PropertySummaryUiTests(unittest.TestCase):
         ).run(timeout=20)
         buttons = [button.label for button in app.button]
         self.assertIn("Sauvegarder mon dossier", buttons)
-        self.assertIn("Découvrir le suivi Premium", buttons)
+        self.assertIn("Voir les avantages Premium", buttons)
         self.assertIn("Modifier mes chiffres", buttons)
 
     def test_selected_address_prefills_save_name_without_replacing_a_custom_name(self):
@@ -92,6 +103,9 @@ class PropertySummaryUiTests(unittest.TestCase):
         values = {metric.label: metric.value for metric in app.metric}
         self.assertEqual(values["Revenus locatifs"], "Non applicable")
         self.assertEqual(values["Flux de trésorerie"], "Non applicable")
+        scenario_metrics = [metric for metric in app.metric if metric.label in {"Flux mensuel", "Coût mensuel"}]
+        self.assertEqual([metric.label for metric in scenario_metrics], ["Coût mensuel"] * 3)
+        self.assertTrue(all(metric.value != "Non applicable" for metric in scenario_metrics))
 
     def test_value_comparison_explains_the_fiscal_role_limit(self):
         app = AppTest.from_string(
@@ -102,6 +116,38 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertIn("repère fiscal officiel", notices)
         self.assertIn("plus élevée ou plus basse", notices)
         self.assertIn("secteur", notices)
+
+    def test_revealed_role_gives_one_clear_next_step_without_calling_it_market_value(self):
+        app = AppTest.from_string(
+            "import components.property_analysis as page\n"
+            "from calculations.real_estate import PropertyInputs\n"
+            "state = page.prepare_address_submission('123 rue Exemple', 'Ville de test', 'H2Z1A4', consent=True)\n"
+            "lookup = {'consent': True, 'matches': [{'total_value': 400000, 'role_year': 2026}]}\n"
+            "inputs = PropertyInputs(price=0, down_payment=0, annual_interest_rate=0, amortization_years=25, municipal_taxes_annual=0, school_taxes_annual=0, insurance_monthly=0, condo_fees_monthly=0, rental_income_monthly=0, other_expenses_monthly=0)\n"
+            "page._show_dossier_summary(state, lookup, inputs, 'Premier acheteur')\n"
+        ).run(timeout=20)
+        messages = "\n".join([item.value for item in app.info] + [item.value for item in app.caption])
+        self.assertIn("Le rôle municipal est révélé", messages)
+        self.assertIn("trois comparables admissibles", messages)
+        self.assertIn("n’est pas un prix de vente", messages)
+        rendered = "\n".join([item.value for item in app.markdown] + [item.value for item in app.caption])
+        self.assertIn("Pour poursuivre simplement", rendered)
+        self.assertIn("prix demandé est facultatif", rendered)
+
+    def test_saved_immovalue_snapshot_keeps_declared_price_without_an_address(self):
+        app = AppTest.from_string(
+            "import json\n"
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "page.st.session_state['iv_asking'] = 575000\n"
+            "page.st.session_state['workflow_property_type'] = 'Maison'\n"
+            "st.code(json.dumps(page._immovalue_snapshot_for_save({'available': True, 'estimated_value': 560000}), ensure_ascii=False))\n"
+        ).run(timeout=20)
+        payload = app.code[0].value
+        self.assertIn('"asking_price": 575000.0', payload)
+        self.assertIn('"property_type": "Maison"', payload)
+        self.assertNotIn("Adresse", payload)
+        self.assertNotIn('"street"', payload.casefold())
 
     def test_property_stage_collects_an_optional_asking_price_before_finances(self):
         app = AppTest.from_string(
@@ -123,6 +169,45 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertEqual(app.number_input(key="property_price").label, "Prix retenu pour vos calculs ($)")
         captions = "\n".join(item.value for item in app.caption)
         self.assertIn("reste distinct du rôle municipal et d’ImmoValue", captions)
+
+    def test_financial_form_adapts_rental_copy_to_the_selected_objective(self):
+        rental = AppTest.from_string(
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "st.session_state['workflow_objective_choice'] = 'Investir et louer'\n"
+            "page._show_finance_stage()\n"
+        ).run(timeout=20)
+        self.assertEqual(
+            rental.number_input(key="rental_income").label,
+            "Revenus locatifs mensuels prévus ($)",
+        )
+
+        owner = AppTest.from_string(
+            "import streamlit as st\n"
+            "import components.property_analysis as page\n"
+            "st.session_state['workflow_objective_choice'] = 'Acheter pour y habiter'\n"
+            "page._show_finance_stage()\n"
+        ).run(timeout=20)
+        captions = "\n".join(item.value for item in owner.caption)
+        self.assertIn("ne nécessite pas de revenu locatif", captions)
+        self.assertTrue(any(item.label == "Ajouter des revenus locatifs (facultatif)" for item in owner.expander))
+
+    def test_financial_form_uses_plain_language_for_each_project(self):
+        cases = {
+            "Acheter pour y habiter": "Prix d’achat envisagé ($)",
+            "Investir et louer": "Prix d’acquisition envisagé ($)",
+            "Connaître la valeur de ma propriété": "Valeur de référence pour vos chiffres ($)",
+            "Préparer une vente": "Prix de référence pour vos chiffres ($)",
+        }
+        for objective, expected_label in cases.items():
+            with self.subTest(objective=objective):
+                app = AppTest.from_string(
+                    "import streamlit as st\n"
+                    "import components.property_analysis as page\n"
+                    f"st.session_state['workflow_objective_choice'] = {objective!r}\n"
+                    "page._show_finance_stage()\n"
+                ).run(timeout=20)
+                self.assertEqual(app.number_input(key="property_price").label, expected_label)
 
     def test_renewal_date_is_optional_in_advanced_financial_inputs(self):
         app = AppTest.from_string(

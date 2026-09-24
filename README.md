@@ -1,21 +1,29 @@
 # ImmoRadar
 
-Application Streamlit d'aide à l'analyse d'un projet immobilier locatif au Québec et au Canada.
+ImmoRadar aide à comprendre un dossier immobilier : renseignements publics autorisés, valeur municipale, calculs financiers, ImmoScore et suivi des changements vérifiables.
 
-## Architecture
+## Ce que l’application fait
 
-- `data/real_data.py` : données externes récupérées sans secret (taux directeur de la Banque du Canada).
-- `data/simulated_data.py` : indicateurs et tendances d'exemple, explicitement identifiés comme simulés.
-- `calculations/real_estate.py` : validations et formules financières testables.
-- `components/` : interface Streamlit, formulaires et présentation des résultats.
-- `tests/` : tests unitaires des calculs importants.
+- Recherche d’adresse québécoise après consentement explicite.
+- Valeur au rôle municipal lorsqu’un territoire MAMH compatible est disponible. C’est un repère fiscal, pas une valeur marchande.
+- ImmoValue seulement lorsque l’utilisateur fournit au moins trois ventes comparables admissibles et autorisées.
+- Analyse financière, scénarios, ImmoScore, sauvegarde de dossiers et alertes factuelles selon les droits du compte.
 
-## Lancer l'application
+## Données et limites
+
+ImmoRadar ne fabrique pas de prix de vente, de rendement locatif ou de niveau de risque municipal. Les comparaisons de municipalités n’apparaissent que lorsque des indicateurs officiels comparables ont été chargés. Le Référentiel québécois des adresses (RQA) sert à améliorer la recherche d’adresse; le rôle municipal reste disponible territoire par territoire. Les chiffres financiers sont les hypothèses saisies par l’utilisateur.
+
+## Lancer l’application
 
 ```powershell
-.\.venv\Scripts\streamlit.exe run indice_immo.py
+.\.venv\Scripts\python.exe -m streamlit run indice_immo.py --server.port 8501
 ```
 
-## Notes sur les données
+## Repères du projet
 
-Le taux directeur canadien est récupéré en direct lorsque la source est disponible. L'inflation, le chômage et les statistiques de villes sont simulés. Les chiffres saisis dans la fiche d'analyse sont vos propres hypothèses.
+- `components/` : interface et parcours utilisateur.
+- `calculations/` et `domain/` : formules financières et moteurs déterministes testables.
+- `services/`, `repositories/` et `providers/` : règles applicatives, stockage local et sources officielles.
+- `migrations/` : évolution rétrocompatible de SQLite.
+- `docs/` : documentation produit, sources, méthodes et limites.
+- `tests/` : contrôles automatisés du produit et de la confidentialité.

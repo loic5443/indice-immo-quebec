@@ -5,7 +5,7 @@ import streamlit as st
 from components.account import current_user, is_authenticated
 from components.sidebar import go_to
 from data.database import DATABASE_PATH
-from services.entitlements_service import can_use
+from services.entitlements_service import can_use, quota_is_enforced
 from services.premium_interest_service import has_premium_interest, set_premium_interest
 
 
@@ -27,7 +27,22 @@ def _status(label: str, detail: str, state: str = "real") -> None:
     )
 
 
+def _free_estimation_limit(quota_enforced: bool) -> tuple[str, str]:
+    """Describe the actual free quota without promising a disabled beta rule."""
+
+    if quota_enforced:
+        return (
+            "Une estimation ImmoValue complète par mois",
+            "1 complète / mois lorsque calculable",
+        )
+    return (
+        "Quota mensuel désactivé pendant la bêta",
+        "Quota bêta désactivé · estimations lorsque calculables",
+    )
+
+
 def show_premium() -> None:
+    free_limit_copy, free_comparison_copy = _free_estimation_limit(quota_is_enforced(DATABASE_PATH))
     st.markdown(
         "<section class='hero-image-panel premium-hero'><div class='hero-content'>"
         "<p class='hero-eyebrow notranslate'>IMMORADAR PREMIUM</p>"
@@ -70,7 +85,7 @@ def show_premium() -> None:
         st.markdown(
             "<article class='plan-card'><p class='plan-label'>GRATUIT</p><div class='plan-title' role='heading' aria-level='3'>Découvrir une propriété</div>"
             "<p class='plan-price'>0 $ <span>pendant la bêta</span></p>"
-            "<p><b>Une estimation ImmoValue complète par mois</b>, seulement lorsqu’elle est calculable.</p>"
+            f"<p><b>{free_limit_copy}</b>, seulement lorsqu’elle est calculable.</p>"
             "<p>Vous conservez l’analyse financière de base et pouvez ouvrir un dossier clair avant de décider de la suite.</p>"
             "<p class='plan-feature'>✓ <span>Valeur municipale lorsqu’elle est disponible</span></p>"
             "<p class='plan-feature'>✓ <span>Finances et ImmoScore selon vos chiffres</span></p>"
@@ -78,7 +93,7 @@ def show_premium() -> None:
             "<span class='data-pill real'>Disponible</span></article>",
             unsafe_allow_html=True,
         )
-        st.button("Commencer une analyse", type="primary", on_click=go_to, args=("Analyser",), key="premium_start_analysis", use_container_width=True)
+        st.button("Commencer une analyse", type="primary", on_click=go_to, args=("Analyser",), key="premium_start_analysis", width="stretch")
     with premium:
         st.markdown(
             "<article class='plan-card premium-card'><p class='plan-label accent-label'>PREMIUM</p><div class='plan-title' role='heading' aria-level='3'>Suivre vos décisions</div>"
@@ -101,10 +116,9 @@ def show_premium() -> None:
         st.markdown("<div class='subsection-title' role='heading' aria-level='3'>Disponible avec l’accès Premium bêta</div>", unsafe_allow_html=True)
         _status("Disponible", "Estimations ImmoValue illimitées lorsque trois comparables admissibles sont fournis.")
         _status("Disponible", "Comparaison de dossiers sauvegardés, scénarios et rapport PDF complet.")
-        _status("Disponible", "Suivi local de changements réellement calculables. Aucun courriel n’est envoyé pendant la bêta.")
+        _status("Disponible", "Suivi de changements réellement calculables. Les avis par courriel restent facultatifs et exigent un consentement séparé.")
     with future:
         st.markdown("<div class='subsection-title' role='heading' aria-level='3'>En préparation</div>", unsafe_allow_html=True)
-        _status("Bientôt disponible", "Alertes de suivi actives par courriel ou autre canal, seulement avec votre consentement.", "simulated")
         _status("Bientôt disponible", "Données enrichies et radar des occasions, après validation de chaque source.", "simulated")
         _status("Bientôt disponible", "Comparaisons municipales plus larges lorsque des données officielles comparables sont disponibles.", "simulated")
 
@@ -113,7 +127,7 @@ def show_premium() -> None:
     free_header.caption("Gratuit")
     premium_header.caption("Premium")
     for values in (
-        ("Estimations ImmoValue", "1 complète / mois lorsque calculable", "Illimitées lorsque calculables"),
+        ("Estimations ImmoValue", free_comparison_copy, "Illimitées lorsque calculables"),
         ("Dossiers", "Repères essentiels", "Historique et instantanés complets"),
         ("Comparaison", "Aperçu utile", "Lecture détaillée de deux dossiers"),
         ("Scénarios et rapport", "Calculs essentiels", "Scénarios sauvegardés et PDF complet"),

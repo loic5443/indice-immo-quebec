@@ -32,11 +32,11 @@ class AlertsUiTests(unittest.TestCase):
         self.assertIn("Suivi des changements vérifiables", text)
         self.assertNotIn("fragilise le flux", text)
 
-    def test_premium_account_sees_calculable_alert_without_email(self):
+    def test_premium_account_sees_calculable_alert_with_clear_email_consent_copy(self):
         app = self._app("premium")
         self.assertFalse(app.exception)
         self.assertIn("Une hausse de taux fragilise le flux mensuel", [item.value for item in app.subheader])
-        self.assertTrue(any("Aucun courriel" in item.value for item in app.caption))
+        self.assertTrue(any("accord Premium" in item.value for item in app.caption))
 
     def test_empty_premium_tracking_explains_what_is_and_is_not_monitored(self):
         app = AppTest.from_string(
@@ -55,6 +55,12 @@ class AlertsUiTests(unittest.TestCase):
         text = " ".join(item.value for item in app.markdown) + " ".join(item.value for item in app.success)
         self.assertIn("aucun changement vérifiable", text)
         self.assertIn("ImmoRadar ne crée pas de notification", text)
+
+    def test_premium_alert_center_links_directly_to_email_preferences(self):
+        app = self._app("premium")
+        self.assertIn("Gérer mes alertes par courriel", [button.label for button in app.button])
+        app.button(key="manage_email_alerts").click().run(timeout=20)
+        self.assertEqual(app.session_state["main_navigation"], "Mon compte")
 
     def test_alert_can_reopen_only_its_own_saved_dossier(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -81,7 +87,7 @@ class AlertsUiTests(unittest.TestCase):
                     f"page.show_alert_center({user!r}, {[analysis]!r})\n"
                 )
                 app = AppTest.from_string(source).run(timeout=20)
-                app.button(key=f"alert_open_{analysis_id}").click().run(timeout=20)
+                app.button(key=f"alert_open_{analysis_id}_rate_sensitivity").click().run(timeout=20)
                 self.assertEqual(app.session_state["main_navigation"], "Analyser")
                 self.assertEqual(app.session_state["analysis_reopen_pending"]["owner_id"], user["id"])
             finally:

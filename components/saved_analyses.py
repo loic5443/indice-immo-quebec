@@ -31,6 +31,32 @@ def _money(value: float) -> str:
     return f"{value:,.0f} $".replace(",", " ")
 
 
+def _saved_financial_presentation(analysis: dict) -> dict[str, str | bool]:
+    """Label an immutable snapshot without treating missing rent as a rental loss."""
+    try:
+        inputs = json.loads(analysis.get("financial_inputs_json") or "{}")
+    except (TypeError, json.JSONDecodeError):
+        inputs = {}
+    if not isinstance(inputs, dict):
+        inputs = {}
+    rental = inputs.get("rental_income_monthly", analysis.get("rental_income", 0))
+    other = inputs.get("other_income_monthly", 0)
+    declared_income = sum(
+        float(value) for value in (rental, other)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+    )
+    has_income = declared_income > 0
+    monthly = analysis.get("cash_flow") if has_income else analysis.get("monthly_expenses")
+    dscr = analysis.get("debt_service_coverage_ratio")
+    return {
+        "monthly_label": "Flux mensuel" if has_income else "Coût mensuel",
+        "monthly_value": _money(monthly) if isinstance(monthly, (int, float)) else "Non disponible",
+        "income_value": _money(declared_income) if has_income else "Non applicable",
+        "dscr_value": f"{dscr:.2f}x" if has_income and isinstance(dscr, (int, float)) else "Non applicable",
+        "has_income": has_income,
+    }
+
+
 def _comparison_value(key: str, value: float | None) -> str:
     """Format a stored value without replacing an absence with a misleading zero."""
     if value is None:
@@ -60,6 +86,26 @@ def _saved_asking_price(analysis: dict) -> float | None:
         return None
 
 
+def _saved_immovalue(analysis: dict) -> dict | None:
+    """Return an actual saved ImmoValue result, never a reconstructed one."""
+
+    try:
+        payload = json.loads(analysis.get("immovalue_json") or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or not payload.get("available"):
+        return None
+    estimated = payload.get("estimated_value")
+    if not isinstance(estimated, (int, float)) or isinstance(estimated, bool):
+        return None
+    return {
+        "estimated_value": float(estimated),
+        "low": payload.get("low") if isinstance(payload.get("low"), (int, float)) else None,
+        "high": payload.get("high") if isinstance(payload.get("high"), (int, float)) else None,
+        "confidence": payload.get("confidence") if isinstance(payload.get("confidence"), (int, float)) else None,
+    }
+
+
 def _saved_official_role(analysis: dict) -> dict | None:
     """Read a public fiscal snapshot without treating it as market value."""
 
@@ -87,6 +133,39 @@ def _snapshot_history_rows(snapshots: tuple[dict, ...]) -> list[dict[str, str]]:
             "Rôle municipal": _money(role["total_value"]) if role else "Non disponible",
         })
     return rows
+
+
+def _show_saved_value_context(analysis: dict) -> None:
+    """Put saved fiscal, market and declared values side by side honestly."""
+
+    official_role = _saved_official_role(analysis)
+    immovalue = _saved_immovalue(analysis)
+    asking_price = _saved_asking_price(analysis)
+    st.markdown("**Repères de valeur**")
+    official, market, asking = st.columns(3)
+    with official:
+        st.metric(
+            "Valeur au rôle municipal",
+            _money(official_role["total_value"]) if official_role else "Non disponible",
+        )
+        if official_role:
+            st.caption(f"Repère fiscal officiel · rôle {official_role.get('role_year') or 'année non publiée'}")
+        else:
+            st.caption("Aucune valeur officielle n’a été sauvegardée.")
+    with market:
+        st.metric(
+            "Estimation ImmoValue",
+            _money(immovalue["estimated_value"]) if immovalue else "Non produite",
+        )
+        if immovalue and immovalue["low"] is not None and immovalue["high"] is not None:
+            confidence = f" · confiance {immovalue['confidence']:.0f} / 100" if immovalue["confidence"] is not None else ""
+            st.caption(f"Fourchette : {_money(immovalue['low'])} à {_money(immovalue['high'])}{confidence}")
+        else:
+            st.caption("Disponible seulement après trois comparables admissibles.")
+    with asking:
+        st.metric("Prix demandé déclaré", _money(asking_price) if asking_price is not None else "Non ajouté")
+        st.caption("Montant saisi par vous, distinct des deux autres repères.")
+    st.caption("La valeur au rôle municipal est un repère fiscal; ImmoValue est une estimation expérimentale. Aucun des deux ne devient automatiquement votre prix retenu.")
 
 
 def _filter_saved_analyses(
@@ -166,6 +245,78 @@ def _tracking_overview(analyses: list[dict]) -> dict[str, int]:
     }
 
 
+def _dossier_tracking_summary(
+    snapshots: list[dict], *, followed: bool, email_consent: bool,
+) -> dict[str, object]:
+    """Describe only factual, owner-visible follow-up status for one dossier.
+
+    A tracking choice is useful only when the person can see what it means:
+    one snapshot is a starting point, while two snapshots can establish an
+    actual change.  The helper reads immutable snapshots only and never
+    refreshes a source, recalculates an analysis, or creates an alert.
+    """
+
+    calculable = build_calculable_alerts(snapshots) if followed else []
+    if not followed:
+        state = "inactive"
+        message = "Le suivi n’est pas encore activé pour ce dossier."
+    elif calculable:
+        state = "attention"
+        message = f"{len(calculable)} changement(s) vérifiable(s) sont disponibles."
+    elif len(snapshots) < 2:
+        state = "waiting"
+        message = "Le suivi est actif. Sauvegardez une nouvelle version plus tard pour pouvoir comparer ce qui a changé."
+    else:
+        state = "current"
+        message = "Le suivi est actif. Aucun changement vérifiable n’est détecté entre les instantanés sauvegardés."
+    return {
+        "state": state,
+        "message": message,
+        "alerts": calculable,
+        "snapshot_count": len(snapshots),
+        "email_consent": bool(email_consent),
+    }
+
+
+def _show_dossier_tracking_status(
+    user: dict, snapshots: list[dict], *, followed: bool,
+) -> None:
+    """Render one compact, honest follow-up card near a saved dossier."""
+
+    entitled = can_use(user, "alerts")
+    summary = _dossier_tracking_summary(
+        snapshots,
+        followed=followed,
+        email_consent=bool(user.get("alert_email_consent")),
+    )
+    with st.container(border=True):
+        st.markdown("**Suivi de ce dossier**")
+        if not entitled:
+            st.caption("Aperçu Premium · Le suivi compare uniquement les instantanés sauvegardés et affiche seulement les changements vérifiables.")
+            return
+        state = str(summary["state"])
+        if state == "attention":
+            st.warning(str(summary["message"]))
+            for alert in list(summary["alerts"])[:2]:
+                st.write(f"• {alert['title']}")
+        elif state == "waiting":
+            st.info(str(summary["message"]))
+        elif state == "current":
+            st.success(str(summary["message"]))
+        else:
+            st.caption(str(summary["message"]))
+        if followed:
+            snapshot_count = int(summary["snapshot_count"])
+            st.caption(
+                f"{snapshot_count} instantané(s) sauvegardé(s) · "
+                + (
+                    "avis par courriel autorisés pour ce compte."
+                    if bool(summary["email_consent"])
+                    else "les avis par courriel restent désactivés pour ce compte."
+                )
+            )
+
+
 def _show_comparison_metric(label: str, value_a: str, value_b: str, relation: str | None = None) -> None:
     """Keep each indicator narrow and readable on a phone."""
     with st.container(border=True):
@@ -202,7 +353,7 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
         selected_b = st.selectbox("Propriété B", ids, index=1, format_func=labels.__getitem__, key="comparison_property_b")
     with reset:
         st.write("")
-        if st.button("Réinitialiser", key="comparison_reset", use_container_width=True):
+        if st.button("Réinitialiser", key="comparison_reset", width="stretch"):
             st.session_state.pop("comparison_property_a", None)
             st.session_state.pop("comparison_property_b", None)
             st.rerun()
@@ -242,7 +393,7 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
     st.download_button(
         "Télécharger le rapport comparatif PDF", generate_comparison_report_pdf(comparison),
         file_name="immoradar-comparaison.pdf", mime="application/pdf",
-        key="comparison_pdf", use_container_width=True,
+        key="comparison_pdf", width="stretch",
     )
     for item in comparison["indicators"]:
         value_a = _comparison_value(item["key"], item["a"])
@@ -284,11 +435,22 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
 def show_saved_analyses() -> None:
     """Show the active user's saved analyses and management actions."""
     st.markdown("<p class='eyebrow'>VOS DOSSIERS</p>", unsafe_allow_html=True)
-    st.title("Mes propriétés")
+    st.html("<h1>Mes propriétés</h1>")
     st.markdown("<p class='section-intro'>Retrouvez vos dossiers sauvegardés, leurs points de repère et le suivi disponible.</p>", unsafe_allow_html=True)
     if not is_authenticated():
-        st.info("Connectez-vous pour consulter et sauvegarder vos analyses.")
-        st.button("Ouvrir Mon compte", type="primary", on_click=go_to, args=("Mon compte",))
+        st.markdown(
+            "<div class='account-summary'><p class='eyebrow'>VOTRE ESPACE IMMORADAR</p>"
+            "<div class='notice-title' role='heading' aria-level='2'>Gardez les décisions qui méritent d’être suivies.</div>"
+            "<p>Un espace gratuit vous permet de conserver votre dossier après une analyse et de le retrouver "
+            "avec les mêmes chiffres. Le suivi et les comparaisons détaillées restent des avantages Premium.</p>"
+            "<div class='next-step-benefits'>"
+            "<span>✓ Dossiers privés sauvegardés</span>"
+            "<span>✓ Retrouver vos scénarios</span>"
+            "<span>🔒 Suivi factuel et comparaisons Premium</span>"
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
+        st.button("Créer mon espace gratuit", type="primary", on_click=go_to, args=("Mon compte",), width="stretch")
         return
 
     user = current_user()
@@ -302,7 +464,7 @@ def show_saved_analyses() -> None:
             "la synthèse pour y revenir, la comparer ou la suivre.</p></div>",
             unsafe_allow_html=True,
         )
-        st.button("Créer mon premier dossier", type="primary", on_click=go_to, args=("Analyser",), use_container_width=True)
+        st.button("Créer mon premier dossier", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
         show_alert_center(user, analyses)
         return
 
@@ -317,8 +479,8 @@ def show_saved_analyses() -> None:
     followed_column.metric("Suivis", followed_count)
     with action_column:
         st.write("")
-        st.button("Créer un nouveau dossier", type="primary", on_click=go_to, args=("Analyser",), key="saved_new_analysis", use_container_width=True)
-    st.caption(f"{followed_count} dossier(s) suivi(s) · Les favoris apparaissent en premier. Le suivi lit uniquement les instantanés sauvegardés et n’envoie aucun courriel pendant la bêta.")
+        st.button("Créer un nouveau dossier", type="primary", on_click=go_to, args=("Analyser",), key="saved_new_analysis", width="stretch")
+    st.caption(f"{followed_count} dossier(s) suivi(s) · Les favoris apparaissent en premier. Le suivi lit uniquement les instantanés sauvegardés. Les courriels restent optionnels et exigent votre accord dans Mon compte.")
     if can_use(user, "alerts"):
         overview = _tracking_overview(tracked_analyses)
         st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>SUIVI ACTIF</p><h2>Ce qui mérite votre attention</h2>", unsafe_allow_html=True)
@@ -326,7 +488,7 @@ def show_saved_analyses() -> None:
         all_alerts.metric("Alertes calculables", overview["total"])
         important_alerts.metric("À vérifier", overview["important"])
         updates.metric("Mises à jour", overview["updates"])
-        st.caption("Ces compteurs lisent uniquement vos instantanés suivis. Ils ne prévoient rien et ne déclenchent aucun envoi.")
+        st.caption("Ces compteurs lisent uniquement vos instantanés suivis. Ils ne prévoient rien. Si vous avez activé le consentement courriel, les nouvelles alertes vérifiables peuvent déclencher un avis générique.")
     _show_property_comparator(user, analyses)
     history_by_id = snapshot_positions(analyses)
     st.markdown("<div class='section-space compact-space'></div><h2>Vos dossiers</h2>", unsafe_allow_html=True)
@@ -339,7 +501,7 @@ def show_saved_analyses() -> None:
         sort_by = st.selectbox("Trier", ["Favoris puis récents", "Plus récent", "Plus ancien", "Score le plus élevé"], key="saved_analysis_sort")
     with reset_column:
         st.write("")
-        st.button("Effacer", key="reset_saved_analysis_filters", on_click=_reset_saved_analysis_filters, use_container_width=True)
+        st.button("Effacer", key="reset_saved_analysis_filters", on_click=_reset_saved_analysis_filters, width="stretch")
     displayed_analyses = _filter_saved_analyses(analyses, query, scope, sort_by, tracked_fingerprints, user["id"])
     st.caption(f"{len(displayed_analyses)} dossier(s) affiché(s). La recherche reste dans cette session et n’est jamais envoyée à un service externe.")
     if not displayed_analyses:
@@ -349,6 +511,8 @@ def show_saved_analyses() -> None:
         label = f"{favorite}  {analysis['property_name']} · dernière mise à jour {analysis['created_at'][:10]}"
         with st.expander(label):
             history = history_by_id.get(int(analysis["id"]))
+            fingerprint = dossier_fingerprint(user["id"], analysis["property_name"])
+            followed = fingerprint in tracked_fingerprints
             if history and history.total > 1:
                 status = "Dernier instantané" if history.is_latest else f"Instantané {history.position}"
                 st.caption(
@@ -359,29 +523,30 @@ def show_saved_analyses() -> None:
                     st.markdown("**Historique des instantanés**")
                     st.dataframe(_snapshot_history_rows(history.snapshots), hide_index=True, width="stretch")
                     st.caption("Les montants et scores sont ceux sauvegardés à chaque date. Une donnée absente reste non disponible.")
+            snapshots = list(history.snapshots) if history else [analysis]
+            _show_dossier_tracking_status(user, snapshots, followed=followed)
+            _show_saved_value_context(analysis)
+            financial_display = _saved_financial_presentation(analysis)
             first, second, third = st.columns(3)
-            first.metric("Prix analysé", _money(analysis["price"]))
-            second.metric("Flux mensuel", _money(analysis["cash_flow"]))
+            first.metric("Prix retenu pour les calculs", _money(analysis["price"]))
+            second.metric(financial_display["monthly_label"], financial_display["monthly_value"])
             third.metric("Score ImmoRadar", f"{analysis['immo_score']:.0f} / 100" if analysis["immo_score"] is not None else "Indisponible")
             st.markdown(
                 f"**Date :** {analysis['created_at']}  \n"
                 f"**Mise de fonds :** {_money(analysis['down_payment'])}  \n"
-                f"**Revenus mensuels :** {_money(analysis['rental_income'])}  \n"
+                f"**Revenus mensuels déclarés :** {financial_display['income_value']}  \n"
                 f"**Dépenses mensuelles :** {_money(analysis['monthly_expenses'])}  \n"
-                f"**Couverture de dette :** {analysis['debt_service_coverage_ratio']:.2f}x  \n"
+                f"**Couverture de dette :** {financial_display['dscr_value']}  \n"
                 f"**Moteur :** {analysis['engine_version']}  \n"
                 f"**Provenance :** {analysis['data_provenance']}"
             )
-            asking_price = _saved_asking_price(analysis)
-            if asking_price is not None:
-                st.caption(f"Prix demandé déclaré : {_money(asking_price)} · distinct de la valeur municipale et d’ImmoValue.")
             official_role = _saved_official_role(analysis)
             if official_role:
                 reference = official_role.get("reference_date") or "date de référence non publiée"
                 st.caption(
-                    f"Valeur au rôle municipal sauvegardée : {_money(official_role['total_value'])} · "
-                    f"rôle {official_role.get('role_year') or 'année non publiée'} · {reference}. "
-                    "Repère fiscal officiel, distinct d’une valeur marchande."
+                    f"Source de la valeur au rôle : MAMH / Données Québec · "
+                    f"rôle {official_role.get('role_year') or 'année non publiée'} · date de référence {reference} · "
+                    "licence CC BY 4.0."
                 )
             if analysis["immo_score"] is not None:
                 st.markdown(
@@ -403,9 +568,16 @@ def show_saved_analyses() -> None:
             resilience = json.loads(analysis.get("resilience_json", "{}"))
             if scenarios:
                 st.markdown("**Scénarios sauvegardés**")
+                scenario_amount = "cash_flow_monthly" if financial_display["has_income"] else "total_monthly_expenses"
                 st.dataframe([
-                    {"Scénario": item["name"], "Flux mensuel": _money(item["financial"]["cash_flow_monthly"]),
-                     "DSCR": f"{item['financial']['debt_service_coverage_ratio']:.2f}x", "Verdict": item["engine"]["verdict"]}
+                    {"Scénario": item["name"], financial_display["monthly_label"]: (
+                        _money(item["financial"][scenario_amount])
+                        if isinstance(item.get("financial", {}).get(scenario_amount), (int, float))
+                        else "Non disponible"
+                    ), "DSCR": (
+                        f"{item['financial']['debt_service_coverage_ratio']:.2f}x"
+                        if financial_display["has_income"] else "Non applicable"
+                    ), "Verdict": item["engine"]["verdict"]}
                     for item in scenarios
                 ], hide_index=True, width="stretch")
             if resilience:
@@ -419,7 +591,7 @@ def show_saved_analyses() -> None:
                 st.download_button(
                     "Télécharger le rapport PDF", generate_report_pdf(analysis),
                     file_name=f"immoradar-analyse-{analysis['id']}.pdf", mime="application/pdf",
-                    key=f"pdf_{analysis['id']}", use_container_width=True,
+                    key=f"pdf_{analysis['id']}", width="stretch",
                 )
             else:
                 show_premium_teaser(
@@ -429,7 +601,7 @@ def show_saved_analyses() -> None:
                     key=f"report_premium_{analysis['id']}",
                 )
             open_column, follow_column, favorite_column, delete_column = st.columns(4)
-            if open_column.button("Ouvrir et modifier", key=f"reopen_{analysis['id']}", use_container_width=True):
+            if open_column.button("Ouvrir et modifier", key=f"reopen_{analysis['id']}", width="stretch"):
                 try:
                     st.session_state["analysis_reopen_pending"] = prepare_reopen_draft(
                         user["id"], int(analysis["id"]), DATABASE_PATH,
@@ -439,11 +611,9 @@ def show_saved_analyses() -> None:
                 else:
                     go_to("Analyser")
                     st.rerun()
-            fingerprint = dossier_fingerprint(user["id"], analysis["property_name"])
-            followed = fingerprint in tracked_fingerprints
             if can_use(user, "alerts"):
                 follow_label = "Arrêter le suivi" if followed else "Suivre ce dossier"
-                if follow_column.button(follow_label, key=f"follow_{analysis['id']}", use_container_width=True):
+                if follow_column.button(follow_label, key=f"follow_{analysis['id']}", width="stretch"):
                     try:
                         set_dossier_tracking(user["id"], int(analysis["id"]), not followed, DATABASE_PATH)
                     except DossierTrackingAccessError:
@@ -452,9 +622,9 @@ def show_saved_analyses() -> None:
                         _set_action_feedback("Suivi activé." if not followed else "Suivi arrêté.")
                         st.rerun()
             else:
-                follow_column.button("Suivi Premium", key=f"follow_locked_{analysis['id']}", disabled=True, use_container_width=True)
+                follow_column.button("Suivi Premium", key=f"follow_locked_{analysis['id']}", disabled=True, width="stretch")
             favorite_label = "Retirer des favoris" if analysis["is_favorite"] else "Ajouter aux favoris"
-            if favorite_column.button(favorite_label, key=f"favorite_{analysis['id']}", use_container_width=True):
+            if favorite_column.button(favorite_label, key=f"favorite_{analysis['id']}", width="stretch"):
                 toggle_favorite(user["id"], analysis["id"], DATABASE_PATH)
                 _set_action_feedback("Dossier ajouté aux favoris." if not analysis["is_favorite"] else "Dossier retiré des favoris.")
                 st.rerun()
@@ -467,17 +637,17 @@ def show_saved_analyses() -> None:
             if deletion_requested:
                 delete_column.warning("Confirmer la suppression de ce dossier et de son historique ?")
                 confirm, cancel = delete_column.columns(2)
-                if confirm.button("Confirmer", key=f"confirm_delete_{analysis['id']}", type="primary", use_container_width=True):
+                if confirm.button("Confirmer", key=f"confirm_delete_{analysis['id']}", type="primary", width="stretch"):
                     if delete_analysis(user["id"], analysis["id"], DATABASE_PATH):
                         _cancel_analysis_deletion()
                         _set_action_feedback("Dossier supprimé.")
                         st.rerun()
                     else:
                         st.error("Ce dossier n’est plus disponible dans votre espace.")
-                if cancel.button("Annuler", key=f"cancel_delete_{analysis['id']}", use_container_width=True):
+                if cancel.button("Annuler", key=f"cancel_delete_{analysis['id']}", width="stretch"):
                     _cancel_analysis_deletion()
                     st.rerun()
-            elif delete_column.button("Supprimer", key=f"delete_{analysis['id']}", use_container_width=True):
+            elif delete_column.button("Supprimer", key=f"delete_{analysis['id']}", width="stretch"):
                 _request_analysis_deletion(user["id"], analysis["id"])
                 st.rerun()
     show_alert_center(user, tracked_analyses, tracking_configured=True)

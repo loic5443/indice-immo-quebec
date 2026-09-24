@@ -15,4 +15,4 @@ def show_premium_teaser(*, feature: str, title: str, detail: str, key: str) -> N
         "<p class='premium-conversion-note'>Aucun paiement n’est demandé pendant la bêta privée.</p></section>",
         unsafe_allow_html=True,
     )
-    st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key=key, use_container_width=True)
+    st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key=key, width="stretch")

@@ -6,9 +6,8 @@ from streamlit.testing.v1 import AppTest
 
 
 class AccountPreferencesUiTests(unittest.TestCase):
-    def _app(self):
-        return AppTest.from_string(
-            '''
+    def _app(self, alerts_available=True):
+        source = '''
 import streamlit as st
 import components.account as page
 user = {
@@ -25,14 +24,16 @@ original_quota_is_enforced = page.quota_is_enforced
 original_quota_status = page.quota_status
 original_can_use = page.can_use
 original_export_user_data = page.export_user_data
+original_alert_email_delivery_status = page.alert_email_delivery_status
 try:
     page.is_authenticated = lambda: True
     page.current_user = lambda: user
     page.count_analyses = lambda _user_id: 0
     page.quota_is_enforced = lambda _database_path: False
     page.quota_status = lambda *_args: {"label": "1 estimation complète restante ce mois-ci"}
-    page.can_use = lambda *_args: True
+    page.can_use = lambda *_args: __ALERTS_AVAILABLE__
     page.export_user_data = lambda *_args: b"{}"
+    page.alert_email_delivery_status = lambda *_args: {"consent": False, "readiness": "ready", "latest_outcome": None, "latest_at": None}
     page.progress = lambda _user_id, _database_path, **values: st.session_state.__setitem__("account_preference_capture", values)
     page.show_account()
 finally:
@@ -44,7 +45,10 @@ finally:
     page.quota_status = original_quota_status
     page.can_use = original_can_use
     page.export_user_data = original_export_user_data
+    page.alert_email_delivery_status = original_alert_email_delivery_status
 '''
+        return AppTest.from_string(
+            source.replace("__ALERTS_AVAILABLE__", "True" if alerts_available else "False")
         ).run(timeout=20)
 
     def test_preferences_are_saved_explicitly_for_future_analyses(self):
@@ -71,6 +75,27 @@ finally:
         app.button(key="save_account_preferences").click().run(timeout=20)
         self.assertIn("Choisissez un profil et un objectif principal.", [item.value for item in app.error])
         self.assertNotIn("account_preference_capture", app.session_state)
+
+    def test_alert_email_choice_is_visible_separately_from_analysis_preferences(self):
+        app = self._app()
+        labels = [item.label for item in app.checkbox]
+        self.assertIn("Recevoir les alertes de mes dossiers par courriel (Premium)", labels)
+        self.assertIn("Enregistrer mon choix d’alerte", [item.label for item in app.button])
+        self.assertTrue(any("Livraison configurée" in item.value for item in app.caption))
+
+    def test_optional_horizon_and_risk_do_not_leave_empty_profile_fragments(self):
+        app = self._app()
+        markup = " ".join(item.value for item in app.markdown)
+        self.assertIn("Profil : <b>Premier acheteur</b>", markup)
+        self.assertNotIn("· · risque", markup)
+        self.assertNotIn("risque </p>", markup)
+
+    def test_free_account_sees_an_honest_premium_alert_preview_not_a_broken_checkbox(self):
+        app = self._app(alerts_available=False)
+        self.assertNotIn("Recevoir les alertes de mes dossiers par courriel (Premium)", [item.label for item in app.checkbox])
+        self.assertIn("Découvrir les alertes Premium", [item.label for item in app.button])
+        text = "\n".join([item.value for item in app.markdown] + [item.value for item in app.caption])
+        self.assertIn("APERÇU PREMIUM", text)
 
 
 if __name__ == "__main__":

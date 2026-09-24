@@ -2,11 +2,44 @@
 
 import unittest
 
-from components.saved_analyses import _filter_saved_analyses, _saved_official_role, _snapshot_history_rows, _tracking_overview
+from components.saved_analyses import (
+    _dossier_tracking_summary,
+    _filter_saved_analyses,
+    _saved_immovalue,
+    _saved_financial_presentation,
+    _saved_official_role,
+    _snapshot_history_rows,
+    _tracking_overview,
+)
 from services.dossier_tracking_service import dossier_fingerprint
+from streamlit.testing.v1 import AppTest
 
 
 class SavedAnalysisFiltersTests(unittest.TestCase):
+    def test_owner_occupied_dossier_does_not_present_rental_ratios_as_results(self):
+        snapshot = {
+            "rental_income": 0, "cash_flow": -2211, "monthly_expenses": 2211,
+            "debt_service_coverage_ratio": -0.19,
+            "financial_inputs_json": '{"rental_income_monthly": 0, "other_income_monthly": 0}',
+        }
+        display = _saved_financial_presentation(snapshot)
+        self.assertEqual(display["monthly_label"], "Coût mensuel")
+        self.assertEqual(display["monthly_value"], "2 211 $")
+        self.assertEqual(display["income_value"], "Non applicable")
+        self.assertEqual(display["dscr_value"], "Non applicable")
+
+    def test_saved_rental_income_keeps_cash_flow_and_debt_coverage(self):
+        snapshot = {
+            "rental_income": 3000, "cash_flow": 789, "monthly_expenses": 2211,
+            "debt_service_coverage_ratio": 1.40,
+            "financial_inputs_json": '{"rental_income_monthly": 3000, "other_income_monthly": 0}',
+        }
+        display = _saved_financial_presentation(snapshot)
+        self.assertEqual(display["monthly_label"], "Flux mensuel")
+        self.assertEqual(display["monthly_value"], "789 $")
+        self.assertEqual(display["income_value"], "3 000 $")
+        self.assertEqual(display["dscr_value"], "1.40x")
+
     def setUp(self):
         self.user_id = 7
         self.analyses = [
@@ -34,12 +67,95 @@ class SavedAnalysisFiltersTests(unittest.TestCase):
         }
         self.assertEqual(_tracking_overview([analysis]), {"total": 1, "important": 1, "updates": 0})
 
+    def test_dossier_tracking_status_distinguishes_waiting_from_a_real_alert(self):
+        single = {
+            "id": 1, "property_name": "Projet Alpha", "created_at": "2026-02-01",
+            "cash_flow": 100, "immovalue_json": "{}", "official_role_snapshot_json": "{}", "resilience_json": "{}",
+        }
+        waiting = _dossier_tracking_summary([single], followed=True, email_consent=False)
+        self.assertEqual(waiting["state"], "waiting")
+        self.assertFalse(waiting["alerts"])
+        self.assertIn("nouvelle version", waiting["message"])
+
+        current = {**single, "id": 2, "created_at": "2026-03-01"}
+        unchanged = _dossier_tracking_summary([current, single], followed=True, email_consent=True)
+        self.assertEqual(unchanged["state"], "current")
+        self.assertTrue(unchanged["email_consent"])
+
+        sensitive = {
+            **current,
+            "resilience_json": '{"tests": [{"name": "Taux +1 point", "financial": {"cash_flow_monthly": -25}}]}',
+        }
+        attention = _dossier_tracking_summary([sensitive], followed=True, email_consent=True)
+        self.assertEqual(attention["state"], "attention")
+        self.assertEqual(attention["alerts"][0]["kind"], "rate_sensitivity")
+
+    def test_dossier_tracking_inactive_never_implies_an_alert(self):
+        summary = _dossier_tracking_summary([], followed=False, email_consent=True)
+        self.assertEqual(summary["state"], "inactive")
+        self.assertEqual(summary["alerts"], [])
+
+    def test_guest_saved_dossiers_page_explains_the_account_value_without_inventing_data(self):
+        app = AppTest.from_string(
+            "import components.saved_analyses as page\n"
+            "original = page.is_authenticated\n"
+            "try:\n"
+            "    page.is_authenticated = lambda: False\n"
+            "    page.show_saved_analyses()\n"
+            "finally:\n"
+            "    page.is_authenticated = original\n"
+        ).run(timeout=20)
+        self.assertFalse(app.exception)
+        text = " ".join(item.value for item in app.markdown)
+        self.assertIn("Dossiers privés sauvegardés", text)
+        self.assertIn("Suivi factuel et comparaisons Premium", text)
+        self.assertEqual([button.label for button in app.button], ["Créer mon espace gratuit"])
+
+    def test_saved_dossier_shows_a_clear_follow_up_state_in_the_interface(self):
+        app = AppTest.from_string(
+            "import components.saved_analyses as page\n"
+            "user = {'plan': 'premium', 'role': 'user', 'alert_email_consent': 0}\n"
+            "snapshot = {'id': 1, 'property_name': 'Dossier test', 'created_at': '2026-02-01', 'cash_flow': 100, 'immovalue_json': '{}', 'official_role_snapshot_json': '{}', 'resilience_json': '{}'}\n"
+            "page._show_dossier_tracking_status(user, [snapshot], followed=True)\n"
+        ).run(timeout=20)
+        self.assertFalse(app.exception)
+        text = " ".join(
+            item.value
+            for items in (app.markdown, app.info, app.caption)
+            for item in items
+        )
+        self.assertIn("Suivi de ce dossier", text)
+        self.assertIn("nouvelle version", text)
+        self.assertIn("désactivés", text)
+
     def test_saved_official_role_remains_a_fiscal_snapshot(self):
         snapshot = _saved_official_role({
             "official_role_snapshot_json": '{"total_value": 404100, "role_year": 2026, "reference_date": "2026-01-01"}',
         })
         self.assertEqual(snapshot["total_value"], 404_100)
         self.assertIsNone(_saved_official_role({"official_role_snapshot_json": "{}"}))
+
+    def test_saved_immovalue_reads_only_a_real_completed_snapshot(self):
+        value = _saved_immovalue({
+            "immovalue_json": '{"available": true, "estimated_value": 425000, "low": 400000, "high": 450000, "confidence": 62}',
+        })
+        self.assertEqual(value["estimated_value"], 425_000)
+        self.assertEqual(value["low"], 400_000)
+        self.assertEqual(value["high"], 450_000)
+        self.assertEqual(value["confidence"], 62)
+        self.assertIsNone(_saved_immovalue({"immovalue_json": '{"available": false}'}))
+        self.assertIsNone(_saved_immovalue({"immovalue_json": '{"estimated_value": 425000}'}))
+
+    def test_saved_dossier_shows_three_value_references_without_confusing_them(self):
+        app = AppTest.from_string(
+            "import components.saved_analyses as page\n"
+            "page._show_saved_value_context({'immovalue_json': '{\\\"available\\\": true, \\\"estimated_value\\\": 425000, \\\"low\\\": 400000, \\\"high\\\": 450000, \\\"confidence\\\": 62, \\\"subject\\\": {\\\"asking_price\\\": 440000}}', 'official_role_snapshot_json': '{\\\"total_value\\\": 404100, \\\"role_year\\\": 2026}'})\n"
+        ).run(timeout=20)
+        labels = [metric.label for metric in app.metric]
+        self.assertEqual(labels, ["Valeur au rôle municipal", "Estimation ImmoValue", "Prix demandé déclaré"])
+        text = "\n".join(item.value for item in app.caption)
+        self.assertIn("Repère fiscal officiel", text)
+        self.assertIn("estimation expérimentale", text)
 
     def test_snapshot_history_uses_only_saved_values_and_marks_absences(self):
         rows = _snapshot_history_rows((

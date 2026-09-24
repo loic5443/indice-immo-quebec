@@ -1,8 +1,10 @@
 """Consent-first suggestions from the official MRNF Adresses Québec geocoder.
 
 Only the request needed by the user is sent to MRNF after explicit consent.
-Coordinates, match scores and the raw payload are intentionally discarded and
-are never passed to telemetry, diagnostics, drafts or application logs.
+Match scores and raw payloads are intentionally discarded. Coordinates can be
+held transiently in a selected suggestion only to request an official aerial
+view after that same consent; they are never passed to telemetry, diagnostics,
+drafts or application logs.
 """
 
 from __future__ import annotations
@@ -47,6 +49,14 @@ class AddressSuggestion:
     label: str
     lookup_key: str = ""
     source: str = "external"
+    # A position is transient selection data only. ``to_dict`` deliberately
+    # excludes it, so it cannot enter drafts, telemetry or diagnostics.
+    longitude: float | None = None
+    latitude: float | None = None
+    # The RQA publishes the official municipal geographic code.  It is
+    # transient selection metadata only: it is used to validate a single
+    # MAMH role territory after consent, never for telemetry or display.
+    territory_code: str = ""
 
     def to_dict(self) -> dict[str, str]:
         """Return display fields only; safe for UI assertions and exports."""
@@ -159,13 +169,29 @@ def _candidate_to_suggestion(candidate: Any) -> AddressSuggestion | None:
         street = _clean_text(candidate.get("address"))
         if city:
             city_tail = re.escape(city)
-            postal_tail = re.escape(postal_code) if postal_code else r"[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d"
+            # The display address may use a compact postal code while the
+            # validated attribute is normalized with a space (``A1A 1A1``).
+            # Match both forms before removing MRNF's trailing locality;
+            # otherwise a city leaks into ``street`` and the exact local
+            # selection can no longer be enriched safely.
+            postal_tail = r"[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d"
             street = re.sub(rf"\s*,\s*{city_tail}(?:\s+{postal_tail})?\s*$", "", street, flags=re.IGNORECASE)
         street = re.sub(r"\s+[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\s?\d[ABCEGHJKLMNPRSTVWXYZ]\d\s*$", "", street, flags=re.IGNORECASE).strip(" ,")
     if not street:
         return None
+    location = candidate.get("location") if isinstance(candidate.get("location"), dict) else {}
+    longitude = location.get("x")
+    latitude = location.get("y")
+    if not isinstance(longitude, (int, float)) or isinstance(longitude, bool) or not isinstance(latitude, (int, float)) or isinstance(latitude, bool):
+        longitude = latitude = None
+    elif not (-80.0 <= float(longitude) <= -57.0 and 44.0 <= float(latitude) <= 63.0):
+        longitude = latitude = None
     label = " · ".join(part for part in (street, city, postal_code) if part)
-    return AddressSuggestion(street=street, city=city, postal_code=postal_code, unit=unit, label=label)
+    return AddressSuggestion(
+        street=street, city=city, postal_code=postal_code, unit=unit, label=label,
+        longitude=float(longitude) if longitude is not None else None,
+        latitude=float(latitude) if latitude is not None else None,
+    )
 
 
 def _suggestion_to_display(item: Any) -> AddressSuggestion | None:

@@ -58,6 +58,26 @@ def validate_registration(name: str, email: str, password: str, confirmation: st
     return errors
 
 
+def reset_user_password(email: str, password: str, confirmation: str, database_path: Path | str) -> tuple[bool, str]:
+    """Safely reset one local password without returning or logging credentials."""
+
+    if not email.strip():
+        return False, "Le courriel est requis."
+    if len(password) < 12:
+        return False, "Le mot de passe doit contenir au moins 12 caractères."
+    if password != confirmation:
+        return False, "La confirmation du mot de passe ne correspond pas."
+    password_hash, password_salt = _hash_password(password)
+    updated = SQLiteRepository(database_path).update_user_password(
+        email.strip().lower(), password_hash, password_salt,
+    )
+    if not updated:
+        # The local command displays this only to its operator. It never
+        # reveals whether any other account exists.
+        return False, "Compte introuvable."
+    return True, "Mot de passe réinitialisé. Vous pouvez maintenant vous connecter."
+
+
 def create_user(name: str, email: str, password: str, profile: UserProfile, database_path: Path | str) -> tuple[bool, str]:
     password_hash, password_salt = _hash_password(password)
     created = SQLiteRepository(database_path).create_user({
