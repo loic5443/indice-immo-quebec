@@ -39,6 +39,9 @@ class PropertySummaryUiTests(unittest.TestCase):
         self.assertIn("Créer mon espace gratuit", buttons)
         self.assertIn("Modifier mes chiffres", buttons)
         self.assertIn("Découvrir Premium", buttons)
+        rendered = "\n".join(item.value for item in app.markdown)
+        self.assertIn("Sauvegarde privée possible", rendered)
+        self.assertNotIn("Dossier privé sauvegardé", rendered)
         self.assertEqual(
             [item.label for item in app.tabs],
             ["Vue d’ensemble", "Finances", "Risques et vérifications", "Détails et sources"],

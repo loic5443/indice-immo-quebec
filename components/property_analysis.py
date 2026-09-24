@@ -2181,7 +2181,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
             "<p>Sauvegardez gratuitement ce dossier. Premium ajoute le suivi de changements vérifiables, "
             "les comparaisons et le rapport complet.</p>"
             "<div class='next-step-benefits'>"
-            "<span>✓ Dossier privé sauvegardé</span>"
+            "<span>✓ Sauvegarde privée possible</span>"
             "<span>🔒 Alertes factuelles et suivi Premium</span>"
             "<span>🔒 Comparaisons et rapport complet</span>"
             "</div><p class='premium-next-step-note'>Premium est en préparation commerciale. "
