@@ -185,10 +185,15 @@ def show_account() -> None:
         safe_profile = escape(str(user.get("user_type") or ""))
         safe_horizon = escape(str(user.get("investment_horizon") or ""))
         safe_risk = escape(str(user.get("risk_tolerance") or ""))
+        profile_details = [f"Profil : <b>{safe_profile or 'Non renseigné'}</b>"]
+        if safe_horizon:
+            profile_details.append(safe_horizon)
+        if safe_risk:
+            profile_details.append(f"risque {safe_risk}")
         st.markdown(
             f"<div class='account-summary'><span class='data-pill real'>Connecté</span>"
             f"<h2>{safe_name}</h2><p>{safe_email}</p><p>Forfait : <b>{'Premium' if user['plan'] == 'premium' else 'Gratuit'}</b></p>"
-            f"<p>Profil : <b>{safe_profile}</b> · {safe_horizon} · risque {safe_risk}</p></div>",
+            f"<p>{' · '.join(profile_details)}</p></div>",
             unsafe_allow_html=True,
         )
         analysis_count = count_analyses(user["id"])

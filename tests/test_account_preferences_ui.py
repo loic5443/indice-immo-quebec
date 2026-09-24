@@ -83,6 +83,13 @@ finally:
         self.assertIn("Enregistrer mon choix d’alerte", [item.label for item in app.button])
         self.assertTrue(any("Livraison configurée" in item.value for item in app.caption))
 
+    def test_optional_horizon_and_risk_do_not_leave_empty_profile_fragments(self):
+        app = self._app()
+        markup = " ".join(item.value for item in app.markdown)
+        self.assertIn("Profil : <b>Premier acheteur</b>", markup)
+        self.assertNotIn("· · risque", markup)
+        self.assertNotIn("risque </p>", markup)
+
     def test_free_account_sees_an_honest_premium_alert_preview_not_a_broken_checkbox(self):
         app = self._app(alerts_available=False)
         self.assertNotIn("Recevoir les alertes de mes dossiers par courriel (Premium)", [item.label for item in app.checkbox])
