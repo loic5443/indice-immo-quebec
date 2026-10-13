@@ -4,7 +4,7 @@ import streamlit as st
 
 
 PRIMARY_PAGES = ["Accueil", "Analyser", "Mes propriétés", "Marché", "Premium"]
-SECONDARY_PAGES = ["Mon compte", "À propos", "Confidentialité", "Donner mon avis"]
+SECONDARY_PAGES = ["Mon compte", "À propos", "Confidentialité", "Donner mon avis", "Démonstration"]
 PAGE_ALIASES = {
     "Analyse immobilière": "Analyser",
     "Mes analyses": "Mes propriétés",
@@ -63,6 +63,7 @@ def show_sidebar() -> str:
         f"👤 {account_label} et alertes", key="secondary_account", width="stretch",
         on_click=_secondary, args=("Mon compte",),
     )
+    st.sidebar.button("Essayer un exemple", key="secondary_demo", width="stretch", on_click=_secondary, args=("Démonstration",))
     with st.sidebar.expander("Informations et aide"):
         st.button("À propos", key="secondary_about", width="stretch", on_click=_secondary, args=("À propos",))
         st.button("Confidentialité", key="secondary_privacy", width="stretch", on_click=_secondary, args=("Confidentialité",))

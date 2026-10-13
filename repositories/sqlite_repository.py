@@ -51,9 +51,10 @@ class SQLiteRepository:
 
         with closing(self._connect()) as connection, connection:
             result = connection.execute(
-                "UPDATE users SET password_hash = ?, password_salt = ? WHERE email = ?",
+                "UPDATE users SET password_hash = ?, password_salt = ?, session_version=session_version+1 WHERE email = ?",
                 (password_hash, password_salt, email),
             )
+            connection.execute("DELETE FROM password_reset_tokens WHERE user_id IN (SELECT id FROM users WHERE email=?)", (email,))
         return result.rowcount == 1
 
     def count_analyses(self, user_id: int) -> int:

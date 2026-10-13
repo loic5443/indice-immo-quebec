@@ -21,6 +21,19 @@ from services.dossier_tracking_service import (
 )
 from services.report_service import generate_comparison_report_pdf, generate_report_pdf
 from services.snapshot_history_service import snapshot_positions
+from components.investment_criteria import show_investment_criteria, show_screening_details
+
+
+@st.cache_data(ttl=300, max_entries=64, show_spinner=False)
+def _cached_report(owner_id, database_identity, analysis, screening):
+    # Owner and database are part of the key. Only an already-authorized
+    # snapshot reaches this function; downloads never fetch another account.
+    return generate_report_pdf(analysis, criteria_result=screening)
+
+
+@st.cache_data(ttl=300, max_entries=32, show_spinner=False)
+def _cached_comparison_report(owner_id, database_identity, comparison):
+    return generate_comparison_report_pdf(comparison)
 
 
 DELETE_CONFIRMATION_KEY = "pending_analysis_delete"
@@ -391,7 +404,7 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
 
     st.success("Comparaison complète basée sur les instantanés sauvegardés.")
     st.download_button(
-        "Télécharger le rapport comparatif PDF", generate_comparison_report_pdf(comparison),
+        "Télécharger le rapport comparatif PDF", _cached_comparison_report(user["id"], str(DATABASE_PATH), comparison),
         file_name="immoradar-comparaison.pdf", mime="application/pdf",
         key="comparison_pdf", width="stretch",
     )
@@ -489,6 +502,7 @@ def show_saved_analyses() -> None:
         important_alerts.metric("À vérifier", overview["important"])
         updates.metric("Mises à jour", overview["updates"])
         st.caption("Ces compteurs lisent uniquement vos instantanés suivis. Ils ne prévoient rien. Si vous avez activé le consentement courriel, les nouvelles alertes vérifiables peuvent déclencher un avis générique.")
+    screening_by_id = show_investment_criteria(user, analyses, DATABASE_PATH)
     _show_property_comparator(user, analyses)
     history_by_id = snapshot_positions(analyses)
     st.markdown("<div class='section-space compact-space'></div><h2>Vos dossiers</h2>", unsafe_allow_html=True)
@@ -525,6 +539,8 @@ def show_saved_analyses() -> None:
                     st.caption("Les montants et scores sont ceux sauvegardés à chaque date. Une donnée absente reste non disponible.")
             snapshots = list(history.snapshots) if history else [analysis]
             _show_dossier_tracking_status(user, snapshots, followed=followed)
+            if int(analysis["id"]) in screening_by_id:
+                show_screening_details(screening_by_id[int(analysis["id"])])
             _show_saved_value_context(analysis)
             financial_display = _saved_financial_presentation(analysis)
             first, second, third = st.columns(3)
@@ -589,7 +605,7 @@ def show_saved_analyses() -> None:
                     st.write(f"{item['metric']} : {item['value']} {item['unit']} · observé le {item['observed_at']} · [source officielle]({item['source_url']})")
             if can_use(user, "reports"):
                 st.download_button(
-                    "Télécharger le rapport PDF", generate_report_pdf(analysis),
+                    "Télécharger le rapport PDF", _cached_report(user["id"], str(DATABASE_PATH), analysis, screening_by_id.get(int(analysis["id"]))),
                     file_name=f"immoradar-analyse-{analysis['id']}.pdf", mime="application/pdf",
                     key=f"pdf_{analysis['id']}", width="stretch",
                 )

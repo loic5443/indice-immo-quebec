@@ -49,9 +49,9 @@ Le code de facturation ne suffit pas à déclarer le produit prêt à vendre. Il
 
 - Adresse de support et procédure pour remboursements, litiges et suppression de compte. La suppression d’un compte lié à Stripe est bloquée tant qu’un opérateur n’a pas résolu son dossier, pour éviter une facturation sans propriétaire.
 - Surveillance des erreurs de webhook, sauvegardes hors du serveur et restauration réelle.
-- Récupération de mot de passe par courriel et protection contre les tentatives de connexion répétées : le projet dispose actuellement surtout d’outils opérateur. Ces parcours doivent être finalisés avant une ouverture large.
+- La récupération de mot de passe et les limites de connexion sont implémentées. Configurer Brevo pour les courriels transactionnels et tester la délivrabilité réelle; vérifier aussi les protections et limites du serveur exposé à Internet.
 - Conditions d’abonnement, confidentialité, politique de remboursement, coordonnées commerciales et attributions des données publiques.
-- Alertes par courriel : consentement distinct et configuration Brevo; le suivi dans l’application n’équivaut pas à une veille automatique tant que le worker n’est pas planifié.
+- Alertes par courriel : consentement distinct et configuration Brevo. Le worker optionnel peut être lancé avec le profil Compose `operations`; le suivi compare les instantanés sauvegardés et ne surveille pas toutes les annonces du marché.
 - La capacité d’inscription reste régie par `beta_settings` (100 comptes initialement). Ajuster explicitement dans l’administration avant le lancement, sans supprimer le contrôle de capacité.
 
 ## Séquence proposée sur dix jours
@@ -72,3 +72,29 @@ La date du 22 octobre est une cible, pas une publication planifiée automatiquem
 - https://docs.stripe.com/billing/subscriptions/webhooks
 - https://docs.stripe.com/api/checkout/sessions/create
 - https://docs.stripe.com/api/customer_portal/sessions/create
+
+
+## Compléments du lot autonome du 12-13 octobre
+
+- Démonstration sans compte avec loyers, prix et taux modifiables, calculs de production et exemple PDF clairement fictif.
+- Critères Premium persistants par compte : prix, flux mensuel, rendement sur capital, DSCR et scénario prudent. Le tableau agrège le dernier instantané de chaque dossier; les données absentes ne passent jamais un critère.
+- Plafond de prix mathématique selon les seuils et hypothèses fixes; aucune estimation marchande ou qualification du prêteur n’est annoncée. Les taxes, loyers, mise de fonds et coûts restent fixes, sans assurance hypothécaire ajoutée automatiquement.
+- Critères courants et simulation du plafond exportés dans le rapport PDF. Polices françaises intégrées pour éviter une substitution différente selon l’ordinateur du lecteur.
+- Lien de récupération valide 30 minutes, à usage unique, stocké sous forme de hash. Le changement de mot de passe invalide les anciennes sessions.
+- Limites par identité hachée : 10 tentatives de connexion et 3 demandes de récupération par fenêtre de 15 minutes. Réponse publique identique pour un courriel de récupération connu ou inconnu.
+- Migrations transactionnelles et sérialisées, avec rollback de la structure et de sa version en cas d’échec.
+- Sauvegarde cohérente via l’API SQLite, intégrité et références vérifiées, fichiers privés, sans écrasement des sauvegardes existantes.
+- Worker optionnel de sauvegarde et de notifications consenties. Il est désactivé par défaut, ne journalise que des agrégats et ne supprime aucune sauvegarde.
+
+### Courriels de récupération
+
+Configurer `IMMORADAR_AUTH_EMAIL_ENABLED=1`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL` et une URL publique HTTPS. La récupération est transactionnelle et séparée du consentement marketing ou des alertes. Sans cette configuration, l’interface annonce l’indisponibilité de l’envoi au lieu de prétendre envoyer un lien.
+
+### Sauvegardes et worker
+
+- Commande ponctuelle : `python -m scripts.backup_database --destination /chemin/prive/nouvelle-sauvegarde.sqlite`.
+- Vérification : `python -m scripts.backup_database --source /chemin/prive/sauvegarde.sqlite --verify-only`.
+- Cycle périodique : configurer `IMMORADAR_OPERATIONS_ENABLED=1` et, si souhaité, `IMMORADAR_BACKUPS_ENABLED=1`, puis `docker compose --profile operations up --build -d`.
+- Les sauvegardes du volume applicatif doivent être copiées hors de la machine. La rotation et la supervision du stockage restent à configurer sur l’hébergement; ce code ne détruit pas les anciennes copies.
+- Avant restauration, arrêter les services applicatifs, vérifier la sauvegarde, conserver une copie de la base actuelle puis restaurer le fichier vérifié sur le volume avec les bons droits. Tester d’abord sur une instance isolée.
+- Diagnostic sans appel réseau : `python -m scripts.launch_readiness`. Il ne prouve ni le bon fonctionnement HTTPS, ni la délivrabilité, ni le paiement en production.

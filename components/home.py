@@ -31,8 +31,8 @@ def show_home() -> None:
     st.markdown(
         f"<section class='hero-image-panel' style=\"{_hero()}\"><div class='hero-content'>"
         "<p class='hero-eyebrow notranslate'>IMMORADAR</p>"
-        "<div class='hero-title' role='heading' aria-level='1'>Découvrez ce qu’une propriété pourrait valoir.</div>"
-        "<p class='hero-copy'>Surveillez ensuite tout ce qui peut changer votre décision. ImmoRadar rassemble les renseignements disponibles, vos hypothèses et une lecture claire de votre dossier.</p>"
+        "<div class='hero-title' role='heading' aria-level='1'>Avant d’acheter, voyez si les chiffres tiennent.</div>"
+        "<p class='hero-copy'>Calculez le coût ou le flux mensuel, testez un scénario prudent et comparez vos dossiers. ImmoRadar relie vos hypothèses aux renseignements publics disponibles au Québec.</p>"
         "<p class='hero-proof'><span>Valeur expliquée</span><span>Hypothèses transparentes</span><span>Suivi utile</span></p>"
         "</div></section>",
         unsafe_allow_html=True,
@@ -41,10 +41,11 @@ def show_home() -> None:
         spacer, action, premium, tail = st.columns([1.1, 1.35, 1.2, 1.1])
         with action:
             st.write("")
-            st.button("Révéler la valeur", type="primary", on_click=_start_from_home, width="stretch")
+            st.button("Analyser une propriété", type="primary", on_click=_start_from_home, width="stretch")
         with premium:
             st.write("")
             st.button("Découvrir Premium", on_click=go_to, args=("Premium",), width="stretch")
+    st.button("Essayer un exemple complet", on_click=go_to, args=("Démonstration",), key="home_demo")
     st.caption("Commencez sans compte ni document. À l’étape suivante, vous choisissez si ImmoRadar peut consulter les renseignements publics disponibles.")
     st.caption(
         "Lorsqu’elle est disponible, la première valeur révélée est celle du rôle municipal officiel : un repère fiscal, "
@@ -71,7 +72,7 @@ def show_home() -> None:
     with overview:
         st.markdown(
             "<article class='dossier-preview'><span class='data-pill simulated'>Exemple d’interface</span>"
-            "<h3>Dossier immobilier 360</h3><div class='preview-grid'><div><small>Valeur ImmoValue</small><strong>Calculable selon les comparables</strong></div>"
+            "<h3>Votre synthèse d’achat</h3><div class='preview-grid'><div><small>Valeur ImmoValue</small><strong>Calculable selon les comparables</strong></div>"
             "<div><small>Score ImmoRadar</small><strong>Lecture adaptée au projet</strong></div>"
             "<div><small>Confiance</small><strong>Qualité des données saisies</strong></div></div></article>",
             unsafe_allow_html=True,

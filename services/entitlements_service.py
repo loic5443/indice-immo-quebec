@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from repositories.sqlite_repository import SQLiteRepository
 
 
-PREMIUM_FEATURES = {"alerts", "reports", "unlimited_estimations", "advanced_comparisons"}
+PREMIUM_FEATURES = {"alerts", "reports", "unlimited_estimations", "advanced_comparisons", "investment_criteria"}
 
 
 def can_use(user, feature):

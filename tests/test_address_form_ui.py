@@ -178,7 +178,7 @@ class AddressFormUiTests(unittest.TestCase):
         app.session_state["main_navigation"] = "Accueil"
         app.run(timeout=20)
         self.assertEqual(list(app.text_input), [])
-        next(button for button in app.button if button.label == "Révéler la valeur").click().run(timeout=20)
+        next(button for button in app.button if button.label == "Analyser une propriété").click().run(timeout=20)
         app.run(timeout=20)
         self.assertEqual(app.session_state["main_navigation"], "Analyser")
         self.assertEqual(app.session_state["address_form_editor_street"], "")

@@ -9,6 +9,7 @@ from components.admin import show_admin
 from components.feedback import show_feedback
 from components.account import initialize_session, is_authenticated, show_account
 from components.home import show_home
+from components.demo import show_demo
 from components.markets import show_markets
 from components.premium import show_premium
 from components.privacy import show_privacy
@@ -34,6 +35,10 @@ if st.session_state.get("pending_billing_return") and is_authenticated():
 if st.query_params.get("billing") in {"success", "cancel", "portal"}:
     st.session_state["main_navigation"] = "Premium"
 
+if st.query_params.get("reset_token"):
+    st.session_state["main_navigation"] = "Mon compte"
+    st.session_state.pop("current_user", None)
+
 page = show_sidebar()
 
 if page == "Accueil":
@@ -42,6 +47,8 @@ elif page == "Analyser":
     show_property_analysis()
 elif page == "Marché":
     show_markets()
+elif page == "Démonstration":
+    show_demo()
 elif page == "Premium":
     show_premium()
 elif page == "Mes propriétés":

@@ -49,10 +49,10 @@ def show_premium() -> None:
     st.markdown(
         "<section class='hero-image-panel premium-hero'><div class='hero-content'>"
         "<p class='hero-eyebrow notranslate'>IMMORADAR PREMIUM</p>"
-        "<div class='hero-title' role='heading' aria-level='1'>Comprenez maintenant. Suivez ensuite ce qui change.</div>"
-        "<p class='hero-copy'>Premium rassemble les dossiers, les scénarios et les changements vérifiables "
+        "<div class='hero-title' role='heading' aria-level='1'>Comparez vos achats. Gardez vos décisions sous contrôle.</div>"
+        "<p class='hero-copy'>Premium rassemble vos critères d’achat, vos dossiers, les scénarios et les changements vérifiables "
         "pour vous aider à revenir à une décision avec le bon contexte.</p>"
-        "<p class='hero-proof'><span>Dossiers sans limite</span><span>Comparaisons claires</span>"
+        "<p class='hero-proof'><span>Vos critères d’achat</span><span>Comparaisons claires</span>"
         "<span>Suivi utile</span></p></div></section>",
         unsafe_allow_html=True,
     )
@@ -75,6 +75,7 @@ def show_premium() -> None:
         "quand vos hypothèses, vos comparables ou les données publiques évoluent.</p>",
         unsafe_allow_html=True,
     )
+    st.button("Voir un exemple complet avant de choisir", on_click=go_to, args=("Démonstration",), key="premium_demo", width="stretch")
     for column, title, copy in zip(
         st.columns(3),
         ("Conserver le contexte", "Comparer sans repartir de zéro", "Surveiller l’important"),
@@ -110,7 +111,7 @@ def show_premium() -> None:
             "<article class='plan-card premium-card'><p class='plan-label accent-label'>PREMIUM</p><div class='plan-title' role='heading' aria-level='3'>Suivre vos décisions</div>"
             f"<p class='plan-price'>{price_label}</p>"
             "<p><b>Des estimations sans limite</b>, des dossiers complets et les outils utiles quand une décision mérite d’être suivie.</p>"
-            "<p class='plan-feature'>✓ <span>Historique, comparaisons et scénarios détaillés</span></p>"
+            "<p class='plan-feature'>✓ <span>Vos critères, comparaisons et simulations de prix</span></p>"
             "<p class='plan-feature'>✓ <span>Rapports PDF complets et dossiers suivis</span></p>"
             "<p class='plan-feature'>✓ <span>Alertes fondées sur des changements vérifiables</span></p>"
             f"<span class='data-pill simulated'>{access_label}</span></article>",
@@ -129,6 +130,7 @@ def show_premium() -> None:
         st.markdown(f"<div class='subsection-title' role='heading' aria-level='3'>{capability_label}</div>", unsafe_allow_html=True)
         _status("Disponible", "Estimations ImmoValue illimitées lorsque trois comparables admissibles sont fournis.")
         _status("Disponible", "Comparaison de dossiers sauvegardés, scénarios et rapport PDF complet.")
+        _status("Disponible", "Critères d’achat personnalisés : prix, flux mensuel, rendement sur capital, couverture de dette et scénario prudent.")
         _status("Disponible", "Suivi de changements réellement calculables. Les avis par courriel restent facultatifs et exigent un consentement séparé.")
     with future:
         st.markdown("<div class='subsection-title' role='heading' aria-level='3'>En préparation</div>", unsafe_allow_html=True)
@@ -140,6 +142,7 @@ def show_premium() -> None:
     free_header.caption("Gratuit")
     premium_header.caption("Premium")
     for values in (
+        ("Critères d’achat", "Exemple de démonstration", "Vos seuils et le tri de vos dossiers"),
         ("Estimations ImmoValue", free_comparison_copy, "Illimitées lorsque calculables"),
         ("Dossiers", "Repères essentiels", "Historique et instantanés complets"),
         ("Comparaison", "Aperçu utile", "Lecture détaillée de deux dossiers"),
@@ -155,6 +158,15 @@ def show_premium() -> None:
         unsafe_allow_html=True,
     )
 
+    st.markdown("### Avant de choisir Premium")
+    with st.expander("Puis-je essayer les outils avant de payer ?"):
+        st.write("Oui. La démonstration utilise le même moteur de calcul et contient un rapport PDF fictif complet. Vous pouvez aussi commencer votre propre analyse gratuitement.")
+    with st.expander("Que reste-t-il si mon abonnement se termine ?"):
+        st.write("Vos dossiers sauvegardés restent dans votre compte. Les fonctions Premium sont verrouillées à la fin de votre accès; vous pouvez toujours consulter les repères disponibles et exporter vos données personnelles depuis Mon compte.")
+    with st.expander("Est-ce une estimation automatique de la valeur de chaque maison ?"):
+        st.write("Non. La valeur municipale dépend de la couverture du rôle officiel. ImmoValue nécessite au moins trois ventes comparables admissibles que vous fournissez. Les critères et plafonds de prix restent des simulations de vos hypothèses.")
+    with st.expander("Mes alertes surveillent-elles automatiquement toutes les annonces ?"):
+        st.write("Le suivi compare vos instantanés sauvegardés. Il ne consulte pas automatiquement toutes les annonces du marché. Les courriels exigent votre consentement et une configuration de livraison disponible.")
     if offer:
         return
 

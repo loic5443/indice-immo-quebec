@@ -51,7 +51,7 @@ def _active_user() -> dict | None:
         st.session_state.pop("current_user", None)
         return None
     user = get_user(session_user["id"])
-    if user is None:
+    if user is None or session_user.get("session_version", 0) != user.get("session_version", 0):
         st.session_state.pop("current_user", None)
         return None
     # Refresh non-sensitive account data such as plan or profile at each request.
@@ -290,6 +290,9 @@ def show_account() -> None:
         return
 
     st.write("Créez un compte local pour sauvegarder vos analyses, ou connectez-vous à un compte existant.")
+    from components.password_recovery import show_recovery
+    if show_recovery(DATABASE_PATH):
+        return
     login_tab, register_tab = st.tabs(["Connexion", "Créer un compte"])
     with login_tab:
         with st.form("login_form"):

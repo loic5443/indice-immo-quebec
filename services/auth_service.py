@@ -51,6 +51,8 @@ def validate_registration(name: str, email: str, password: str, confirmation: st
         errors.append("Veuillez saisir une adresse courriel valide.")
     if len(password) < 12:
         errors.append("Le mot de passe doit contenir au moins 12 caractères.")
+    if len(password) > 1024:
+        errors.append("Le mot de passe doit contenir au plus 1 024 caractères.")
     if password != confirmation:
         errors.append("La confirmation du mot de passe ne correspond pas.")
     if profile and not all((profile.user_type, profile.investment_horizon, profile.risk_tolerance)):
@@ -65,6 +67,8 @@ def reset_user_password(email: str, password: str, confirmation: str, database_p
         return False, "Le courriel est requis."
     if len(password) < 12:
         return False, "Le mot de passe doit contenir au moins 12 caractères."
+    if len(password) > 1024:
+        return False, "Le mot de passe doit contenir au plus 1 024 caractères."
     if password != confirmation:
         return False, "La confirmation du mot de passe ne correspond pas."
     password_hash, password_salt = _hash_password(password)
@@ -91,12 +95,17 @@ def create_user(name: str, email: str, password: str, profile: UserProfile, data
 
 
 def authenticate_user(email: str, password: str, database_path: Path | str) -> dict[str, Any] | None:
+    from services.auth_attempt_service import claim_attempt, clear_login_attempts
+    if len(email) > MAX_EMAIL_LENGTH or len(password) > 1024 or not claim_attempt(email, "login", database_path):
+        return None
     user = SQLiteRepository(database_path).get_user_by_email(email.strip().lower())
     if user is None:
+        _hash_password(password, bytes(16))
         return None
     attempted_hash, _ = _hash_password(password, bytes.fromhex(user["password_salt"]))
     if not hmac.compare_digest(attempted_hash, user["password_hash"]):
         return None
+    clear_login_attempts(email, database_path)
     return _public_user(user, database_path)
 
 
@@ -108,6 +117,7 @@ def get_user(user_id: int, database_path: Path | str) -> dict[str, Any] | None:
 def _public_user(user: dict[str, Any], database_path: Path | str) -> dict[str, Any]:
     public = {key: user[key] for key in ("id", "name", "email", "plan", "user_type", "investment_horizon", "risk_tolerance", "role", "onboarding_completed", "onboarding_step", "user_objective", "limitations_accepted", "marketing_consent", "analytics_consent", "alert_email_consent")}
     from services.billing_service import effective_plan
+    public["session_version"] = user.get("session_version", 0)
     public["plan"] = effective_plan(user["id"], user["plan"], database_path)
     return public
 

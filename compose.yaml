@@ -23,6 +23,13 @@ services:
     depends_on:
       initialize:
         condition: service_completed_successfully
+  operations:
+    <<: *application
+    profiles: ["operations"]
+    command: ["python", "-m", "scripts.operations_worker"]
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
   proxy:
     image: caddy:2.10.2-alpine
     environment:

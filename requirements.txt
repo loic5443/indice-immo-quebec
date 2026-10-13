@@ -1,9 +1,9 @@
-streamlit
-requests
-pandas
-plotly
-reportlab
-pypdf
+streamlit==1.65.0
+requests==2.34.2
+pandas==3.0.6
+plotly==7.1.0
+reportlab==5.0.1
+pypdf==6.20.1
 stripe==16.0.0
 fastapi==0.143.0
 uvicorn==0.54.0

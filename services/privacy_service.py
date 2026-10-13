@@ -8,7 +8,10 @@ def export_user_data(user_id, database_path):
     user=SQLiteRepository(database_path).get_user_by_id(user_id)
     if not user: return None
     for field in ("password_hash", "password_salt", "failed_login_count", "locked_until"): user.pop(field, None)
-    return json.dumps({"profile":user,"analyses":list_analyses(user_id,database_path)}, ensure_ascii=False, indent=2)
+    with closing(SQLiteRepository(database_path)._connect()) as connection:
+        row = connection.execute("SELECT criteria_json FROM investment_criteria WHERE user_id=?", (user_id,)).fetchone()
+    criteria = json.loads(row[0]) if row else {}
+    return json.dumps({"profile":user,"analyses":list_analyses(user_id,database_path),"investment_criteria":criteria}, ensure_ascii=False, indent=2)
 
 def delete_account(user_id, database_path):
     repository=SQLiteRepository(database_path)

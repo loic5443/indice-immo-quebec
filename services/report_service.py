@@ -1,12 +1,18 @@
 """Static French PDF reports generated from one saved analysis snapshot.
 
-PDF access is intentionally enabled for free accounts during development.  A
-future entitlement layer may make it Premium without changing this generator.
+The calling interface enforces account entitlements. The public fictional
+demonstration uses this same generator without loading a user-owned dossier.
 """
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from functools import lru_cache
+
+import reportlab
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from html import escape
 from io import BytesIO
 from typing import Any
@@ -25,7 +31,7 @@ MUTED = colors.HexColor("#667085")
 LIGHT = colors.HexColor("#EAF1FF")
 
 
-def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
+def generate_report_pdf(analysis: dict[str, Any], criteria_result: dict | None = None) -> bytes:
     """Create a Letter-size PDF using only the saved analysis snapshot."""
     font_name = _register_font()
     styles = _styles(font_name)
@@ -46,11 +52,12 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
     immovalue = _json(analysis.get("immovalue_json"), {})
     official_role = _json(analysis.get("official_role_snapshot_json"), {})
     story = []
+    date_label = "Démonstration fictive, sans adresse réelle" if analysis.get("is_demo") else "Analyse sauvegardée le " + str(analysis.get("created_at", ""))
 
     story += [Spacer(1, 1.4 * inch), Paragraph("IMMORADAR", styles["cover_brand"]),
               Paragraph("Rapport d'analyse immobilière", styles["cover_title"]), Spacer(1, 0.25 * inch),
               Paragraph(escape(str(analysis.get("property_name", "Analyse immobilière"))), styles["cover_property"]),
-              Spacer(1, 0.18 * inch), Paragraph(f"Analyse sauvegardée le {escape(str(analysis.get('created_at', '')))}", styles["center"]),
+              Spacer(1, 0.18 * inch), Paragraph(escape(date_label), styles["center"]),
               Spacer(1, 1.45 * inch), Paragraph("Fondé exclusivement sur les hypothèses saisies et les calculs déterministes ImmoRadar.", styles["center"]),
               Paragraph("Aucune donnée de ville simulée n'est utilisée dans ce rapport. Une estimation ImmoValue, lorsqu'elle est présente, provient uniquement des comparables déclarés dans le dossier.", styles["center"]), PageBreak()]
 
@@ -94,6 +101,20 @@ def generate_report_pdf(analysis: dict[str, Any]) -> bytes:
               Paragraph(f"Version du moteur : {escape(str(analysis.get('engine_version', 'Non renseignée')))}<br/>Provenance : {escape(str(analysis.get('data_provenance', 'Hypothèses utilisateur et calculs déterministes.')))}", styles["body"]),
               Paragraph(_market_context_text(market_context), styles["note"]),
               Spacer(1, 0.12 * inch), Paragraph("Avertissement : ce rapport est indicatif. Il ne constitue ni une évaluation officielle ni un conseil financier, juridique, fiscal ou immobilier. Faites vérifier les renseignements importants par des professionnels qualifiés avant une décision.", styles["warning"])]
+    if criteria_result and criteria_result.get("rows"):
+        story += [PageBreak()] + _heading("11. Vos critères d’achat au moment de l’export", styles)
+        criteria_rows = [["Critère", "Instantané", "Votre seuil", "Résultat"]]
+        for row in criteria_result["rows"]:
+            value = "Non disponible" if row["value"] is None else f"{row['value']:.2f} {row['unit']}"
+            threshold = ("<= " if row["operator"] == "max" else ">= ") + f"{row['threshold']:.2f} {row['unit']}"
+            status = "À compléter" if row["meets"] is None else "Atteint" if row["meets"] else "Non atteint"
+            criteria_rows.append([row["label"], value, threshold, status])
+        story += [_table(criteria_rows, styles, [2.3 * inch, 1.5 * inch, 1.5 * inch, 1.45 * inch])]
+        story += [Paragraph(escape(criteria_result["note"]), styles["note"])]
+        ceiling = criteria_result.get("price_ceiling") or {}
+        if ceiling.get("status") == "available":
+            story += [Spacer(1, 0.15 * inch), Paragraph("Plafond de prix selon vos hypothèses fixes : " + _money(ceiling["price"]), styles["body"]),
+                      Paragraph(escape(ceiling["note"]), styles["warning"])]
     document.build(story, onFirstPage=_footer, onLaterPages=_footer)
     return stream.getvalue()
 
@@ -163,9 +184,16 @@ def generate_comparison_report_pdf(comparison: dict[str, Any]) -> bytes:
     return stream.getvalue()
 
 
+@lru_cache(maxsize=1)
 def _register_font() -> str:
-    """Use a standard PDF font with reliable Western French character support."""
-    return "Helvetica"
+    """Embed the bundled Bitstream Vera fonts for predictable French rendering."""
+    directory = Path(reportlab.__file__).resolve().parent / "fonts"
+    if not (directory / "Vera.ttf").is_file():
+        return "Helvetica"
+    for name, filename in (("ImmoRadarSans", "Vera.ttf"), ("ImmoRadarSans-Bold", "VeraBd.ttf"), ("ImmoRadarSans-Italic", "VeraIt.ttf"), ("ImmoRadarSans-BoldItalic", "VeraBI.ttf")):
+        pdfmetrics.registerFont(TTFont(name, str(directory / filename)))
+    pdfmetrics.registerFontFamily("ImmoRadarSans", normal="ImmoRadarSans", bold="ImmoRadarSans-Bold", italic="ImmoRadarSans-Italic", boldItalic="ImmoRadarSans-BoldItalic")
+    return "ImmoRadarSans"
 
 
 def _styles(font: str):
@@ -387,7 +415,7 @@ def _footer(canvas, document):
     canvas.saveState()
     canvas.setStrokeColor(colors.HexColor("#DCE4EF"))
     canvas.line(document.leftMargin, 0.45 * inch, LETTER[0] - document.rightMargin, 0.45 * inch)
-    canvas.setFont("Helvetica", 7.5)
+    canvas.setFont(_register_font(), 7.5)
     canvas.setFillColor(MUTED)
     canvas.drawString(document.leftMargin, 0.29 * inch, "ImmoRadar - Analyse indicative")
     canvas.drawRightString(LETTER[0] - document.rightMargin, 0.29 * inch, f"Page {document.page}")

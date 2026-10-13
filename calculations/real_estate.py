@@ -1,6 +1,8 @@
 """Deterministic Canadian real-estate calculations from stated assumptions only."""
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from math import isfinite
+from numbers import Real
 from typing import Optional
 
 
@@ -54,6 +56,14 @@ class AnalysisResult:
 def validate_inputs(inputs: PropertyInputs) -> list[str]:
     """Return user-facing validation messages for impossible assumptions."""
     errors = []
+    for name, value in asdict(inputs).items():
+        if value is None and name == "household_income_annual":
+            continue
+        if isinstance(value, bool) or not isinstance(value, Real) or not isfinite(value):
+            errors.append("Les hypothèses financières doivent être des nombres finis; vérifiez les champs renseignés.")
+            return errors
+    if not isinstance(inputs.amortization_years, int) or not isinstance(inputs.holding_period_years, int):
+        return ["Les durées doivent être des nombres entiers d’années."]
     if inputs.price <= 0:
         errors.append("Le prix de la propriété doit être supérieur à 0 $.")
     if inputs.down_payment <= 0:
