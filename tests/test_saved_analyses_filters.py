@@ -159,17 +159,17 @@ class SavedAnalysisFiltersTests(unittest.TestCase):
 
     def test_snapshot_history_uses_only_saved_values_and_marks_absences(self):
         rows = _snapshot_history_rows((
-            {"created_at": "2026-02-01", "cash_flow": 250, "immo_score": 65, "official_role_snapshot_json": '{"total_value": 404100}'},
-            {"created_at": "2026-01-01", "cash_flow": 0, "immo_score": None, "official_role_snapshot_json": "{}"},
+            {"created_at": "2026-02-01", "rental_income": 1000, "cash_flow": 250, "immo_score": 65, "official_role_snapshot_json": '{"total_value": 404100}'},
+            {"created_at": "2026-01-01", "rental_income": 1000, "cash_flow": 0, "immo_score": None, "official_role_snapshot_json": "{}"},
         ))
-        self.assertEqual(rows[0]["Flux mensuel"], "250 $")
+        self.assertEqual(rows[0]["Montant mensuel"], "250 $")
         self.assertEqual(rows[0]["Rôle municipal"], "404 100 $")
-        self.assertEqual(rows[1]["Flux mensuel"], "0 $")
+        self.assertEqual(rows[1]["Montant mensuel"], "0 $")
         self.assertEqual(rows[1]["Score"], "Non disponible")
         self.assertEqual(rows[1]["Rôle municipal"], "Non disponible")
 
         missing = _snapshot_history_rows(({"created_at": "2026-01-01", "cash_flow": None, "immo_score": None},))
-        self.assertEqual(missing[0]["Flux mensuel"], "Non disponible")
+        self.assertEqual(missing[0]["Montant mensuel"], "Non disponible")
 
 
 if __name__ == "__main__":

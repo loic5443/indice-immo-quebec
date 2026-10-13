@@ -67,6 +67,8 @@ def build_resilience_tests(inputs: PropertyInputs, profile: str) -> tuple[list[S
             initial_repairs=inputs.initial_repairs * 1.10,
         ), {"expense_multiplier": 1.10}), profile, "Taux +1 point, revenus -10 %, vacance +5 points et dépenses +10 %."),
     ]
+    if not (inputs.rental_income_monthly or inputs.other_income_monthly):
+        return tests, "non applicable sans revenu locatif"
     if any(test.engine.score is None for test in tests):
         return tests, "données insuffisantes"
     if all(test.financial.cash_flow_monthly >= 0 and test.financial.debt_service_coverage_ratio >= 1.10 for test in tests):

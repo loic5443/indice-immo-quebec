@@ -33,7 +33,7 @@ from services.comparable_workspace import (
     reviewed_comparables,
     today_iso,
 )
-from services.analysis_workflow import STEPS, load_draft, save_draft, normalize_step, transition
+from services.analysis_workflow import STEPS, load_draft, save_draft, abandon_draft, normalize_step, transition
 from services.alert_delivery_service import deliver_alerts_for_user
 from services.entitlements_service import can_use, quota_is_enforced, quota_status, consume_estimation
 from services.dossier_tracking_service import (
@@ -162,7 +162,27 @@ def _remember_property_details() -> None:
         st.session_state[PROPERTY_TYPE_STATE_KEY] = st.session_state["workflow_property_type"]
 
 
+def start_new_analysis() -> None:
+    """Start an explicit new dossier without reusing the previous draft."""
+    user = st.session_state.get("current_user")
+    st.session_state.clear()
+    if isinstance(user, dict):
+        st.session_state["current_user"] = user
+    st.session_state["new_analysis_pending"] = True
+    st.session_state["address_form_start_empty"] = True
+    go_to("Analyser")
+
+
+def _reset_custom_scenario(seed=None):
+    for key in list(st.session_state):
+        if key.startswith("scenario_custom_"):
+            st.session_state.pop(key, None)
+    if isinstance(seed, dict) and seed:
+        st.session_state["scenario_custom_seed"] = seed
+
+
 def reset_analysis() -> None:
+    _reset_custom_scenario()
     st.session_state.update(DEFAULTS)
     st.session_state[FINANCIAL_STATE_KEY] = dict(DEFAULTS)
     st.session_state.pop(FINANCIAL_RESTORE_KEY, None)
@@ -188,6 +208,7 @@ def _apply_reopen_draft() -> str | None:
         return None
     if payload.get("owner_id") != current_user().get("id"):
         return None
+    _reset_custom_scenario(payload.get("custom_scenario"))
     financial_values = dict(DEFAULTS)
     for key, value in payload.get("financial_values", {}).items():
         if key in DEFAULTS and isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -1587,6 +1608,10 @@ def _show_technical_workflow(step: int) -> None:
 
 
 def show_property_analysis() -> None:
+    if st.session_state.pop("new_analysis_pending", False):
+        owner = _address_owner_id()
+        if owner is not None:
+            abandon_draft(owner, DATABASE_PATH)
     # Streamlit removes widget keys while their stage is hidden. Keep a
     # non-widget copy so calculated results and later edits use the same
     # submitted figures after every rerun.
@@ -1859,7 +1884,7 @@ def _official_role_snapshot(address_lookup: dict | None) -> dict:
     }
 
 
-def _save_snapshot_signature(property_name: str, inputs: PropertyInputs, profile: str, address_lookup: dict | None, immovalue: dict | None) -> str:
+def _save_snapshot_signature(property_name: str, inputs: PropertyInputs, profile: str, address_lookup: dict | None, immovalue: dict | None, *, scenarios=None, resilience=None, market_context=None) -> str:
     """Identify one unchanged save action without retaining its inputs in the key."""
 
     renewal_date = st.session_state.get("mortgage_renewal_date")
@@ -1870,6 +1895,8 @@ def _save_snapshot_signature(property_name: str, inputs: PropertyInputs, profile
         "mortgage_renewal_date": renewal_date.isoformat() if isinstance(renewal_date, date) else None,
         "role": _official_role_snapshot(address_lookup),
         "immovalue": _immovalue_snapshot_for_save(immovalue),
+        "scenarios": scenarios or [], "resilience": resilience or {},
+        "market_context": market_context or [],
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
 
@@ -2081,9 +2108,14 @@ def _show_summary_scenarios(inputs: PropertyInputs, profile: str) -> None:
     """Compact preview of existing deterministic scenarios; no formula changes."""
 
     has_rental_context = bool(inputs.rental_income_monthly or inputs.other_income_monthly)
-    base = next(item for item in build_standard_scenarios(inputs, profile) if item.name == "Scénario de base")
-    rate_up = next(item for item in build_resilience_tests(inputs, profile)[0] if item.name == "Taux +1 point")
-    prudent = next(item for item in build_standard_scenarios(inputs, profile) if item.name == "Prudent")
+    try:
+        standard = build_standard_scenarios(inputs, profile)
+        base = next(item for item in standard if item.name == "Scénario de base")
+        rate_up = next(item for item in build_resilience_tests(inputs, profile)[0] if item.name == "Taux +1 point")
+        prudent = next(item for item in standard if item.name == "Prudent")
+    except ValueError:
+        st.info("Les scénarios de résistance dépassent les limites actuelles de calcul. Les résultats de base restent disponibles.")
+        return
     for column, scenario in zip(st.columns(3), (base, rate_up, prudent)):
         with column:
             with st.container(border=True):
@@ -2165,6 +2197,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
         st.write("ImmoValue est une fourchette expérimentale issue des comparables que vous fournissez. Le rôle municipal est une valeur fiscale officielle, distincte d’une valeur marchande. ImmoScore mesure l’adéquation de vos hypothèses à votre profil; il ne constitue pas une recommandation.")
         st.caption("Chaque renseignement officiel affiché indique sa provenance, son année et sa fraîcheur. Une donnée absente reste indisponible.")
 
+    market_context = market_context_snapshot(str(DATABASE_PATH))
     user = current_user() if is_authenticated() else None
     has_premium_follow_up = bool(user and can_use(user, "alerts"))
     if has_premium_follow_up:
@@ -2214,7 +2247,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                 st.error("Ajoutez un nom de dossier ou sélectionnez une adresse.")
             elif _unchanged_snapshot_is_saved(
                 current_user()["id"],
-                _save_snapshot_signature(property_name, inputs, engine_result.profile, address_lookup, immovalue),
+                _save_snapshot_signature(property_name, inputs, engine_result.profile, address_lookup, immovalue, scenarios=scenarios, resilience=resilience, market_context=market_context),
             ):
                 st.info("Ce dossier inchangé est déjà sauvegardé dans Mes propriétés.")
             else:
@@ -2234,7 +2267,8 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                             else None
                         ),
                     },
-                    "market_context": market_context_snapshot(str(DATABASE_PATH)),
+                    "market_context": market_context,
+                    "scenarios": scenarios, "resilience": resilience,
                     "immovalue": _immovalue_snapshot_for_save(immovalue),
                     "official_role_snapshot": _official_role_snapshot(address_lookup),
                 }, profile=engine_result.profile, engine_result=engine_result)
@@ -2244,6 +2278,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
                     "property_name": property_name.strip(),
                     "signature": _save_snapshot_signature(
                         property_name, inputs, engine_result.profile, address_lookup, immovalue,
+                        scenarios=scenarios, resilience=resilience, market_context=market_context,
                     ),
                 }
                 st.success("Dossier, scénarios et tests de résistance sauvegardés dans Mes propriétés.")
@@ -2266,7 +2301,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
             and isinstance(saved.get("id"), int)
             and _unchanged_snapshot_is_saved(
                 current_user()["id"],
-                _save_snapshot_signature(property_name, inputs, engine_result.profile, address_lookup, immovalue),
+                _save_snapshot_signature(property_name, inputs, engine_result.profile, address_lookup, immovalue, scenarios=scenarios, resilience=resilience, market_context=market_context),
             )
         ):
             if can_use(current_user(), "alerts"):
@@ -2499,7 +2534,10 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
         if not candidate["available"]:
             st.info("Estimation non prête : ajoutez les renseignements manquants et au moins trois comparables admissibles. Cette étape ne consomme aucune estimation.")
         elif st.button("Produire l’estimation ImmoValue", type="primary", key="generate_immovalue"):
-            if not is_authenticated() or not quota_is_enforced(DATABASE_PATH) or consume_estimation(current_user()["id"], current_user(), DATABASE_PATH, draft_key):
+            if quota_is_enforced(DATABASE_PATH) and not is_authenticated():
+                st.info("Créez votre compte gratuit pour produire une estimation ImmoValue complète. Vos comparables restent dans cette session.")
+                st.button("Créer mon compte et conserver ce brouillon", on_click=_open_account_to_keep_analysis, key="iv_quota_account", type="primary")
+            elif not quota_is_enforced(DATABASE_PATH) or consume_estimation(current_user()["id"], current_user(), DATABASE_PATH, draft_key):
                 st.session_state["immovalue_generated_result"] = candidate
                 st.session_state["immovalue_generated_key"] = draft_key
                 st.session_state["immovalue_generated_at"] = today_iso()

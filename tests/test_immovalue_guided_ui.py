@@ -8,8 +8,10 @@ from streamlit.testing.v1 import AppTest
 class GuidedImmoValueUiTests(unittest.TestCase):
     def _app(self):
         app = AppTest.from_string(
+            "from unittest.mock import patch\n"
             "import components.property_analysis as page\n"
-            "page._show_immovalue()\n"
+            "with patch.object(page, 'is_authenticated', lambda: False), patch.object(page, 'quota_is_enforced', lambda _path: False):\n"
+            "    page._show_immovalue()\n"
         )
         return app.run(timeout=20)
 

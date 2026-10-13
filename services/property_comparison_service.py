@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 from services.analysis_service import get_user_analyses_for_comparison
@@ -21,7 +22,12 @@ def _json_object(raw: str | None, fallback: Any) -> Any:
 
 
 def _number(value: Any) -> float | None:
-    return float(value) if isinstance(value, (int, float)) else None
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
+
+
+def _first_number(primary, fallback):
+    value = _number(primary)
+    return value if value is not None else _number(fallback)
 
 
 def _scenario_financial(analysis: dict[str, Any], name: str) -> dict[str, Any]:
@@ -77,7 +83,7 @@ def _snapshot(analysis: dict[str, Any]) -> dict[str, Any]:
         # ImmoValue result. It therefore remains available when the estimate
         # is still waiting for three comparable sales.
         "asking_price": _number(immovalue_payload.get("subject", {}).get("asking_price")) if isinstance(immovalue_payload.get("subject"), dict) else None,
-        "monthly_payment": _number(base.get("monthly_payment")) or _number(financial_inputs.get("monthly_payment")),
+        "monthly_payment": _first_number(base.get("monthly_payment"), financial_inputs.get("monthly_payment")),
         "monthly_expenses": _number(analysis.get("monthly_expenses")),
         "rental_income": _number(analysis.get("rental_income")),
         "cash_flow": _number(analysis.get("cash_flow")),
@@ -87,7 +93,7 @@ def _snapshot(analysis: dict[str, Any]) -> dict[str, Any]:
         "score": _number(analysis.get("immo_score")),
         "confidence": _number(analysis.get("confidence_index")),
         "engine_version": analysis.get("engine_version"),
-        "base_cash_flow": _number(base.get("cash_flow_monthly")) or _number(analysis.get("cash_flow")),
+        "base_cash_flow": _first_number(base.get("cash_flow_monthly"), analysis.get("cash_flow")),
         "rate_up_cash_flow": _number(stressed.get("cash_flow_monthly")),
     }
 

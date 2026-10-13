@@ -15,7 +15,7 @@ def show_recovery(database_path):
         if submitted:
             ok, message = redeem_recovery(token, password, confirmation, database_path)
             if ok:
-                st.session_state.pop("current_user", None)
+                st.session_state.clear()
                 st.query_params.pop("reset_token", None)
                 st.success(message)
             else:

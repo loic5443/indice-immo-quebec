@@ -4,7 +4,7 @@
 
 La branche de travail repose sur `audit-sync-origin-main-2026-09-22`, commit `fe261232f29d26bed8a2e6abc67a0e169328d6e7`, qui contient la version locale attestée du 22 septembre et les 27 commits suivants.
 
-Le premier lot a ajouté la facturation Premium. Ce second lot rend l’offre tangible : démonstration calculée sans compte, critères personnels sur les dossiers, simulation de prix selon ces critères, rapports exportables et parcours de récupération de compte.
+Le premier lot a ajouté la facturation Premium. Le second rend l’offre tangible : démonstration calculée sans compte, critères personnels sur les dossiers, simulation de prix selon ces critères, rapports exportables et parcours de récupération de compte. Le troisième corrige les parcours commerciaux et la conservation des scénarios.
 
 ## Fonctionnalités du second lot
 
@@ -23,12 +23,23 @@ Le premier lot a ajouté la facturation Premium. Ce second lot rend l’offre ta
 
 ## Vérifications réalisées
 
-- 380 tests automatisés réussis, dont tests de paiement simulé, isolement des comptes, reconnexion, critères, plafond, démonstration, PDF, récupération, migrations concurrentes, rollback et sauvegardes.
+- 392 tests automatisés réussis, dont tests de paiement simulé, isolement des comptes, reconnexion, critères, plafond, démonstration, PDF, récupération, migrations concurrentes, rollback et sauvegardes.
 - Compilation Python et cohérence des dépendances vérifiées. Les versions principales installées et testées sont fixées dans `requirements.txt`.
 - Cinq pages du PDF d’exemple rendues et contrôlées visuellement; la police intégrée corrige la substitution observée avec la police standard.
 - Le fichier Compose est analysable et garde les opérations périodiques dans un profil optionnel.
 - Ces vérifications ne constituent pas un test de charge, un test d’intrusion ou une validation sur un vrai compte Stripe/Brevo.
 - Docker n’est pas disponible dans l’environnement de travail : la construction et le démarrage des conteneurs restent à vérifier sur l’hébergement.
+
+## Corrections du troisième lot
+
+- Les alertes utilisent les droits commerciaux actuels : un abonnement actif ouvre l’accès même si le compte était gratuit; une résiliation ou une expiration le ferme.
+- Le quota ImmoValue commercial ne peut plus être contourné par une session sans compte. Les comparables restent disponibles pour l’inscription.
+- La déconnexion et l’invalidation d’une session effacent les données privées conservées dans cette session.
+- Les scénarios et tests de résistance sont effectivement enregistrés avec le dossier. Modifier un scénario personnalisé crée un nouvel instantané; rouvrir le dossier restitue ses paramètres.
+- « Nouveau dossier » abandonne le brouillon précédent du même compte, conserve les dossiers sauvegardés et laisse les autres comptes intacts.
+- Les simulations dépassant les bornes du moteur affichent une indisponibilité explicite et conservent les résultats de base.
+- Pour un logement sans revenu locatif, les tableaux et PDF présentent le coût mensuel et des ratios locatifs non applicables. Une valeur nulle reste nulle dans la comparaison.
+- Deux rapports fictifs de quatre pages, avec et sans revenus locatifs, ont été rendus pour contrôle visuel.
 
 ## État des accès et de la publication
 

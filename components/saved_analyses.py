@@ -40,6 +40,11 @@ DELETE_CONFIRMATION_KEY = "pending_analysis_delete"
 ACTION_FEEDBACK_KEY = "saved_analysis_action_feedback"
 
 
+def _start_new_dossier():
+    from components.property_analysis import start_new_analysis
+    start_new_analysis()
+
+
 def _money(value: float) -> str:
     return f"{value:,.0f} $".replace(",", " ")
 
@@ -138,10 +143,11 @@ def _snapshot_history_rows(snapshots: tuple[dict, ...]) -> list[dict[str, str]]:
     for snapshot in snapshots[:5]:
         role = _saved_official_role(snapshot)
         score = snapshot.get("immo_score")
-        cash_flow = snapshot.get("cash_flow")
+        display = _saved_financial_presentation(snapshot)
         rows.append({
             "Date": str(snapshot.get("created_at") or "")[:10] or "Non publiée",
-            "Flux mensuel": _money(cash_flow) if isinstance(cash_flow, (int, float)) else "Non disponible",
+            "Mesure": display["monthly_label"],
+            "Montant mensuel": display["monthly_value"],
             "Score": f"{float(score):.0f} / 100" if isinstance(score, (int, float)) else "Non disponible",
             "Rôle municipal": _money(role["total_value"]) if role else "Non disponible",
         })
@@ -477,7 +483,7 @@ def show_saved_analyses() -> None:
             "la synthèse pour y revenir, la comparer ou la suivre.</p></div>",
             unsafe_allow_html=True,
         )
-        st.button("Créer mon premier dossier", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
+        st.button("Créer mon premier dossier", type="primary", on_click=_start_new_dossier, width="stretch")
         show_alert_center(user, analyses)
         return
 
@@ -492,7 +498,8 @@ def show_saved_analyses() -> None:
     followed_column.metric("Suivis", followed_count)
     with action_column:
         st.write("")
-        st.button("Créer un nouveau dossier", type="primary", on_click=go_to, args=("Analyser",), key="saved_new_analysis", width="stretch")
+        st.button("Créer un nouveau dossier", type="primary", on_click=_start_new_dossier, key="saved_new_analysis", width="stretch")
+    st.caption("Créer un nouveau dossier démarre un brouillon vierge. Vos dossiers sauvegardés sont conservés.")
     st.caption(f"{followed_count} dossier(s) suivi(s) · Les favoris apparaissent en premier. Le suivi lit uniquement les instantanés sauvegardés. Les courriels restent optionnels et exigent votre accord dans Mon compte.")
     if can_use(user, "alerts"):
         overview = _tracking_overview(tracked_analyses)
@@ -597,7 +604,7 @@ def show_saved_analyses() -> None:
                     for item in scenarios
                 ], hide_index=True, width="stretch")
             if resilience:
-                st.write(f"**Résistance financière :** {resilience.get('status', 'Non calculée')}")
+                st.write(f"**Résistance financière :** {resilience.get('status', 'Non calculée') if financial_display['has_income'] else 'Non applicable sans revenu locatif'}")
             market_context = json.loads(analysis.get("market_context_json", "[]"))
             if market_context:
                 st.markdown("**Contexte de marché observé lors de la sauvegarde**")

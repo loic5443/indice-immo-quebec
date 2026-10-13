@@ -1,7 +1,9 @@
 """Focused Streamlit assertions for the unified property summary."""
 
 import unittest
+import tempfile
 from pathlib import Path
+from data.database import initialize_database
 
 from streamlit.testing.v1 import AppTest
 
@@ -9,18 +11,17 @@ from streamlit.testing.v1 import AppTest
 class PropertySummaryUiTests(unittest.TestCase):
     def setUp(self):
         import components.property_analysis as page
-
         self.page = page
-        self.originals = {
-            "is_authenticated": page.is_authenticated,
-            "current_user": page.current_user,
-            "quota_status": page.quota_status,
-            "quota_is_enforced": page.quota_is_enforced,
-        }
+        self.temp = tempfile.TemporaryDirectory()
+        self.db = Path(self.temp.name) / "summary.sqlite"
+        initialize_database(self.db)
+        self.originals = {name: getattr(page, name) for name in ("DATABASE_PATH", "is_authenticated", "current_user", "quota_status", "quota_is_enforced")}
+        page.DATABASE_PATH = self.db
 
     def tearDown(self):
         for name, value in self.originals.items():
             setattr(self.page, name, value)
+        self.temp.cleanup()
 
     def test_summary_prioritizes_known_results_and_keeps_details_secondary(self):
         app = AppTest.from_string(

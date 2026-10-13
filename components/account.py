@@ -52,7 +52,7 @@ def _active_user() -> dict | None:
         return None
     user = get_user(session_user["id"])
     if user is None or session_user.get("session_version", 0) != user.get("session_version", 0):
-        st.session_state.pop("current_user", None)
+        st.session_state.clear()
         return None
     # Refresh non-sensitive account data such as plan or profile at each request.
     st.session_state["current_user"] = user
@@ -60,7 +60,7 @@ def _active_user() -> dict | None:
 
 
 def logout() -> None:
-    st.session_state.pop("current_user", None)
+    st.session_state.clear()
     go_to("Accueil")
 
 

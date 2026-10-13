@@ -21,6 +21,7 @@ from services.alert_email_service import alert_email_readiness
 from services.alert_service import build_calculable_alerts
 from services.dossier_tracking_service import filter_tracked_analyses
 from services.entitlements_service import can_use
+from services.auth_service import get_user
 
 
 AlertSender = Callable[..., None]
@@ -86,14 +87,9 @@ def _finish_claims(user_id: int, fingerprints: list[str], outcome: str, database
 def _eligible_user(user_id: int, database_path: Path | str) -> dict | None:
     """Reload consent and rights from SQLite, never from a Streamlit session."""
 
-    with closing(SQLiteRepository(database_path)._connect()) as connection:
-        row = connection.execute(
-            "SELECT id, email, plan, role, alert_email_consent FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-    if row is None:
+    user = get_user(user_id, database_path)
+    if user is None:
         return None
-    user = dict(row)
     if not bool(user["alert_email_consent"]) or not can_use(user, "alerts"):
         return None
     return user

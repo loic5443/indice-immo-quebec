@@ -51,6 +51,7 @@ def generate_report_pdf(analysis: dict[str, Any], criteria_result: dict | None =
     market_context = _json(analysis.get("market_context_json"), [])
     immovalue = _json(analysis.get("immovalue_json"), {})
     official_role = _json(analysis.get("official_role_snapshot_json"), {})
+    has_income = _has_rental_income(inputs, analysis)
     story = []
     date_label = "Démonstration fictive, sans adresse réelle" if analysis.get("is_demo") else "Analyse sauvegardée le " + str(analysis.get("created_at", ""))
 
@@ -69,7 +70,7 @@ def generate_report_pdf(analysis: dict[str, Any], criteria_result: dict | None =
         ["Score ImmoRadar", _score(analysis.get("immo_score"))],
         ["Indice de confiance", _score(analysis.get("confidence_index"))],
         ["Verdict", analysis.get("engine_verdict") or "Données insuffisantes"],
-        ["Résistance", resilience.get("status", "Non calculée")],
+        ["Résistance", resilience.get("status", "Non calculée") if has_income else "Non applicable sans revenu locatif"],
     ]
     story += [_table(summary, styles, [1.75 * inch, 5.0 * inch]), Spacer(1, 0.18 * inch),
               Paragraph("La confiance mesure la complétude et la qualité des hypothèses, et non la probabilité qu'une propriété soit un bon achat.", styles["note"])]
@@ -89,11 +90,11 @@ def generate_report_pdf(analysis: dict[str, Any], criteria_result: dict | None =
     story += _list_section("Points à surveiller", negatives, styles)
     story += _list_section("Données manquantes", missing, styles)
     story += _heading("7. Scénarios « Et si? »", styles)
-    story += [_table(_scenario_rows(scenarios), styles, [1.2 * inch, 1.0 * inch, 1.0 * inch, 1.0 * inch, 1.15 * inch, 1.4 * inch]), PageBreak()]
+    story += [_table(_scenario_rows(scenarios, has_income=has_income), styles, [1.2 * inch, 1.0 * inch, 1.0 * inch, 1.0 * inch, 1.15 * inch, 1.4 * inch]), PageBreak()]
 
     story += _heading("8. Tests de résistance", styles)
-    story += [Paragraph("Seuils : résistant si chaque test garde un flux mensuel >= 0 $ et un DSCR >= 1,10x; sensible si le test combiné garde un flux >= 0 $ et un DSCR >= 1,00x; fragile autrement.", styles["note"]),
-              _table(_resilience_rows(resilience), styles, [2.2 * inch, 1.4 * inch, 1.0 * inch, 2.15 * inch])]
+    story += [Paragraph("Sans revenu locatif, les variations de coûts sont affichées. La résistance locative et le DSCR ne sont pas applicables." if not has_income else "Seuils : résistant si chaque test garde un flux mensuel >= 0 $ et un DSCR >= 1,10x; sensible si le test combiné garde un flux >= 0 $ et un DSCR >= 1,00x; fragile autrement.", styles["note"]),
+              _table(_resilience_rows(resilience, has_income=has_income), styles, [2.2 * inch, 1.4 * inch, 1.0 * inch, 2.15 * inch])]
     story += _heading("9. Prochaines vérifications recommandées", styles)
     story += _list_section("À vérifier", checks, styles)
     story += _heading("10. Méthodologie, sources et limites", styles)
@@ -342,19 +343,24 @@ def _dimension_rows(dimensions):
     return rows
 
 
-def _scenario_rows(scenarios):
-    rows = [["Scénario", "Paiement", "RNE", "Flux", "Score", "Verdict"]]
+def _has_rental_income(inputs, analysis):
+    values = (inputs.get("rental_income_monthly", analysis.get("rental_income", 0)), inputs.get("other_income_monthly", 0))
+    return any(isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 for value in values)
+
+
+def _scenario_rows(scenarios, has_income=True):
+    rows = [["Scénario", "Paiement", "RNE", "Flux" if has_income else "Coût", "Score", "Verdict"]]
     for item in scenarios:
         financial, engine = item.get("financial", {}), item.get("engine", {})
-        rows.append([item.get("name", ""), _money(financial.get("monthly_payment", 0)), _money(financial.get("net_operating_income_annual", 0)), _money(financial.get("cash_flow_monthly", 0)), _score(engine.get("score")), engine.get("verdict", "")])
+        rows.append([item.get("name", ""), _money(financial.get("monthly_payment", 0)), _money(financial.get("net_operating_income_annual", 0)) if has_income else "Non applicable", _money(financial.get("cash_flow_monthly" if has_income else "total_monthly_expenses", 0)), _score(engine.get("score")), engine.get("verdict", "")])
     return rows
 
 
-def _resilience_rows(resilience):
-    rows = [["Test", "Flux mensuel", "DSCR", "Verdict"]]
+def _resilience_rows(resilience, has_income=True):
+    rows = [["Test", "Flux mensuel" if has_income else "Coût mensuel", "DSCR", "Verdict"]]
     for item in resilience.get("tests", []):
         financial, engine = item.get("financial", {}), item.get("engine", {})
-        rows.append([item.get("name", ""), _money(financial.get("cash_flow_monthly", 0)), _ratio(financial.get("debt_service_coverage_ratio")), engine.get("verdict", "")])
+        rows.append([item.get("name", ""), _money(financial.get("cash_flow_monthly" if has_income else "total_monthly_expenses", 0)), _ratio(financial.get("debt_service_coverage_ratio")) if has_income else "Non applicable", engine.get("verdict", "")])
     return rows
 
 

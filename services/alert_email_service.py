@@ -10,6 +10,7 @@ import sqlite3
 from providers.brevo_email import BrevoUnavailable, delivery_status, send_email, verify_delivery_configuration
 from repositories.sqlite_repository import SQLiteRepository
 from services.entitlements_service import can_use
+from services.auth_service import get_user
 
 
 TEST_ALERT_FINGERPRINT = "brevo-email-test-v1"
@@ -115,19 +116,15 @@ def send_test_alert_email(
     if alert_email_readiness(environment) != "ready":
         return "not_ready"
 
+    user = get_user(user_id, database_path)
+    if user is None:
+        return "not_found"
+    if not user["alert_email_consent"]:
+        return "no_consent"
+    if not can_use(user, "alerts"):
+        return "not_entitled"
+    email = user["email"]
     with closing(SQLiteRepository(database_path)._connect()) as connection, connection:
-        row = connection.execute(
-            "SELECT email, plan, role, alert_email_consent FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-        if row is None:
-            return "not_found"
-        email, plan, role, consent = row
-        if not consent:
-            return "no_consent"
-        if not can_use({"plan": plan, "role": role}, "alerts"):
-            return "not_entitled"
-
         previous = connection.execute(
             "SELECT outcome FROM alert_delivery_log WHERE user_id = ? AND alert_fingerprint = ? AND channel = 'email'",
             (user_id, TEST_ALERT_FINGERPRINT),
