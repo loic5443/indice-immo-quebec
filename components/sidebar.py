@@ -69,5 +69,8 @@ def show_sidebar() -> str:
         st.button("Donner mon avis", key="secondary_feedback", width="stretch", on_click=_secondary, args=("Donner mon avis",))
     if st.session_state.get("current_user", {}).get("role") == "admin":
         st.sidebar.button("Administration", key="secondary_admin", width="stretch", on_click=_secondary, args=("Administration",))
-    st.sidebar.caption("Bêta privée · Aucun paiement réel n’est activé.")
+    import os
+    commercial = os.environ.get("IMMORADAR_BILLING_ENABLED") == "1"
+    live = os.environ.get("IMMORADAR_BILLING_MODE") == "live"
+    st.sidebar.caption("ImmoRadar · Gratuit et Premium" if commercial and live else "Paiement en mode test" if commercial else "Bêta privée · Aucun paiement réel n’est activé.")
     return st.session_state.get("main_navigation", "Accueil")

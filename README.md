@@ -27,3 +27,9 @@ ImmoRadar ne fabrique pas de prix de vente, de rendement locatif ou de niveau de
 - `migrations/` : évolution rétrocompatible de SQLite.
 - `docs/` : documentation produit, sources, méthodes et limites.
 - `tests/` : contrôles automatisés du produit et de la confidentialité.
+
+## Préparer le lancement Premium
+
+Le parcours de facturation Stripe et le déploiement avec stockage persistant sont décrits dans [le guide de lancement](docs/LANCEMENT_PREMIUM.md). Les paiements sont désactivés par défaut. La configuration Stripe et la recette sur HTTPS doivent être terminées avant une offre payante.
+
+Tests : `python -m pip install -r requirements-dev.txt`, puis `python -m unittest discover -s tests -q`.

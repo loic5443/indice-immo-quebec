@@ -1,5 +1,6 @@
 """Backward-compatible facade for the SQLite account and analysis services."""
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,7 @@ from services.auth_service import get_user as _get_user
 from services.auth_service import validate_registration
 
 
-DATABASE_PATH = Path(__file__).resolve().parent / "immoradar.db"
+DATABASE_PATH = Path(os.environ.get("IMMORADAR_DATABASE_PATH", str(Path(__file__).resolve().parent / "immoradar.db")))
 
 
 def initialize_database(database_path: Path | str = DATABASE_PATH) -> list[str]:

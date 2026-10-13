@@ -1,0 +1,44 @@
+# Run one replica of each Python service; both share the same local volume.
+x-application: &application
+  build: .
+  env_file: .env
+  environment:
+    IMMORADAR_DATABASE_PATH: /app/var/immoradar.db
+  volumes:
+    - application_data:/app/var
+  restart: unless-stopped
+services:
+  initialize:
+    <<: *application
+    restart: "no"
+    command: ["python", "-c", "from data.database import initialize_database; initialize_database()"]
+  app:
+    <<: *application
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+  billing:
+    <<: *application
+    command: ["python", "-m", "uvicorn", "services.billing_api:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+  proxy:
+    image: caddy:2.10.2-alpine
+    environment:
+      IMMORADAR_HOSTNAME: ${IMMORADAR_HOSTNAME:?Set the public hostname}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployment/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+      - billing
+    restart: unless-stopped
+volumes:
+  application_data:
+  caddy_data:
+  caddy_config:

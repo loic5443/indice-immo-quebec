@@ -212,6 +212,13 @@ def show_account() -> None:
             st.info("Votre espace est prêt. Commencez par analyser une propriété : vous pourrez ensuite conserver votre dossier et vos scénarios ici.")
             primary.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
         sign_out.button("Se déconnecter", on_click=logout, width="stretch")
+        from components.billing import available_offer, show_billing_actions
+        billing_offer, billing_error = available_offer()
+        if billing_offer:
+            with st.expander("Abonnement et facturation", expanded=False):
+                show_billing_actions(user, DATABASE_PATH, billing_offer)
+        elif billing_error:
+            st.info(billing_error)
         _show_alert_email_preferences(user)
         with st.expander("Préférences pour mes nouvelles analyses", expanded=False):
             st.caption("Ces choix personnalisent vos prochains dossiers. Ils ne modifient jamais les analyses déjà sauvegardées.")
@@ -276,7 +283,10 @@ def show_account() -> None:
             if confirmation != "SUPPRIMER": st.error("Confirmation requise : tapez SUPPRIMER.")
             elif delete_account(user["id"], DATABASE_PATH):
                 logout(); st.success("Compte supprimé."); st.rerun()
-        st.caption("Le statut Premium est prévu techniquement; aucun paiement réel n'est activé.")
+            else:
+                st.error("Un dossier de facturation est associé à votre compte. Annulez le renouvellement dans votre espace Premium et contactez le support pour supprimer le compte sans laisser de paiement actif.")
+        if not billing_offer:
+            st.caption("Le statut Premium est prévu techniquement; aucun paiement réel n'est activé.")
         return
 
     st.write("Créez un compte local pour sauvegarder vos analyses, ou connectez-vous à un compte existant.")

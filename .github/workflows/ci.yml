@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - audit-sync-origin-main-2026-09-22
 
 permissions:
   contents: read
@@ -23,7 +24,7 @@ jobs:
           python-version: "3.12"
 
       - name: Installer les dépendances
-        run: python -m pip install --disable-pip-version-check -r requirements.txt
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
 
       - name: Vérifier la compilation Python
         run: python -m compileall -q calculations components data domain migrations providers repositories scripts services indice_immo.py

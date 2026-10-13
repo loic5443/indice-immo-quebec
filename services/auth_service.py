@@ -97,16 +97,19 @@ def authenticate_user(email: str, password: str, database_path: Path | str) -> d
     attempted_hash, _ = _hash_password(password, bytes.fromhex(user["password_salt"]))
     if not hmac.compare_digest(attempted_hash, user["password_hash"]):
         return None
-    return _public_user(user)
+    return _public_user(user, database_path)
 
 
 def get_user(user_id: int, database_path: Path | str) -> dict[str, Any] | None:
     user = SQLiteRepository(database_path).get_user_by_id(user_id)
-    return _public_user(user) if user else None
+    return _public_user(user, database_path) if user else None
 
 
-def _public_user(user: dict[str, Any]) -> dict[str, Any]:
-    return {key: user[key] for key in ("id", "name", "email", "plan", "user_type", "investment_horizon", "risk_tolerance", "role", "onboarding_completed", "onboarding_step", "user_objective", "limitations_accepted", "marketing_consent", "analytics_consent", "alert_email_consent")}
+def _public_user(user: dict[str, Any], database_path: Path | str) -> dict[str, Any]:
+    public = {key: user[key] for key in ("id", "name", "email", "plan", "user_type", "investment_horizon", "risk_tolerance", "role", "onboarding_completed", "onboarding_step", "user_objective", "limitations_accepted", "marketing_consent", "analytics_consent", "alert_email_consent")}
+    from services.billing_service import effective_plan
+    public["plan"] = effective_plan(user["id"], user["plan"], database_path)
+    return public
 
 
 def _now() -> str:

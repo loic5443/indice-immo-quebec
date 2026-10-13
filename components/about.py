@@ -52,4 +52,5 @@ def show_about() -> None:
     analyse, premium, _ = st.columns([1, 1, 2])
     analyse.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
     premium.button("Découvrir Premium", on_click=go_to, args=("Premium",), width="stretch")
-    st.caption("ImmoRadar — bêta privée. Aucun paiement réel n’est demandé pendant cette période.")
+    import os
+    st.caption("ImmoRadar — Gratuit et Premium. Consultez les conditions de l’offre avant de vous abonner." if os.environ.get("IMMORADAR_BILLING_ENABLED") == "1" else "ImmoRadar — bêta privée. Aucun paiement réel n’est demandé pendant cette période.")

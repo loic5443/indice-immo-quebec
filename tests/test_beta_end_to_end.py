@@ -164,8 +164,8 @@ class BetaEndToEndTests(unittest.TestCase):
         self.assertEqual([row[0] for row in self.trace], list(range(1, 18)))
 
     def test_private_beta_smoke_journey(self):
-        self.step(1, "migrations appliquées", lambda: self.assertEqual(initialize_database(self.db)[-1], "0025"))
-        self.step(2, "version de schéma persistée", lambda: self.assertEqual(applied_migrations(self.db)[-1], "0025"))
+        self.step(1, "migrations appliquées", lambda: self.assertEqual(initialize_database(self.db)[-1], "0026"))
+        self.step(2, "version de schéma persistée", lambda: self.assertEqual(applied_migrations(self.db)[-1], "0026"))
         self.step(3, "compte fondateur créé", lambda: self.assertIsNotNone(
             create_user("Fondateur", "founder@example.invalid", "motdepasse-solide", self.db, UserProfile())
         ))

@@ -13,4 +13,8 @@ def export_user_data(user_id, database_path):
 def delete_account(user_id, database_path):
     repository=SQLiteRepository(database_path)
     with closing(repository._connect()) as connection, connection:
+        # Billing accounts must first be resolved by support; deletion must never
+        # leave a recurring payment active without an owning app account.
+        if connection.execute("SELECT 1 FROM billing_accounts WHERE user_id=?", (user_id,)).fetchone():
+            return False
         return connection.execute("DELETE FROM users WHERE id=?",(user_id,)).rowcount == 1

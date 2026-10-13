@@ -7,7 +7,7 @@ import streamlit as st
 from components.about import show_about
 from components.admin import show_admin
 from components.feedback import show_feedback
-from components.account import initialize_session, show_account
+from components.account import initialize_session, is_authenticated, show_account
 from components.home import show_home
 from components.markets import show_markets
 from components.premium import show_premium
@@ -27,6 +27,12 @@ initialize_session()
 css_path = Path(__file__).resolve().parent / "styles" / "main.css"
 with css_path.open(encoding="utf-8") as css:
     st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
+
+if st.session_state.get("pending_billing_return") and is_authenticated():
+    st.query_params.update(st.session_state.pop("pending_billing_return"))
+
+if st.query_params.get("billing") in {"success", "cancel", "portal"}:
+    st.session_state["main_navigation"] = "Premium"
 
 page = show_sidebar()
 

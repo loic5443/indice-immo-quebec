@@ -15,3 +15,15 @@ class EntitlementsTests(unittest.TestCase):
   with closing(SQLiteRepository(self.db)._connect()) as connection,connection:
    connection.execute("UPDATE beta_settings SET quota_enforced=1 WHERE id=1")
   self.assertTrue(quota_is_enforced(self.db))
+
+
+class CommercialQuotaTests(EntitlementsTests):
+ def test_concurrent_free_estimations_only_consume_once(self):
+  from concurrent.futures import ThreadPoolExecutor
+  with ThreadPoolExecutor(max_workers=2) as pool:
+   futures = [pool.submit(consume_estimation, 1, self.user, self.db, key) for key in ("a", "b")]
+   self.assertEqual(sorted(f.result() for f in futures), [False, True])
+ def test_commercial_launch_enforces_quota(self):
+  from unittest.mock import patch
+  with patch.dict("os.environ", {"IMMORADAR_BILLING_ENABLED": "1"}):
+   self.assertTrue(quota_is_enforced(self.db))

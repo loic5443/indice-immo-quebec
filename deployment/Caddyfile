@@ -1,0 +1,9 @@
+{$IMMORADAR_HOSTNAME} {
+    encode zstd gzip
+    handle /stripe/webhook {
+        reverse_proxy billing:8000
+    }
+    handle {
+        reverse_proxy app:8501
+    }
+}
