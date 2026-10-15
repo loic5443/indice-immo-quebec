@@ -1,3 +1,4 @@
+from contextlib import closing
 import re
 import sqlite3
 import tempfile
@@ -18,7 +19,7 @@ class LaunchUiJourneys(unittest.TestCase):
         self.db = Path(self.temp.name) / "journey.sqlite"
         initialize_database(self.db)
         create_user("Client", "ui-client@example.test", "old-long-password", self.db)
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE users SET plan='premium' WHERE id=1")
         snapshot, _ = demo_snapshot()
         self.analysis_id = SQLiteRepository(self.db).save_analysis(1, "Duplex du client", snapshot)
@@ -79,7 +80,7 @@ with patch.object(account, "get_user", lambda identifier: get_user(identifier, {
         app.session_state["current_user"] = get_user(1, self.db)
         app.run(timeout=20)
         self.assertIn("SESSION ACTIVE", " ".join(item.value for item in app.markdown))
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE users SET session_version=session_version+1 WHERE id=1")
         app.run(timeout=20)
         self.assertIn("SESSION FERMÉE", " ".join(item.value for item in app.markdown))

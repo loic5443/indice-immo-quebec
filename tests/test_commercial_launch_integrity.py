@@ -1,3 +1,4 @@
+from contextlib import closing
 import json
 import sqlite3
 import tempfile
@@ -22,7 +23,7 @@ class CommercialRightsTests(unittest.TestCase):
         self.db = Path(self.temp.name) / "commercial.sqlite"
         initialize_database(self.db)
         create_user("Client", "paid@example.test", "long-password-test", self.db)
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE users SET alert_email_consent=1 WHERE id=1")
             connection.execute("INSERT INTO billing_accounts(user_id,customer_id,subscription_id,status,access_until) VALUES(1,'cus_fixture','sub_fixture','active',?)", (int(time.time())+86400,))
         self.sender = Mock()
@@ -34,11 +35,11 @@ class CommercialRightsTests(unittest.TestCase):
         self.assertEqual(_eligible_user(1, self.db)["plan"], "premium")
         self.assertEqual(send_test_alert_email(1, self.db, environment=EMAIL_ENV, sender=self.sender), "sent")
         self.sender.assert_called_once()
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             self.assertEqual(connection.execute("SELECT plan FROM users WHERE id=1").fetchone()[0], "free")
 
     def test_canceled_paid_account_cannot_use_stale_beta_premium(self):
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE users SET plan='premium' WHERE id=1")
             connection.execute("UPDATE billing_accounts SET status='canceled' WHERE user_id=1")
         self.assertIsNone(_eligible_user(1, self.db))
@@ -46,7 +47,7 @@ class CommercialRightsTests(unittest.TestCase):
         self.sender.assert_not_called()
 
     def test_expired_paid_period_stops_alert_delivery(self):
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE billing_accounts SET access_until=1 WHERE user_id=1")
         self.assertIsNone(_eligible_user(1, self.db))
         self.assertEqual(send_test_alert_email(1, self.db, environment=EMAIL_ENV, sender=self.sender), "not_entitled")
@@ -111,7 +112,7 @@ with patch.object(page,"DATABASE_PATH",db), patch.object(page,"is_authenticated"
 ''').run(timeout=20)
 
     def saved(self):
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.row_factory = sqlite3.Row
             return [dict(row) for row in connection.execute("SELECT * FROM analyses ORDER BY id")]
 

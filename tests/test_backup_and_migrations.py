@@ -1,3 +1,4 @@
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -29,7 +30,7 @@ class OperationalTests(unittest.TestCase):
         self.assertEqual(metadata["schema_version"], "0027")
         self.assertEqual(verify_backup(target)["sha256"], metadata["sha256"])
         self.assertEqual(self.db.read_bytes(), before)
-        with sqlite3.connect(target) as connection:
+        with closing(sqlite3.connect(target)) as connection, connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM users").fetchone()[0], 1)
         self.assertEqual(applied_migrations(target), applied_migrations(self.db))
         with self.assertRaises(BackupError):
@@ -37,7 +38,7 @@ class OperationalTests(unittest.TestCase):
 
     def test_random_sqlite_is_not_accepted_as_immoradar_backup(self):
         unknown = self.root / "unknown.sqlite"
-        with sqlite3.connect(unknown) as connection:
+        with closing(sqlite3.connect(unknown)) as connection, connection:
             connection.execute("CREATE TABLE unrelated(id INTEGER)")
         with self.assertRaises(BackupError):
             verify_backup(unknown)
@@ -50,7 +51,7 @@ class OperationalTests(unittest.TestCase):
         with patch("migrations.runner.MIGRATIONS_DIRECTORY", directory):
             with self.assertRaises(sqlite3.Error):
                 apply_migrations(target)
-        with sqlite3.connect(target) as connection:
+        with closing(sqlite3.connect(target)) as connection, connection:
             self.assertIsNone(connection.execute("SELECT 1 FROM sqlite_master WHERE name='should_not_survive'").fetchone())
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0], 0)
 

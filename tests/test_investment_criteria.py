@@ -1,3 +1,4 @@
+from contextlib import closing
 import json
 import math
 import sqlite3
@@ -51,7 +52,7 @@ class CriteriaServiceTests(unittest.TestCase):
         initialize_database(self.db)
         for index in (1, 2):
             create_user(f"Compte {index}", f"criteria{index}@example.test", "long-password-test", self.db)
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE users SET plan='premium' WHERE id=1")
         snapshot, _ = demo_snapshot()
         self.analysis_id = SQLiteRepository(self.db).save_analysis(1, "Dossier privé", snapshot)
@@ -64,7 +65,7 @@ class CriteriaServiceTests(unittest.TestCase):
         self.assertEqual(get_criteria(1, self.db), {"min_cash_flow": 100})
         with self.assertRaises(CriteriaAccessError):
             save_criteria(2, {"min_cash_flow": 0}, self.db)
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE users SET plan='premium' WHERE id=2")
         self.assertEqual(get_criteria(2, self.db), {})
         with self.assertRaises(CriteriaAccessError):

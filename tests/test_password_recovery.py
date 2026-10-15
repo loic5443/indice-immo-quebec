@@ -1,3 +1,4 @@
+from contextlib import closing
 import hashlib
 import re
 import sqlite3
@@ -36,14 +37,14 @@ class RecoveryTests(unittest.TestCase):
         self.assertFalse(recovery_ready({}))
         self.assertFalse(request_recovery("client@example.test", self.db, {}, self.sender)[0])
         self.sender.assert_not_called()
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM password_reset_tokens").fetchone()[0], 0)
 
     def test_token_is_hashed_single_use_and_invalidates_old_session(self):
         before = get_user(1, self.db)
         result, token = self.request()
         self.assertEqual(result, (True, REQUEST_MESSAGE))
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             stored = connection.execute("SELECT token_hash FROM password_reset_tokens").fetchone()[0]
         self.assertNotEqual(stored, token)
         self.assertEqual(stored, hashlib.sha256(token.encode()).hexdigest())
@@ -74,7 +75,7 @@ class RecoveryTests(unittest.TestCase):
     def test_send_failure_exposes_no_provider_details_and_removes_token(self):
         self.sender.side_effect = RuntimeError("private secret")
         self.assertEqual(request_recovery("client@example.test", self.db, ENV, self.sender, now=1000), (True, REQUEST_MESSAGE))
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM password_reset_tokens").fetchone()[0], 0)
 
     def test_reset_throttle_and_login_window_expiry(self):
@@ -91,6 +92,6 @@ class RecoveryTests(unittest.TestCase):
         for _ in range(10):
             self.assertIsNone(authenticate_user("client@example.test", "wrong", self.db))
         self.assertIsNone(authenticate_user("client@example.test", "old-long-password", self.db))
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             rows = connection.execute("SELECT identity_hash,purpose FROM auth_attempt_windows").fetchall()
         self.assertTrue(all("@" not in key for key, purpose in rows))
