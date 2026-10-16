@@ -55,6 +55,11 @@ page.show_premium()
         self.assertFalse(app.exception)
         self.assertIn("Créer mon compte pour choisir Premium", [button.label for button in app.button])
         self.assertNotIn("Choisir Premium", [button.label for button in app.button])
+        app.session_state["return_to_analysis_after_auth"] = True
+        app.button(key="billing_signup").click().run(timeout=20)
+        self.assertEqual(app.session_state["main_navigation"], "Mon compte")
+        self.assertTrue(app.session_state["return_to_premium_after_auth"])
+        self.assertNotIn("return_to_analysis_after_auth", app.session_state)
 
     def test_guest_payment_return_can_navigate_to_login(self):
         from streamlit.testing.v1 import AppTest
