@@ -1,6 +1,7 @@
 FROM caddy:2.10.2-alpine AS proxy
 FROM python:3.12-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    IMMORADAR_DATABASE_PATH=/app/var/immoradar.db
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
