@@ -1,0 +1,32 @@
+# Paid resource proposal. Do not create it before approving the provider quote.
+services:
+  - type: web
+    name: immoradar
+    runtime: docker
+    plan: 0.5c-512mb
+    region: virginia
+    dockerfilePath: ./deployment/render.Dockerfile
+    dockerContext: .
+    autoDeployTrigger: off
+    numInstances: 1
+    healthCheckPath: /_deployment/ready
+    maxShutdownDelaySeconds: 30
+    disk:
+      name: immoradar-data
+      mountPath: /app/var
+      sizeGB: 1
+    envVars:
+      - key: IMMORADAR_DATABASE_PATH
+        value: /app/var/immoradar.db
+      - key: IMMORADAR_BILLING_ENABLED
+        value: "0"
+      - key: IMMORADAR_BILLING_MODE
+        value: test
+      - key: IMMORADAR_AUTH_EMAIL_ENABLED
+        value: "0"
+      - key: IMMORADAR_ALERT_DELIVERY_ENABLED
+        value: "false"
+      - key: IMMORADAR_OPERATIONS_ENABLED
+        value: "0"
+      - key: IMMORADAR_BACKUPS_ENABLED
+        value: "0"

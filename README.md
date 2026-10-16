@@ -1,5 +1,7 @@
 # ImmoRadar
 
+Pour préparer l’hébergement avec disque persistant et une adresse HTTPS fournie par Render, consulter [le guide de déploiement](docs/HEBERGEMENT_RENDER.md). La création de ressources payantes reste soumise à l’accord du propriétaire.
+
 ImmoRadar aide à comprendre un dossier immobilier : renseignements publics autorisés, valeur municipale, calculs financiers, ImmoScore et suivi des changements vérifiables.
 
 ## Ce que l’application fait
