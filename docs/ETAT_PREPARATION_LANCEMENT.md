@@ -1,5 +1,7 @@
 # ImmoRadar — lot autonome de préparation au lancement
 
+État mis à jour le 16 octobre 2026. Aucun nouvel hébergement payant ni paiement réel n’est activé. Le propriétaire souhaite différer toute dépense jusqu’à la fin des préparatifs gratuits.
+
 ## Résultat concret
 
 La branche de travail repose sur `audit-sync-origin-main-2026-09-22`, commit `fe261232f29d26bed8a2e6abc67a0e169328d6e7`, qui contient la version locale attestée du 22 septembre et les 27 commits suivants.
@@ -23,12 +25,18 @@ Le premier lot a ajouté la facturation Premium. Le second rend l’offre tangib
 
 ## Vérifications réalisées
 
-- 392 tests automatisés réussis, dont tests de paiement simulé, isolement des comptes, reconnexion, critères, plafond, démonstration, PDF, récupération, migrations concurrentes, rollback et sauvegardes.
+- 406 tests automatisés réussis le 16 octobre, dont tests de paiement simulé, isolement des comptes, reconnexion, critères, plafond, démonstration, PDF, récupération, migrations concurrentes, rollback, sauvegardes, hébergement et retour vers Premium après authentification.
 - Compilation Python et cohérence des dépendances vérifiées. Les versions principales installées et testées sont fixées dans `requirements.txt`.
 - Cinq pages du PDF d’exemple rendues et contrôlées visuellement; la police intégrée corrige la substitution observée avec la police standard.
 - Le fichier Compose est analysable et garde les opérations périodiques dans un profil optionnel.
 - Ces vérifications ne constituent pas un test de charge, un test d’intrusion ou une validation sur un vrai compte Stripe/Brevo.
-- Docker n’est pas disponible dans l’environnement de travail : la construction et le démarrage des conteneurs restent à vérifier sur l’hébergement.
+- Docker est absent de l’environnement de travail local. La construction et le démarrage ont toutefois réussi dans GitHub Actions : [exécution 38963680907](https://github.com/loic5443/indice-immo-quebec/actions/runs/38963680907), avec vraie session Streamlit via WebSocket et conservation d’un compte fictif après recréation du conteneur sur le même volume. Ce contrôle ne remplace pas la validation sur Render ni un test de charge.
+
+## Parcours Premium corrigé le 16 octobre
+
+Un visiteur qui choisit Premium retrouve maintenant l’offre après connexion ou après le démarrage obligatoire de son nouveau compte. Une connexion refusée ou un démarrage incomplet conserve cette intention. Ce retour n’ouvre pas de paiement et n’accorde aucun droit Premium. Le dernier choix explicite entre conserver une analyse et choisir Premium détermine la destination.
+
+Deux nouveaux essais d’interface couvrent une vraie connexion avec mot de passe incorrect puis correct, et la fin du démarrage avec reconnaissance des limites d’abord absente puis acceptée. Le parcours de création de compte depuis Premium et le retour vers une analyse sont également contrôlés. Le workflow `launch-journeys.yml` permet de répéter la suite sur GitHub avec les paiements réels et les courriels désactivés.
 
 ## Corrections du troisième lot
 
@@ -43,9 +51,9 @@ Le premier lot a ajouté la facturation Premium. Le second rend l’offre tangib
 
 ## État des accès et de la publication
 
-L’écriture GitHub a retourné une erreur 403 et l’envoi Git n’avait pas d’authentification utilisable. Aucun changement n’a donc été poussé, fusionné sur `main` ou publié sur un site. Les commits et le fichier de modifications constituent le point de reprise.
+La version de lancement est sauvegardée sur GitHub dans `codex/launch-october-2026`, commit `0c16d53`. Les préparatifs d’hébergement persistant sont dans `codex/hosting-persistent-2026-10-16`, commit `d6612f1`. Les corrections de parcours du 16 octobre sont préparées à partir de ce dernier état, dans `codex/premium-journey-2026-10-16`. Aucune fusion dans `main` ni publication de cette version commerciale n’a été faite. Un ancien déploiement Streamlit a existé; sa présence ne valide pas cette version.
 
-Pour la phase d’intégration réelle, il reste les accès GitHub, hébergement/domaine, Stripe et Brevo. Les procédures, configurations et scénarios de recette sont dans `LANCEMENT_PREMIUM.md`.
+GitHub est accessible et le connecteur Render est connecté. Aucun espace de travail Render n’est sélectionné et aucune ressource payante n’a été créée. Pour la phase d’intégration réelle, il reste le choix et l’accord sur l’hébergement, puis la configuration Stripe et Brevo. Un domaine personnel n’est pas nécessaire aux premiers contrôles HTTPS si l’hébergeur fournit une adresse. Les procédures et scénarios de recette sont dans `LANCEMENT_PREMIUM.md` et `HEBERGEMENT_RENDER.md`.
 
 La récupération est implémentée mais ne peut envoyer de lien tant que la configuration de courriel et l’URL HTTPS ne sont pas prêtes. Le suivi ne surveille pas automatiquement toutes les annonces; il compare les instantanés sauvegardés. Les sauvegardes périodiques du même volume doivent être copiées hors du serveur et surveillées.
 
