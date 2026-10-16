@@ -1,0 +1,39 @@
+name: Parcours de lancement
+
+on:
+  push:
+    branches: ["codex/premium-journey-*"]
+  pull_request:
+    paths:
+      - "components/**"
+      - "services/**"
+      - "tests/**"
+      - "requirements*.txt"
+      - ".github/workflows/launch-journeys.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: launch-journeys-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  journeys:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      IMMORADAR_BILLING_ENABLED: "0"
+      IMMORADAR_AUTH_EMAIL_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Installer les dépendances
+        run: python -m pip install -r requirements-dev.txt
+      - name: Vérifier les dépendances
+        run: python -m pip check
+      - name: Vérifier les parcours et les droits Premium avec données fictives
+        run: python -m unittest discover -s tests -q
