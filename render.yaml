@@ -7,7 +7,7 @@ services:
     region: virginia
     dockerfilePath: ./deployment/render.Dockerfile
     dockerContext: .
-    autoDeployTrigger: off
+    autoDeployTrigger: "off"
     numInstances: 1
     healthCheckPath: /_deployment/ready
     maxShutdownDelaySeconds: 30
