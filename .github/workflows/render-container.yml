@@ -1,0 +1,59 @@
+name: Hébergement persistant
+
+on:
+  push:
+    branches: ["codex/hosting-persistent-*"]
+  pull_request:
+    paths:
+      - "deployment/**"
+      - "scripts/render_server.py"
+      - "services/deployment_api.py"
+      - "render.yaml"
+      - "requirements*.txt"
+      - ".github/workflows/render-container.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construire le conteneur
+        run: docker build -f deployment/render.Dockerfile -t immoradar-render .
+      - name: Vérifier la configuration du proxy
+        run: docker run --rm --entrypoint caddy immoradar-render validate --config /app/deployment/RenderCaddyfile --adapter caddyfile
+      - name: Vérifier le démarrage et la persistance après recréation
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker volume create immoradar-test-data
+          launch() {
+            docker run -d --name immoradar-test --memory 512m --cpus .5 \
+              -e RENDER=true -e RENDER_EXTERNAL_URL=https://immoradar-ci.example \
+              -e IMMORADAR_BILLING_ENABLED=0 -e IMMORADAR_AUTH_EMAIL_ENABLED=0 \
+              -v immoradar-test-data:/app/var -p 127.0.0.1:10000:10000 immoradar-render
+            for attempt in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:10000/_deployment/ready; then return; fi
+              sleep 2
+            done
+            docker logs immoradar-test
+            return 1
+          }
+          launch
+          docker exec -u app immoradar-test python -m scripts.check_hosted_runtime
+          docker exec -u app immoradar-test python -c "from data.database import create_user; create_user('Fixture', 'render-fixture@example.test', 'test-only-password-long')"
+          docker stop -t 20 immoradar-test
+          docker rm immoradar-test
+          launch
+          docker exec -u app immoradar-test python -c "import sqlite3; c=sqlite3.connect('/app/var/immoradar.db'); assert c.execute('SELECT COUNT(*) FROM users WHERE email=?', ('render-fixture@example.test',)).fetchone()[0] == 1; c.close()"
+          docker exec immoradar-test python -c "from pathlib import Path; assert Path('/app/var/immoradar.db').stat().st_uid == 10001"
+          docker stats --no-stream immoradar-test
+      - name: Nettoyer les ressources de test
+        if: always()
+        run: |
+          docker logs immoradar-test || true
+          docker rm -f immoradar-test || true
+          docker volume rm immoradar-test-data || true
