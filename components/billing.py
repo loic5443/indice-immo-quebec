@@ -23,6 +23,13 @@ def available_offer():
         return None, str(error)
 
 
+def _open_account_for_premium():
+    """Keep the purchase intent through login and required onboarding."""
+    st.session_state["return_to_premium_after_auth"] = True
+    st.session_state.pop("return_to_analysis_after_auth", None)
+    go_to("Mon compte")
+
+
 def handle_billing_return(user, database_path):
     """Keep a return across login; an untrusted URL can never set the plan."""
     if "billing" not in st.query_params:
@@ -62,8 +69,8 @@ def show_billing_actions(user, database_path, offer):
     if offer["mode"] == "test":
         st.warning("Mode de test : aucun paiement réel. Utilisez uniquement une carte de test Stripe.")
     if user is None:
-        st.button("Créer mon compte pour choisir Premium", type="primary", on_click=go_to,
-                  args=("Mon compte",), key="billing_signup", width="stretch")
+        st.button("Créer mon compte pour choisir Premium", type="primary", on_click=_open_account_for_premium,
+                  key="billing_signup", width="stretch")
         return
     account = billing_account(user["id"], database_path)
     if account:

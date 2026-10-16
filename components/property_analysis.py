@@ -197,6 +197,7 @@ def _open_account_to_keep_analysis() -> None:
     """Keep the active draft in session while a guest creates an account."""
 
     st.session_state[RETURN_TO_ANALYSIS_KEY] = True
+    st.session_state.pop("return_to_premium_after_auth", None)
     go_to("Mon compte")
 
 

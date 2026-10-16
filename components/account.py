@@ -77,6 +77,15 @@ def _resume_analysis_after_authentication() -> bool:
     return True
 
 
+def _resume_premium_after_authentication() -> bool:
+    """Return to the offer without starting a payment or changing access."""
+    if not st.session_state.pop("return_to_premium_after_auth", False):
+        return False
+    st.session_state.pop(RETURN_TO_ANALYSIS_KEY, None)
+    go_to("Premium")
+    return True
+
+
 def _start_new_account_session(email: str, password: str) -> dict | None:
     """Authenticate a new local account and defer preferences to onboarding."""
 
@@ -178,7 +187,7 @@ def show_account() -> None:
         if not user.get("onboarding_completed"):
             _show_onboarding(user)
             return
-        if _resume_analysis_after_authentication():
+        if _resume_premium_after_authentication() or _resume_analysis_after_authentication():
             st.rerun()
         safe_name = escape(str(user.get("name") or ""))
         safe_email = escape(str(user.get("email") or ""))
@@ -413,6 +422,6 @@ def _show_onboarding(user: dict) -> None:
         progress(user["id"], DATABASE_PATH, limitations_accepted=1 if accepted else 0)
         if complete(user["id"], DATABASE_PATH):
             st.success("Onboarding terminé.")
-            _resume_analysis_after_authentication()
+            _resume_premium_after_authentication() or _resume_analysis_after_authentication()
             st.rerun()
         else: st.error("Profil, objectif et reconnaissance des limites requis.")
