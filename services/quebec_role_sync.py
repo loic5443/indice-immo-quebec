@@ -13,6 +13,7 @@ def municipality_key(value: str) -> str:
  this helper must never turn a similar municipality into a guessed match.
  """
  text=" ".join(str(value or "").split()).casefold()
+ text=text.translate(str.maketrans("’‘‛‐‑–—", "'''----"))
  text=unicodedata.normalize("NFD",text)
  return "".join(char for char in text if not unicodedata.combining(char))
 def parse_index(content:bytes):

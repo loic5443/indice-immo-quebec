@@ -3,13 +3,35 @@ import hashlib, json, re, sqlite3, unicodedata, xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
-PUBLIC_FIELDS={"RL0101Ax","RL0101Gx","RL0101Ix","RL0104A","RL0104B","RL0104C","RL0104D","RL0104E","RL0104F","RL0104G","RL0104H","RL0105A","RL0302A","RL0306A","RL0307A","RL0401A","RL0402A","RL0403A","RL0404A"}
+PUBLIC_FIELDS={"RL0101Ax","RL0101Bx","RL0101Cx","RL0101Dx","RL0101Ex","RL0101Fx","RL0101Gx","RL0101Hx","RL0101Ix","RL0101Jx","RL0104A","RL0104B","RL0104C","RL0104D","RL0104E","RL0104F","RL0104G","RL0104H","RL0105A","RL0302A","RL0306A","RL0307A","RL0401A","RL0402A","RL0403A","RL0404A"}
 FORBIDDEN_FIELDS={"owner","proprietaire","courriel","email","telephone","postal","lot","cadastre"}
 # The importer accepts only versions verified against official MAMH XML files.
 # Versions 2.6 through 2.9 have been inspected against official MAMH files
 # and use the same public field whitelist below. Any unknown version remains
 # on the manual path until it is explicitly verified.
 SUPPORTED_XML_VERSIONS=frozenset({"2.6","2.7","2.8","2.9"})
+# Official MEFQ 2026, part 2C, 1.3.3. These are public civic-address
+# components, never the owner's postal address (RL0201).
+ADDRESS_PARSER_VERSION=2
+ROAD_TYPES=dict(zip(
+ "AL AR AT AV BO CA CE CH CI CO CR CS CT DE DO DR DS EC EP GA IM JA KO KR LC LN MO PL PR PS PU RA RD RG RL RO RU SN SQ ST TA TC TE TL TV VO".split(),
+ ["allée","ancienne route","autoroute","avenue","boulevard","carré","cercle","chemin","circle","cours","croissant","concession","côte","desserte","domaine","drive","descente","échangeur","esplanade","garden","impasse","jardin","court","crescent","lac","lane","montée","place","promenade","passage","plateau","rang","road","ridge","ruelle","route","rue","sentier","square","street","terrace","trait-carré","terrasse","trail","traverse","voie"]))
+ROAD_LINKS=dict(zip("ABCDEFGHIJKLMNOPQRSTUVWX",["à","à l'","à la","au","aux","chez","chez les","d'","d'en","de","de l'","de la","des","du","en","l'","la","le","les","sur","sur l'","sur la","sur le","sur les"]))
+CARDINALS={"E":"Est","N":"Nord","S":"Sud","O":"Ouest","NE":"Nord-Est","NO":"Nord-Ouest","SE":"Sud-Est","SO":"Sud-Ouest"}
+
+def _public_address(element):
+ lower=(_text(element,"RL0101Ax") or '')+(_text(element,"RL0101Bx") or '')
+ upper=(_text(element,"RL0101Cx") or '')+(_text(element,"RL0101Dx") or '')
+ name=_text(element,"RL0101Gx") or ''
+ generic=ROAD_TYPES.get(_text(element,"RL0101Ex"), '')
+ link=ROAD_LINKS.get(_text(element,"RL0101Fx"), '')
+ direction=CARDINALS.get(_text(element,"RL0101Hx"), '')
+ street=' '.join(x for x in (generic,link,name,direction) if x).replace("' ","'") or None
+ local=((_text(element,"RL0101Ix") or '')+(_text(element,"RL0101Jx") or '')) or None
+ shown=lower+(f"-{upper}" if upper and upper!=lower else '')
+ address=' '.join(x for x in (shown,street) if x)
+ if local:address+=f", unité {local}"
+ return lower or None,upper or None,street,local,address or None
 
 def inspect_role_xml(path, territory="01023"):
  """Compatibility inspection that never exposes an evaluation-unit payload."""
@@ -34,12 +56,11 @@ def _num(element, tag, integer=False):
 def _unit(element, sequence, territory, year, checksum, source_version):
  parts=[_text(element,t) for t in ("RL0104A","RL0104B","RL0104C","RL0104D","RL0104E","RL0104F","RL0104G","RL0104H")]
  matricule=''.join(x for x in parts if x) or None
- civic,street,local=_text(element,"RL0101Ax"),_text(element,"RL0101Gx"),_text(element,"RL0101Ix")
- address=' '.join(x for x in (civic,street,local) if x) or None
+ civic,upper,street,local,address=_public_address(element)
  provenance={key:{"source":f"MAMH rôle {territory} XML {source_version}","xml":key} for key in PUBLIC_FIELDS if _text(element,key) is not None}
- return (territory,checksum,matricule or f"unit-{sequence}",matricule,civic,street,local,address,_text(element,"RL0105A"),_num(element,"RL0302A"),_num(element,"RL0306A"),_num(element,"RL0307A",True),_num(element,"RL0402A"),_num(element,"RL0403A"),_num(element,"RL0404A"),year,_text(element,"RL0401A"),json.dumps(provenance,ensure_ascii=False),_role_key(' '.join(x for x in (civic,street) if x)),_role_key(street or ''))
+ return (territory,checksum,matricule or f"unit-{sequence}",matricule,civic,street,local,address,_text(element,"RL0105A"),_num(element,"RL0302A"),_num(element,"RL0306A"),_num(element,"RL0307A",True),_num(element,"RL0402A"),_num(element,"RL0403A"),_num(element,"RL0404A"),year,_text(element,"RL0401A"),json.dumps(provenance,ensure_ascii=False),_role_key(' '.join(x for x in (civic,street) if x)),_role_key(street or ''),upper)
 
-_UNIT_COLUMNS="territory_code,import_checksum,unit_key,matricule,civic_number,street_name,address_unit,address_text,use_code,land_area_m2,building_floors,construction_year,land_value,building_value,total_value,role_year,market_reference_date,field_provenance,address_search_key,street_search_key"
+_UNIT_COLUMNS="territory_code,import_checksum,unit_key,matricule,civic_number,street_name,address_unit,address_text,use_code,land_area_m2,building_floors,construction_year,land_value,building_value,total_value,role_year,market_reference_date,field_provenance,address_search_key,street_search_key,civic_number_end"
 _UNIT_PLACEHOLDERS=",".join("?" for _ in _UNIT_COLUMNS.split(","))
 
 
@@ -82,6 +103,7 @@ def import_role_xml(path, database_path, territory="01023", batch_size=1_000):
   c.execute("DELETE FROM role_assessment_units WHERE territory_code=?",(territory,))
   c.execute(f"INSERT INTO role_assessment_units ({_UNIT_COLUMNS}) SELECT {_UNIT_COLUMNS} FROM role_import_stage")
   c.execute("INSERT OR REPLACE INTO role_territory_imports (territory_code,source_version,role_year,checksum,imported_units,rejected_units,synced_at) VALUES (?,?,?,?,?,?,?)",(territory,version,year,checksum,imported,rejected,datetime.now(timezone.utc).isoformat()))
+  c.execute("UPDATE role_territory_imports SET address_parser_version=? WHERE territory_code=?",(ADDRESS_PARSER_VERSION,territory))
   c.commit()
  except Exception:
   c.rollback();raise
@@ -130,18 +152,21 @@ def search_role_units(database_path, territory, query, limit=20):
  c=sqlite3.connect(database_path)
  try:
   c.row_factory=sqlite3.Row
-  fields="matricule,civic_number,street_name,address_unit,address_text,use_code,land_value,building_value,total_value,role_year,market_reference_date,field_provenance"
+  fields="matricule,civic_number,civic_number_end,street_name,address_unit,address_text,use_code,land_value,building_value,total_value,role_year,market_reference_date,field_provenance"
   if civic and street_key:
    # The imported, normalized street key is indexed with the territory and
    # civic number.  A province-wide local role database must never scan every
    # civic record in a territory after a selection: when the exact public
    # address is absent, returning no match lets the interface explain the
    # manual path immediately instead of leaving the person waiting.
+   civic_range=re.fullmatch(r"(\d+[A-Za-z]?)\s*[-–—]\s*(\d+[A-Za-z]?)",civic)
+   civic_condition="(civic_number=? AND civic_number_end=?)" if civic_range else "(civic_number=? OR civic_number_end=?)"
+   endpoints=(civic_range.group(1),civic_range.group(2)) if civic_range else (civic,civic)
    cursor=c.execute(
     f"SELECT {fields} FROM role_assessment_units "
-    "WHERE territory_code=? AND civic_number=? AND street_search_key=? "
+    f"WHERE territory_code=? AND {civic_condition} AND street_search_key=? "
     "ORDER BY address_text LIMIT ?",
-    (territory,civic,street_key,limit),
+    (territory,*endpoints,street_key,limit),
    )
    rows=[dict(row) for row in cursor.fetchall()]
   else:
@@ -170,23 +195,22 @@ def suggest_role_units(database_path, query, limit=8):
   where="r.street_search_key LIKE ?"
   params=[f"{street_key}%"]
   if civic:
-   where+=" AND r.civic_number LIKE ?";params.append(f"{civic}%")
+   where+=" AND (r.civic_number=? OR r.civic_number_end=?)";params.extend((civic,civic))
   sql=("SELECT r.civic_number,r.street_name,r.address_unit,i.municipality "
        "FROM role_assessment_units r "
        "JOIN role_territory_imports imported ON imported.territory_code=r.territory_code "
        "JOIN role_index_entries i ON i.territory_code=r.territory_code "
        "LEFT JOIN role_territory_settings settings ON settings.territory_code=r.territory_code "
-       f"WHERE COALESCE(settings.enabled,1)=1 AND {where} "
+       f"WHERE COALESCE(settings.enabled,1)=1 AND imported.address_parser_version>=2 AND {where} "
        "ORDER BY i.municipality,r.street_name,r.civic_number LIMIT ?")
   rows=c.execute(sql,params+[max(1,min(limit*4,32))]).fetchall()
   suggestions=[];seen=set()
   for row in rows:
    street=' '.join(part for part in (row['civic_number'],row['street_name']) if part)
-   if row['address_unit']: street=f"{street}, {row['address_unit']}"
    street=display_role_address(street)
-   signature=(_role_key(street),_role_key(row['municipality'] or ''))
+   signature=(_role_key(street),_role_key(row['municipality'] or ''),row['address_unit'] or '')
    if street and signature not in seen:
-    seen.add(signature);suggestions.append({'street':street,'city':row['municipality'] or '', 'postal_code':'','unit':'','source':'role'})
+    seen.add(signature);suggestions.append({'street':street,'city':row['municipality'] or '', 'postal_code':'','unit':row['address_unit'] or '','source':'role'})
    if len(suggestions)>=limit:break
   return suggestions
  finally:

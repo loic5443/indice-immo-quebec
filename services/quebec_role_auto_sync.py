@@ -21,13 +21,16 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from services.diagnostics_service import source_enabled
-from services.quebec_role_importer import SUPPORTED_XML_VERSIONS, import_role_xml
+from services.quebec_role_importer import ADDRESS_PARSER_VERSION, SUPPORTED_XML_VERSIONS, import_role_xml
 from services.quebec_role_sync import INDEX_URL, municipality_key, parse_index, validate_xml
 
 
 SOURCE_ID = "mamh_quebec_assessment_rolls"
 OFFICIAL_HOSTS = frozenset({"mamh.gouv.qc.ca", "www.mamh.gouv.qc.ca"})
 MAX_BYTES = 20_000_000
+# One explicitly selected municipality may exceed the former in-memory cap.
+# Stream public-role downloads to disk; keep a finite per-request ceiling.
+PUBLIC_ROLE_MAX_BYTES = 50_000_000
 TIMEOUT_SECONDS = 15
 COOLDOWN_SECONDS = 300
 LOCK_TTL_SECONDS = 300
@@ -108,6 +111,7 @@ def _official_download_to_temporary_file(url: str, maximum: int = MAX_BYTES) -> 
     if parsed.scheme != "https" or parsed.hostname not in OFFICIAL_HOSTS:
         raise ValueError("official_host_required")
     path = ""
+    completed = False
     opener = urllib.request.build_opener(_NoRedirect)
     request = urllib.request.Request(url, headers={"User-Agent": "ImmoRadar/1.0 official-data"})
     try:
@@ -128,16 +132,16 @@ def _official_download_to_temporary_file(url: str, maximum: int = MAX_BYTES) -> 
                     temporary.write(chunk)
         if not first.startswith(b"\xef\xbb\xbf<"):
             raise ValueError("XML territorial invalide ou trop volumineux.")
+        completed = True
         return path, total
     except urllib.error.HTTPError as error:
         raise ValueError("official_http_error") from error
     except urllib.error.URLError as error:
         raise ValueError("official_network_unavailable") from error
-    except Exception:
-        if path:
+    finally:
+        if path and not completed:
             try: os.unlink(path)
             except OSError: pass
-        raise
 
 
 def official_content_length(url: str) -> int | None:
@@ -320,7 +324,7 @@ def _territory_is_available(database_path: Path | str, territory: str) -> bool:
 
     with closing(sqlite3.connect(database_path)) as connection:
         row = connection.execute(
-            """SELECT imported.territory_code,imported.synced_at,role_index.source_updated_at
+            """SELECT imported.territory_code,imported.synced_at,role_index.source_updated_at,imported.address_parser_version
             FROM role_territory_imports imported
             JOIN role_index_entries role_index ON role_index.territory_code=imported.territory_code
             LEFT JOIN role_territory_settings settings ON settings.territory_code=imported.territory_code
@@ -328,6 +332,8 @@ def _territory_is_available(database_path: Path | str, territory: str) -> bool:
             (territory,),
         ).fetchone()
     if not row:
+        return False
+    if row[3] < ADDRESS_PARSER_VERSION:
         return False
     try:
         imported_at = datetime.fromisoformat(str(row[1]).replace("Z", "+00:00").replace(" ", "T"))
@@ -506,7 +512,8 @@ def synchronize_selected_municipality(database_path: Path | str, municipality: s
         entry = resolve_official_territory(database_path, municipality, index_fetcher=index_fetcher)
     except Exception:
         return AutoSyncResult("index_unavailable", "L’index officiel est momentanément indisponible. Vous pouvez poursuivre manuellement.")
-    return _synchronize_entry(database_path, entry, consent, fetcher=fetcher, version_fetcher=version_fetcher)
+    return _synchronize_entry(database_path, entry, consent, fetcher=fetcher, version_fetcher=version_fetcher,
+                              maximum_bytes=PUBLIC_ROLE_MAX_BYTES, stream_to_file=fetcher is _official_download)
 
 
 def synchronize_selected_territory(database_path: Path | str, territory_code: str, consent: bool, *, fetcher=_official_download, index_fetcher=_official_download, version_fetcher=probe_role_xml_version) -> AutoSyncResult:
@@ -522,4 +529,5 @@ def synchronize_selected_territory(database_path: Path | str, territory_code: st
         entry = resolve_official_territory_code(database_path, territory_code, index_fetcher=index_fetcher)
     except Exception:
         return AutoSyncResult("index_unavailable", "L’index officiel est momentanément indisponible. Vous pouvez poursuivre manuellement.")
-    return _synchronize_entry(database_path, entry, consent, fetcher=fetcher, version_fetcher=version_fetcher)
+    return _synchronize_entry(database_path, entry, consent, fetcher=fetcher, version_fetcher=version_fetcher,
+                              maximum_bytes=PUBLIC_ROLE_MAX_BYTES, stream_to_file=fetcher is _official_download)

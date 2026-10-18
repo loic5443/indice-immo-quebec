@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import re
 import time
+import unicodedata
 from typing import Any, Callable
 from urllib.parse import urlencode, urlparse
 
@@ -158,6 +159,10 @@ def _candidate_to_suggestion(candidate: Any) -> AddressSuggestion | None:
     unit = _clean_text(fields.get("Unite"), 30)
     city = _clean_text(fields.get("City"))
     postal_code = normalize_canadian_postal_code(_clean_text(fields.get("ZIP"), 12)) or ""
+    # MRNF can publish the direction both in Odonyme and in Dir.
+    # Duplicating it changes the exact address used to match the role.
+    if direction and re.search(rf"(?:^|\s){re.escape(direction)}$", odonym, re.IGNORECASE):
+        direction = ""
     street = " ".join(part for part in (f"{number}{suffix}".strip(), odonym, direction) if part)
     if not street:
         # A selected MRNF ``magicKey`` sometimes resolves to a candidate whose
@@ -186,7 +191,7 @@ def _candidate_to_suggestion(candidate: Any) -> AddressSuggestion | None:
         longitude = latitude = None
     elif not (-80.0 <= float(longitude) <= -57.0 and 44.0 <= float(latitude) <= 63.0):
         longitude = latitude = None
-    label = " · ".join(part for part in (street, city, postal_code) if part)
+    label = " · ".join(part for part in (street, f"Unité {unit}" if unit else "", city, postal_code) if part)
     return AddressSuggestion(
         street=street, city=city, postal_code=postal_code, unit=unit, label=label,
         longitude=float(longitude) if longitude is not None else None,
@@ -250,6 +255,25 @@ def clear_suggestion_cache() -> None:
     _last_network_request = 0.0
 
 
+def _matching_civic_number(query: str, suggestions: tuple[AddressSuggestion, ...]) -> tuple[AddressSuggestion, ...]:
+    """A typed civic number must not silently become a nearby building.
+
+    Number-only typing remains a prefix search. Once street text follows a
+    simple civic number, keep that number (and any suffix) exactly. Ranges
+    and unit-first inputs are left to the provider's structured resolution.
+    """
+    requested = re.match(r"^(\d+[A-Za-z]?)\s*,?\s+(.+)$", useful_query(query))
+    if not requested:
+        return suggestions
+    expected = requested.group(1).casefold()
+    results = []
+    for item in suggestions:
+        actual = re.match(r"^(\d+[A-Za-z]?)(?=\s|,|$)", item.street or item.label)
+        if actual and actual.group(1).casefold() == expected:
+            results.append(item)
+    return tuple(results)
+
+
 def suggest_addresses(
     query: str,
     consent: bool,
@@ -285,11 +309,21 @@ def suggest_addresses(
         # result limit and privacy guarantees, while returning structured
         # form fields when it succeeds.
         payload = (fetch_json or _fetch_json)(_suggest_url(normalized_query))
-        response = SuggestionResponse("ok", _parse_suggest_response(payload))
+        response = SuggestionResponse("ok", _matching_civic_number(normalized_query, _parse_suggest_response(payload)))
+        if not response.suggestions:
+            # A valid but empty type-ahead response is common for pasted
+            # complete addresses and abbreviations. Try the official address
+            # resolver as well; failure here must retain the honest empty
+            # result rather than inventing a candidate.
+            try:
+                payload = (fetch_json or _fetch_json)(_official_url(normalized_query))
+                response = SuggestionResponse("ok", _matching_civic_number(normalized_query, _parse_response(payload)))
+            except Exception:
+                pass
     except Exception:
         try:
             payload = (fetch_json or _fetch_json)(_official_url(normalized_query))
-            response = SuggestionResponse("ok", _parse_response(payload))
+            response = SuggestionResponse("ok", _matching_civic_number(normalized_query, _parse_response(payload)))
         except Exception:  # Network/schema detail is deliberately never retained.
             response = SuggestionResponse("unavailable", message="Le service d’adresses est momentanément indisponible. Vous pouvez poursuivre manuellement.")
     _CACHE[cache_key] = (current_time, response)
@@ -322,7 +356,7 @@ def resolve_freeform_address(
         return SuggestionResponse(cached[1].status, cached[1].suggestions, cached[1].message, cached=True)
     try:
         payload = (fetch_json or _fetch_json)(_official_url(normalized_query))
-        response = SuggestionResponse("ok", _parse_response(payload))
+        response = SuggestionResponse("ok", _matching_civic_number(normalized_query, _parse_response(payload)))
     except Exception:
         response = SuggestionResponse("unavailable", message="Le service d’adresses est momentanément indisponible. Vous pouvez poursuivre manuellement.")
     _CACHE[cache_key] = (current_time, response)
@@ -355,7 +389,21 @@ def resolve_suggestion(
     )
     try:
         payload = (fetch_json or _fetch_json)(f"{GEOCODER_URL}?{params}")
-        candidates = _parse_response(payload)
-        return candidates[0] if candidates else None
+        candidates = _matching_civic_number(suggestion.label, _parse_response(payload))
+        if candidates:
+            return candidates[0]
+    except Exception:
+        pass
+    # A suggestion key can expire or fail independently of the public address
+    # resolver. Retry the selected label once, accepting only an exact label
+    # after accent/punctuation normalization, including city, postal and unit.
+    def label_key(value: str) -> str:
+        text = unicodedata.normalize("NFD", value.casefold())
+        return "".join(c for c in text if c.isalnum() and not unicodedata.combining(c))
+    try:
+        payload = (fetch_json or _fetch_json)(_official_url(suggestion.label))
+        exact = [item for item in _matching_civic_number(suggestion.label, _parse_response(payload))
+                 if label_key(item.label) == label_key(suggestion.label)]
+        return exact[0] if len(exact) == 1 else None
     except Exception:
         return None
