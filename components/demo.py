@@ -47,7 +47,7 @@ def show_demo():
                  hide_index=True, width="stretch")
     st.caption("Prudent : taux +1 point, loyers −5 %, vacance +3 points et dépenses variables +10 %. Favorable : illustration de sensibilité, jamais une prévision.")
     st.markdown("### L’aperçu des critères Premium")
-    st.caption("Exemple de critères : flux de base ≥ 0 $/mois, couverture ≥ 1,10x et flux prudent ≥ 0 $/mois. Dans votre compte Premium, vous choisissez vos propres seuils.")
+    st.caption(r"Exemple de critères : flux de base ≥ 0 \$/mois, couverture ≥ 1,10x et flux prudent ≥ 0 \$/mois. Dans votre compte Premium, vous choisissez vos propres seuils.")
     result = screen_snapshot(snapshot, {"min_cash_flow": 0, "min_dscr": 1.1, "min_prudent_cash_flow": 0})
     labels = {"matches": "Cet exemple respecte les trois seuils.", "outside": "Cet exemple ne respecte pas tous les seuils.", "incomplete": "Des critères ne sont pas calculables avec ces hypothèses."}
     st.write(labels[result["status"]])
