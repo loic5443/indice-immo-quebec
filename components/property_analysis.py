@@ -364,6 +364,7 @@ def _address_state_for_current_user() -> AddressFormState:
     ):
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup_fields(
             state.address.street, state.address.city, bool(state.values.get("consent")), postal_available=False,
+            unit=state.address.unit,
         )
     return state
 
@@ -1088,11 +1089,8 @@ def _official_lookup(state: AddressFormState) -> dict:
         state.values["consent"],
         postal_available=not bool(state.metadata.get("postal_optional", False)),
         territory_code=str(state.metadata.get("territory_code") or ""),
+        unit=state.address.unit,
     )
-    if state.address.unit:
-        unit_key = lambda value: str(value or "").strip().casefold()
-        response["matches"] = [item for item in response["matches"]
-            if unit_key(item.get("address_unit")) == unit_key(state.address.unit)]
     if result is not None:
         response["message"] = result["message"]
     response["normalized_address"] = {
@@ -1109,6 +1107,7 @@ def _official_lookup_fields(
     *,
     postal_available: bool = True,
     territory_code: str = "",
+    unit: str = "",
 ) -> dict:
     """Match public role fields without treating municipal data as an estimate."""
 
@@ -1126,6 +1125,9 @@ def _official_lookup_fields(
     territory = territory_for_code(DATABASE_PATH, territory_code) if territory_code else None
     territory = territory or territory_for_municipality(DATABASE_PATH, city)
     matches = search_role_units(DATABASE_PATH, territory, street) if territory else []
+    if unit:
+        unit_key = lambda value: str(value or "").strip().casefold()
+        matches = [item for item in matches if unit_key(item.get("address_unit")) == unit_key(unit)]
     response.update({
         "coverage": bool(territory),
         "territory": territory,
@@ -1667,6 +1669,9 @@ def show_property_analysis() -> None:
         st.success(reopen_notice)
     address_state = _address_state_for_current_user()
     _refresh_selected_local_enrichment()
+    # Finish the queued public lookup before rendering coverage hints, so a
+    # successful import cannot leave a stale “not covered” message above it.
+    _run_queued_auto_role_sync()
     address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)
     existing_public_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
     public_information_revealed = _has_revealed_public_information(existing_public_lookup)
@@ -1811,7 +1816,6 @@ def show_property_analysis() -> None:
         elif manual_mode:
             st.caption(lookup_message)
         st.caption("Adresse saisie et renseignements publics éventuels restent séparés des calculs ImmoValue et ImmoScore.")
-    _run_queued_auto_role_sync()
     address_state = st.session_state.get(ADDRESS_STATE_KEY, address_state)
     address_lookup = st.session_state.get(ADDRESS_LOOKUP_KEY)
     # Public results must be visible immediately after their explicit search.
