@@ -5,7 +5,7 @@ import unicodedata
 
 POSTAL_RE=re.compile(r"^[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJKLMNPRSTVWXYZ]\d[ABCEGHJKLMNPRSTVWXYZ]\d$")
 STREET_RE=re.compile(r"^\d+(?:\s*[-–—]\s*\d+)?[A-Za-zÀ-ÖØ-öø-ÿ]?(?:\s*,\s*|\s+).*[A-Za-zÀ-ÖØ-öø-ÿ].*$")
-CITY_RE=re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ '\-‐‑–—]*[A-Za-zÀ-ÖØ-öø-ÿ]$")
+CITY_RE=re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ '’‘‛\-‐‑–—]*[A-Za-zÀ-ÖØ-öø-ÿ]$")
 FORBIDDEN_RE=re.compile(r"[<>\[\]{};\\]|[\x00-\x1f]")
 
 class AddressValidationError(ValueError):
