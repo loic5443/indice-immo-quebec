@@ -527,7 +527,7 @@ def _autocomplete_options(query: str) -> list[tuple[str, dict[str, str]]]:
     role_suggestions = [
         AddressSuggestion(
             street=row["street"], city=row["city"], postal_code=row["postal_code"],
-            unit=row["unit"], label=" · ".join(part for part in (row["street"], row["city"]) if part), source="role",
+            unit=row["unit"], label=" · ".join(part for part in (row["street"], f"Unité {row['unit']}" if row["unit"] else "", row["city"]) if part), source="role",
         )
         for row in suggest_role_units(DATABASE_PATH, query, limit=MAX_ADDRESS_SUGGESTIONS)
     ]
@@ -598,7 +598,11 @@ def _suggestion_key(suggestion: AddressSuggestion) -> str:
     )
     value = re.sub(r"\b(rue|avenue|av\.?|boulevard|boul\.?|chemin|route|rang|place|montee)\b", " ", value, flags=re.I)
     value = "".join(char for char in unicodedata.normalize("NFD", value.casefold()) if not unicodedata.combining(char))
-    return "".join(char for char in value if char.isalnum())
+    normalized = "".join(char for char in value if char.isalnum())
+    # Apartment/local variants are distinct selections, even at one civic
+    # address. Never merge their official data into the first unit.
+    unit = "".join(char for char in suggestion.unit.casefold() if char.isalnum())
+    return normalized + (f"|unit:{unit}" if unit else "")
 
 
 def _merge_address_suggestions(external: tuple[AddressSuggestion, ...], local: list[AddressSuggestion]) -> list[AddressSuggestion]:
@@ -929,9 +933,9 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
     values.update(
         {
             "street": resolved.street,
-            "city": resolved.city or values.get("city", ""),
-            "postal": resolved.postal_code or values.get("postal", ""),
-            "unit": resolved.unit or values.get("unit", ""),
+            "city": resolved.city,
+            "postal": resolved.postal_code,
+            "unit": resolved.unit,
             "consent": consent,
         }
     )
@@ -953,6 +957,7 @@ def _select_address_suggestion(suggestion: dict[str, str]) -> None:
         metadata=metadata,
     )
     st.session_state[ADDRESS_STATE_KEY] = selected_state
+    st.session_state.pop("official_role_unit", None)
     if selected_state.valid:
         _hydrate_dossier_name_from_selected_address()
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = resolved.street
@@ -989,21 +994,24 @@ def _select_resolved_address() -> None:
     state = st.session_state.get(ADDRESS_STATE_KEY, empty_address_form_state())
     values = dict(state.values)
     values.update({
-        "street": candidate.street or values["street"],
-        "city": candidate.city or values["city"],
-        "postal": candidate.postal_code or values["postal"],
+        "street": candidate.street,
+        "city": candidate.city,
+        "postal": candidate.postal_code,
+        "unit": candidate.unit,
     })
     selected_state = submit_address_form(
         values["street"], values["city"], values["postal"], values.get("unit", ""),
         bool(values.get("consent")), metadata={"official_source": "external"},
     )
     st.session_state[ADDRESS_STATE_KEY] = selected_state
+    st.session_state.pop("official_role_unit", None)
     if selected_state.valid:
         _hydrate_dossier_name_from_selected_address()
     st.session_state[ADDRESS_HYDRATE_KEY] = True
     st.session_state[ADDRESS_EDITOR_STREET_KEY] = values["street"]
     st.session_state[ADDRESS_WIDGET_KEYS["city"]] = values["city"]
     st.session_state[ADDRESS_WIDGET_KEYS["postal"]] = values["postal"]
+    st.session_state[ADDRESS_WIDGET_KEYS["unit"]] = values["unit"]
     if selected_state.valid:
         st.session_state[ADDRESS_LOOKUP_KEY] = _official_lookup(selected_state)
         _queue_auto_role_sync(selected_state)
@@ -1041,6 +1049,8 @@ def _submit_address_lookup() -> None:
             street = candidate.street or street
             city = candidate.city or city
             postal = candidate.postal_code or postal
+            st.session_state[ADDRESS_WIDGET_KEYS["unit"]] = candidate.unit
+            st.session_state.pop("official_role_unit", None)
             st.session_state[ADDRESS_EDITOR_STREET_KEY] = street
             st.session_state[ADDRESS_STREET_INPUT_KEY] = street
             st.session_state[ADDRESS_WIDGET_KEYS["city"]] = city
@@ -1079,6 +1089,10 @@ def _official_lookup(state: AddressFormState) -> dict:
         postal_available=not bool(state.metadata.get("postal_optional", False)),
         territory_code=str(state.metadata.get("territory_code") or ""),
     )
+    if state.address.unit:
+        unit_key = lambda value: str(value or "").strip().casefold()
+        response["matches"] = [item for item in response["matches"]
+            if unit_key(item.get("address_unit")) == unit_key(state.address.unit)]
     if result is not None:
         response["message"] = result["message"]
     response["normalized_address"] = {
@@ -1381,11 +1395,10 @@ def _current_role_match(address_lookup: dict | None) -> dict | None:
     matches = (address_lookup or {}).get("matches", [])
     if not matches:
         return None
-    try:
-        selected = int(st.session_state.get("official_role_unit", 0))
-    except (TypeError, ValueError):
-        selected = 0
-    return matches[max(0, min(selected, len(matches) - 1))]
+    selected = st.session_state.get("official_role_unit", 0 if len(matches) == 1 else None)
+    if not isinstance(selected, int) or isinstance(selected, bool) or not 0 <= selected < len(matches):
+        return None
+    return matches[selected]
 
 
 def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict | None, inputs: PropertyInputs, profile: str) -> None:
@@ -1868,10 +1881,10 @@ def _official_role_snapshot(address_lookup: dict | None) -> dict:
     if not address_lookup or not address_lookup.get("consent"):
         return {}
     matches = address_lookup.get("matches") or []
-    selected = st.session_state.get("official_role_unit", 0)
-    if not isinstance(selected, int) or not 0 <= selected < len(matches):
-        selected = 0
     if not matches:
+        return {}
+    selected = st.session_state.get("official_role_unit", 0 if len(matches) == 1 else None)
+    if not isinstance(selected, int) or isinstance(selected, bool) or not 0 <= selected < len(matches):
         return {}
     match = matches[selected]
     return {
@@ -1972,10 +1985,15 @@ def _show_role_overview(address_lookup: dict | None) -> None:
     if matches:
         chosen = st.selectbox(
             "Unité officielle trouvée", range(len(matches)), key="official_role_unit",
+            index=0 if len(matches) == 1 else None,
+            placeholder="Choisissez l’unité correspondant à votre propriété",
             format_func=lambda index: display_role_address(
                 matches[index]["address_text"] or matches[index]["matricule"] or "Unité officielle"
             ),
         )
+        if chosen is None:
+            st.info("Plusieurs unités officielles correspondent à cette adresse. Choisissez la bonne unité avant d’afficher ou de sauvegarder une valeur municipale.")
+            return
         match = matches[chosen]
         st.markdown("<article class='official-role-card'><span class='data-pill real'>Valeur municipale officielle</span><h3>Valeur au rôle — ce n’est pas une valeur marchande</h3></article>", unsafe_allow_html=True)
         land, building, total = st.columns(3)
