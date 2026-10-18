@@ -27,7 +27,7 @@ class OperationalTests(unittest.TestCase):
         before = self.db.read_bytes()
         metadata = backup_database(self.db, target)
         self.assertEqual(metadata["integrity"], "ok")
-        self.assertEqual(metadata["schema_version"], "0027")
+        self.assertEqual(metadata["schema_version"], "0028")
         self.assertEqual(verify_backup(target)["sha256"], metadata["sha256"])
         self.assertEqual(self.db.read_bytes(), before)
         with closing(sqlite3.connect(target)) as connection, connection:
@@ -62,4 +62,4 @@ class OperationalTests(unittest.TestCase):
         combined = results[0] + results[1]
         self.assertEqual(len(combined), len(set(combined)))
         self.assertEqual(sorted(combined), applied_migrations(target))
-        self.assertEqual(applied_migrations(target)[-1], "0027")
+        self.assertEqual(applied_migrations(target)[-1], "0028")

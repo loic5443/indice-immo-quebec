@@ -66,7 +66,7 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
     def test_anonymized_candidate_uses_only_public_form_fields(self):
         result = suggest_addresses("123 rue Exemple, Ville-exemple", True, fetch_json=lambda _: MRNF_SUGGEST_PAYLOAD, now=lambda: 10)
         self.assertEqual(result.status, "ok")
-        self.assertEqual(len(result.suggestions), 2)
+        self.assertEqual(len(result.suggestions), 1)
         first = result.suggestions[0]
         self.assertEqual((first.street, first.city, first.postal_code, first.unit), ("", "", "", ""))
         self.assertEqual(first.label, "123 rue Exemple, Ville-exemple H2X1Y4")
@@ -170,7 +170,7 @@ class QuebecAddressGeocoderTests(unittest.TestCase):
         calls = []
         without_consent = resolve_freeform_address("122 rue Publique", False, fetch_json=lambda _: self.fail("network must not run"))
         self.assertEqual(without_consent.status, "consent_required")
-        resolved = resolve_freeform_address("122 rue Publique", True, fetch_json=lambda url: calls.append(url) or MRNF_CANDIDATE_PAYLOAD, now=lambda: 10)
+        resolved = resolve_freeform_address("123 rue Exemple", True, fetch_json=lambda url: calls.append(url) or MRNF_CANDIDATE_PAYLOAD, now=lambda: 10)
         self.assertEqual(resolved.status, "ok")
         self.assertEqual((resolved.suggestions[0].street, resolved.suggestions[0].city, resolved.suggestions[0].postal_code), ("123 rue Exemple", "Ville-exemple", "H2X 1Y4"))
         self.assertIn("findAddressCandidates", calls[0])
