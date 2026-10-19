@@ -129,3 +129,15 @@ st.session_state["tested_snapshot"]=page._official_role_snapshot(lookup)
         app.selectbox(key="official_role_unit").set_value(1).run(timeout=20)
         self.assertFalse(app.exception)
         self.assertEqual(app.session_state["tested_snapshot"]["total_value"],2000)
+
+    def test_requested_apartment_cannot_receive_another_units_assessment(self):
+        import components.property_analysis as page
+        matches=[{"address_unit":"A","total_value":100000},
+                 {"address_unit":"B","total_value":200000}]
+        with patch.object(page,"territory_for_municipality",return_value="01023"), \
+             patch.object(page,"search_role_units",return_value=matches), \
+             patch.object(page,"role_street_variants",return_value=[]):
+            found=page._official_lookup_fields("350 rue Exemple","Ville test",True,unit="B")
+            self.assertEqual(found["matches"],[matches[1]])
+            absent=page._official_lookup_fields("350 rue Exemple","Ville test",True,unit="C")
+            self.assertEqual(absent["matches"],[])
