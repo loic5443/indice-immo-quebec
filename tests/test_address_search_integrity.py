@@ -141,3 +141,14 @@ st.session_state["tested_snapshot"]=page._official_role_snapshot(lookup)
             self.assertEqual(found["matches"],[matches[1]])
             absent=page._official_lookup_fields("350 rue Exemple","Ville test",True,unit="C")
             self.assertEqual(absent["matches"],[])
+
+    def test_resolver_expands_common_street_abbreviations_without_changing_editor_query(self):
+        from urllib.parse import parse_qs,urlsplit
+        from services.quebec_address_geocoder import _official_url,_expanded_street_query
+        query="350 boul de Maisonneuve O Montreal"
+        self.assertEqual(parse_qs(urlsplit(_official_url(query)).query)["SingleLine"],
+                         ["350 boulevard de Maisonneuve Ouest Montreal"])
+        self.assertEqual(_expanded_street_query("12 ch. du Canal E, Ville-exemple"),
+                         "12 chemin du Canal Est, Ville-exemple")
+        self.assertEqual(_expanded_street_query("Ville O"),"Ville O")
+        self.assertEqual(_expanded_street_query("12 rue Saint-Ours"),"12 rue Saint-Ours")
