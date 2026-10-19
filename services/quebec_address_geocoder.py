@@ -108,10 +108,29 @@ def is_eligible_query(query: str) -> bool:
     return len("".join(char for char in value if char.isalnum())) >= MIN_QUERY_CHARS and len(value) <= MAX_QUERY_CHARS
 
 
+def _expanded_street_query(query: str) -> str:
+    """Expand ordinary civic/street abbreviations for the official resolver.
+
+    Keep the original editor text and suggestion request untouched. Only a
+    leading civic + known road type qualifies; no city or street is guessed.
+    """
+    aliases = {"boul": "boulevard", "av": "avenue", "ch": "chemin", "rte": "route"}
+    match = re.match(r"^(\d+[A-Za-z]?\s*,?\s+)(boul\.?|av\.?|ch\.?|rte\.?|boulevard|avenue|chemin|route|rue)\s+(.+)$", query, re.I)
+    if not match:
+        return query
+    road_type = aliases.get(match.group(2).lower().rstrip("."), match.group(2))
+    # These separate tokens are conventional directional abbreviations; they
+    # never replace a letter inside a road or municipality name.
+    directions = {"O": "Ouest", "E": "Est", "N": "Nord", "S": "Sud"}
+    rest = re.sub(r"(?<!\S)([OENS])\.?(?=\s|,|$)",
+                  lambda item: directions[item.group(1).upper()], match.group(3), flags=re.I)
+    return match.group(1) + road_type + " " + rest
+
+
 def _official_url(query: str) -> str:
     params = urlencode(
         {
-            "SingleLine": query,
+            "SingleLine": _expanded_street_query(query),
             "f": "json",
             "maxLocations": str(MAX_SUGGESTIONS),
             "outFields": "Num,Odonyme,Dir,Unite,SufNum,City,ZIP",
