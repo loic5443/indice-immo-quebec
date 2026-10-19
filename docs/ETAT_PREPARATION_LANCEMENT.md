@@ -1,6 +1,17 @@
 # ImmoRadar — lot autonome de préparation au lancement
 
-État mis à jour le 16 octobre 2026. Aucun nouvel hébergement payant ni paiement réel n’est activé. Le propriétaire souhaite différer toute dépense jusqu’à la fin des préparatifs gratuits.
+État mis à jour le 19 octobre 2026. Aucun nouvel hébergement payant ni paiement réel n’est activé. Le propriétaire souhaite différer toute dépense jusqu’à la fin des préparatifs gratuits.
+
+## Dernière recette — 18 et 19 octobre 2026
+
+- 427 tests locaux réussis après les correctifs d’adresses et de reprise des appartements. La suite distante est également exécutée à chaque sauvegarde de la branche.
+- Aperçu HTTPS gratuit : https://immoradar-apercu.onrender.com/ — paiements, courriels et opérations périodiques désactivés; base éphémère et données fictives uniquement.
+- 28 requêtes d’adresses réelles et entrées limites vérifiées auprès du MRNF; deux rôles municipaux importés et leurs valeurs affichées dans le navigateur public. Les résultats absents restent explicitement absents.
+- Mise en page Chromium vérifiée à 360 et 390 px; formulaire, suggestions, navigation Premium et démonstration contrôlés. Aucun vrai iPhone/Safari ni clavier tactile utilisé.
+- Comptes, dossiers, brouillons, isolation entre utilisateurs, réouverture dans un autre processus et restauration d’une sauvegarde contrôlés. La conservation après redémarrage du véritable hébergement persistant reste à valider.
+- L’espace Render My Workspace a été confirmé et contient le seul service gratuit d’aperçu. Le plan de production avec disque /app/var est préparé mais non créé, conformément au refus de frais avant la fin des préparatifs gratuits.
+
+Voir [la recette détaillée](VERIFICATION_ADRESSES_MOBILE_COMPTES_2026-10-18.md). Les sections datées du 16 octobre ci-dessous décrivent les contrôles antérieurs; leurs blocages visuels locaux ont été dépassés par les essais HTTPS, sans valider pour autant tous les appareils ou une exploitation payante.
 
 ## Résultat concret
 
@@ -51,9 +62,22 @@ Deux nouveaux essais d’interface couvrent une vraie connexion avec mot de pass
 
 ## État des accès et de la publication
 
+### Recette client complémentaire du 16 octobre
+
+- 47 essais ciblés réussis : inscription et invitation, démarrage interrompu puis repris, connexion, analyse explicite, sauvegarde et retour au dossier, comparaison gratuite/Premium, PDF, filtres et navigation publique. Commande : `python -m unittest -v tests.test_beta_ui_journey tests.test_account_analysis_return tests.test_launch_demo tests.test_launch_ui_journeys tests.test_billing_ui tests.test_property_comparator_ui tests.test_comparison_report tests.test_saved_analyses_filters tests.test_public_ui_regressions`.
+- Sur un vrai serveur Streamlit temporaire, une session WebSocket a ouvert l’accueil, activé la démonstration et récupéré le PDF par HTTP. Réponse 200, type `application/pdf`, contenu PDF de quatre pages et mention de démonstration vérifiés. Base et données fictives isolées, paiements et courriels désactivés, serveur arrêté après le contrôle.
+- Les quatre pages de ce PDF ont été rendues et inspectées : tableaux lisibles, accents présents, aucune superposition observée dans cet exemple. Ce contrôle ne garantit pas la mise en page de toutes les saisies possibles.
+- La suite complète de 406 tests a également réussi sur la version sauvegardée : [GitHub Actions 38966144157](https://github.com/loic5443/indice-immo-quebec/actions/runs/38966144157), commit `9bbdc3f`.
+- **Contrôle visuel du site non terminé** : le navigateur distant ne peut pas joindre le serveur local (`ERR_CONNECTION_REFUSED`). Les essais Streamlit ne prouvent pas le rendu mobile ou ordinateur. Aucun contrôle Safari/iPhone ni essai visuel complet du site n’est déclaré réussi.
+
+Les deux étapes suivantes restent :
+
+1. **Prépublication** : rendre cette version accessible pour la recette visuelle sur téléphone et ordinateur, corriger les défauts observés, puis valider le fonctionnement HTTPS et le stockage sur l’hébergement choisi. Toute création d’hébergement payant exige d’abord l’accord du propriétaire; rien n’a été créé pour contourner cette limite.
+2. **Activation commerciale** : configurer et tester Stripe en mode test et les courriels transactionnels, finaliser l’offre et le support, puis valider les paiements réels et ouvrir les abonnements après accord. La configuration actuelle n’encaisse rien.
+
 La version de lancement est sauvegardée sur GitHub dans `codex/launch-october-2026`, commit `0c16d53`. Les préparatifs d’hébergement persistant sont dans `codex/hosting-persistent-2026-10-16`, commit `d6612f1`. Les corrections de parcours du 16 octobre sont préparées à partir de ce dernier état, dans `codex/premium-journey-2026-10-16`. Aucune fusion dans `main` ni publication de cette version commerciale n’a été faite. Un ancien déploiement Streamlit a existé; sa présence ne valide pas cette version.
 
-GitHub est accessible et le connecteur Render est connecté. Aucun espace de travail Render n’est sélectionné et aucune ressource payante n’a été créée. Pour la phase d’intégration réelle, il reste le choix et l’accord sur l’hébergement, puis la configuration Stripe et Brevo. Un domaine personnel n’est pas nécessaire aux premiers contrôles HTTPS si l’hébergeur fournit une adresse. Les procédures et scénarios de recette sont dans `LANCEMENT_PREMIUM.md` et `HEBERGEMENT_RENDER.md`.
+GitHub est accessible et le connecteur Render est connecté. L’espace My Workspace a été confirmé et un aperçu gratuit existe depuis le 18 octobre; aucune ressource payante n’a été créée. Pour la phase d’intégration réelle, il reste le choix et l’accord sur l’hébergement, puis la configuration Stripe et Brevo. Un domaine personnel n’est pas nécessaire aux premiers contrôles HTTPS si l’hébergeur fournit une adresse. Les procédures et scénarios de recette sont dans `LANCEMENT_PREMIUM.md` et `HEBERGEMENT_RENDER.md`.
 
 La récupération est implémentée mais ne peut envoyer de lien tant que la configuration de courriel et l’URL HTTPS ne sont pas prêtes. Le suivi ne surveille pas automatiquement toutes les annonces; il compare les instantanés sauvegardés. Les sauvegardes périodiques du même volume doivent être copiées hors du serveur et surveillées.
 
