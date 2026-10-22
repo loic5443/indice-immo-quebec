@@ -30,7 +30,7 @@ def _start_from_home() -> None:
 def show_home() -> None:
     st.markdown(
         f"<section class='hero-image-panel' style=\"{_hero()}\"><div class='hero-content'>"
-        "<p class='hero-eyebrow notranslate'>CENLIO — L’immobilier, plus clair.</p>"
+        "<p class='hero-eyebrow'><span class='notranslate'>CENLIO</span> — L’immobilier, plus clair.</p>"
         "<div class='hero-title' role='heading' aria-level='1'>Avant d’acheter, voyez si les chiffres tiennent.</div>"
         "<p class='hero-copy'>Calculez le coût ou le flux mensuel, testez un scénario prudent et comparez vos dossiers. Cenlio relie vos hypothèses aux renseignements publics disponibles au Québec.</p>"
         "<p class='hero-proof'><span>Valeur expliquée</span><span>Hypothèses transparentes</span><span>Suivi utile</span></p>"
