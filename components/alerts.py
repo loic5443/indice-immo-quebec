@@ -48,11 +48,11 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
     if isinstance(user_id, int):
         delivery = deliver_alerts_for_user(user_id, DATABASE_PATH)
         if delivery.status == "sent":
-            st.success("Un avis par courriel a été envoyé. Le détail reste visible uniquement dans votre espace ImmoRadar.")
+            st.success("Un avis par courriel a été envoyé. Le détail reste visible uniquement dans votre espace Cenlio.")
         elif delivery.status == "failed":
             st.warning("Les alertes sont disponibles ici, mais le courriel n’a pas pu être livré pour le moment.")
     if alerts:
-        st.caption("Alertes calculées à partir de vos instantanés sauvegardés. Avec votre accord Premium, ImmoRadar envoie un avis générique par courriel; les détails restent dans votre espace privé.")
+        st.caption("Alertes calculées à partir de vos instantanés sauvegardés. Avec votre accord Premium, Cenlio envoie un avis générique par courriel; les détails restent dans votre espace privé.")
         _show_email_alert_preferences_action(user)
         for alert in alerts:
             with st.container(border=True):
@@ -82,11 +82,11 @@ def show_alert_center(user: dict, analyses: list[dict], *, tracking_configured: 
     st.success("Vos dossiers suivis ne signalent aucun changement vérifiable pour le moment.")
     st.markdown(
         "<div class='data-card'><div><span class='data-pill real'>SUIVI LOCAL ACTIF</span>"
-        "<h3>Ce qu’ImmoRadar peut vous signaler</h3><p>Une variation entre deux valeurs municipales ou deux ImmoValue fiables, "
+        "<h3>Ce que Cenlio peut vous signaler</h3><p>Une variation entre deux valeurs municipales ou deux ImmoValue fiables, "
         "une sensibilité au taux devenue négative, ou un rappel de renouvellement que vous avez vous-même saisi.</p>"
         "</div><div><span class='data-pill simulated'>PAS UNE PRÉVISION</span>"
         "<h3>Ce qui reste indisponible</h3><p>Sans nouvel instantané, source autorisée ou date fournie, aucun changement n’est affiché. "
-        "ImmoRadar ne crée pas de notification à partir d’une supposition.</p></div></div>",
+        "Cenlio ne crée pas de notification à partir d’une supposition.</p></div></div>",
         unsafe_allow_html=True,
     )
     _show_email_alert_preferences_action(user)

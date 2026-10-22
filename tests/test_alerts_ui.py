@@ -54,7 +54,7 @@ class AlertsUiTests(unittest.TestCase):
         ).run(timeout=20)
         text = " ".join(item.value for item in app.markdown) + " ".join(item.value for item in app.success)
         self.assertIn("aucun changement vérifiable", text)
-        self.assertIn("ImmoRadar ne crée pas de notification", text)
+        self.assertIn("Cenlio ne crée pas de notification", text)
 
     def test_premium_alert_center_links_directly_to_email_preferences(self):
         app = self._app("premium")

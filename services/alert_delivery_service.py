@@ -99,11 +99,11 @@ def _generic_email_content(alert_count: int) -> tuple[str, str]:
     """Keep emails useful without disclosing a dossier in an inbox preview."""
 
     plural = "s" if alert_count > 1 else ""
-    subject = "ImmoRadar — une alerte est disponible"
+    subject = "Cenlio — une alerte est disponible"
     content = (
-        "<p>Une ou plusieurs alertes vérifiables sont disponibles dans votre espace ImmoRadar.</p>"
+        "<p>Une ou plusieurs alertes vérifiables sont disponibles dans votre espace Cenlio.</p>"
         f"<p>{alert_count} nouvelle{plural} alerte{plural} a été détectée{plural} dans vos dossiers suivis.</p>"
-        "<p>Connectez-vous à ImmoRadar pour consulter le détail, les sources et les limites. "
+        "<p>Connectez-vous à Cenlio pour consulter le détail, les sources et les limites. "
         "Ce courriel ne contient aucune adresse ni donnée financière.</p>"
     )
     return subject, content

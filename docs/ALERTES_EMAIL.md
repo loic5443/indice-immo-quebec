@@ -1,6 +1,6 @@
 # Alertes par courriel
 
-Les alertes ImmoRadar sont construites uniquement à partir des instantanés que
+Les alertes Cenlio sont construites uniquement à partir des instantanés que
 l’utilisateur a sauvegardés et choisis de suivre. Elles ne prédisent pas le
 marché et ne déclenchent jamais un courriel à partir d’une donnée manquante.
 

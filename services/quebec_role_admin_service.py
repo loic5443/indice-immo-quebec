@@ -11,7 +11,7 @@ MAX_BYTES=20_000_000; TIMEOUT_SECONDS=45; _LOCK=threading.Lock()
 def _now(): return datetime.now(timezone.utc).isoformat()
 def _log(c,code,action,outcome,detail="",checksum=None,units=None): c.execute("INSERT INTO role_sync_history(territory_code,action,outcome,checksum,imported_units,detail) VALUES(?,?,?,?,?,?)",(code,action,outcome,checksum,units,detail[:240]))
 def _download(url, maximum=MAX_BYTES):
- request=urllib.request.Request(url,headers={"User-Agent":"ImmoRadar/1.0 official-data"})
+ request=urllib.request.Request(url,headers={"User-Agent":"Cenlio/1.0 official-data"})
  with urllib.request.urlopen(request,timeout=TIMEOUT_SECONDS) as response:
   chunks=[]; size=0
   while True:

@@ -1,6 +1,6 @@
 # Dictionnaire de données — Sprint 4
 
-- `market_observations.value` : valeur observée publiée par une source intégrée; jamais une estimation ImmoRadar.
+- `market_observations.value` : valeur observée publiée par une source intégrée; jamais une estimation Cenlio.
 - `market_observations.observed_at` : date de l'observation chez la source.
 - `market_observations.retrieved_at` : date de récupération locale.
 - `market_observations.quality_status` : `valid` ou `quarantined`; une valeur en quarantaine n'est jamais visible publiquement.

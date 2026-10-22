@@ -8,7 +8,7 @@ import streamlit as st
 from components.sidebar import go_to
 
 
-IMAGE = Path(__file__).resolve().parents[1] / "assets" / "images" / "immoradar-hero.png"
+IMAGE = Path(__file__).resolve().parents[1] / "assets" / "images" / "cenlio-hero.png"
 
 
 @st.cache_data(show_spinner=False)
@@ -30,9 +30,9 @@ def _start_from_home() -> None:
 def show_home() -> None:
     st.markdown(
         f"<section class='hero-image-panel' style=\"{_hero()}\"><div class='hero-content'>"
-        "<p class='hero-eyebrow notranslate'>IMMORADAR</p>"
+        "<p class='hero-eyebrow notranslate'>CENLIO — L’immobilier, plus clair.</p>"
         "<div class='hero-title' role='heading' aria-level='1'>Avant d’acheter, voyez si les chiffres tiennent.</div>"
-        "<p class='hero-copy'>Calculez le coût ou le flux mensuel, testez un scénario prudent et comparez vos dossiers. ImmoRadar relie vos hypothèses aux renseignements publics disponibles au Québec.</p>"
+        "<p class='hero-copy'>Calculez le coût ou le flux mensuel, testez un scénario prudent et comparez vos dossiers. Cenlio relie vos hypothèses aux renseignements publics disponibles au Québec.</p>"
         "<p class='hero-proof'><span>Valeur expliquée</span><span>Hypothèses transparentes</span><span>Suivi utile</span></p>"
         "</div></section>",
         unsafe_allow_html=True,
@@ -46,7 +46,7 @@ def show_home() -> None:
             st.write("")
             st.button("Découvrir Premium", on_click=go_to, args=("Premium",), width="stretch")
     st.button("Essayer un exemple complet", on_click=go_to, args=("Démonstration",), key="home_demo")
-    st.caption("Commencez sans compte ni document. À l’étape suivante, vous choisissez si ImmoRadar peut consulter les renseignements publics disponibles.")
+    st.caption("Commencez sans compte ni document. À l’étape suivante, vous choisissez si Cenlio peut consulter les renseignements publics disponibles.")
     st.caption(
         "Lorsqu’elle est disponible, la première valeur révélée est celle du rôle municipal officiel : un repère fiscal, "
         "pas un prix de vente. Elle peut différer du marché selon l’année du rôle et le secteur. ImmoValue est distincte "
@@ -73,17 +73,17 @@ def show_home() -> None:
         st.markdown(
             "<article class='dossier-preview'><span class='data-pill simulated'>Exemple d’interface</span>"
             "<h3>Votre synthèse d’achat</h3><div class='preview-grid'><div><small>Valeur ImmoValue</small><strong>Calculable selon les comparables</strong></div>"
-            "<div><small>Score ImmoRadar</small><strong>Lecture adaptée au projet</strong></div>"
+            "<div><small>Score Cenlio</small><strong>Lecture adaptée au projet</strong></div>"
             "<div><small>Confiance</small><strong>Qualité des données saisies</strong></div></div></article>",
             unsafe_allow_html=True,
         )
     with notes:
         st.markdown("<article class='benefit-card'><h3>Ce que vous voyez</h3><p>• La valeur municipale reste distincte d’une valeur marchande.</p><p>• Les points forts et les vérifications viennent des données réellement disponibles.</p><p>• Aucun résultat d’exemple n’est présenté comme le vôtre.</p></article>", unsafe_allow_html=True)
 
-    st.markdown("<div class='section-space'></div><section class='premium-notice'><p class='eyebrow notranslate'>ALERTES PREMIUM</p><h2>Gardez une longueur d’avance</h2><p>Suivez les changements qui peuvent influencer vos décisions grâce aux alertes personnalisées ImmoRadar.</p><p><b>Alertes vérifiables :</b> variation de valeur quand deux estimations fiables existent · impact d’un taux directeur sur un scénario · mise à jour du rôle municipal.</p><p>Avec votre consentement, ImmoRadar peut vous envoyer un avis générique par courriel. Les alertes non calculables restent indiquées « bientôt disponible ».</p></section>", unsafe_allow_html=True)
+    st.markdown("<div class='section-space'></div><section class='premium-notice'><p class='eyebrow notranslate'>ALERTES PREMIUM</p><h2>Gardez une longueur d’avance</h2><p>Suivez les changements qui peuvent influencer vos décisions grâce aux alertes personnalisées Cenlio.</p><p><b>Alertes vérifiables :</b> variation de valeur quand deux estimations fiables existent · impact d’un taux directeur sur un scénario · mise à jour du rôle municipal.</p><p>Avec votre consentement, Cenlio peut vous envoyer un avis générique par courriel. Les alertes non calculables restent indiquées « bientôt disponible ».</p></section>", unsafe_allow_html=True)
     st.button("Voir les alertes Premium", on_click=go_to, args=("Premium",), key="home_premium")
 
-    st.markdown("<div class='section-space'></div><h2>Pourquoi ImmoRadar</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='section-space'></div><h2>Pourquoi Cenlio</h2>", unsafe_allow_html=True)
     for column, title, copy in zip(
         st.columns(4),
         ("Valeur", "Analyse", "Transparence", "Suivi"),

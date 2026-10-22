@@ -119,7 +119,7 @@ _INDICATORS = (
     ("cash_on_cash_return", "Rendement sur la mise", True, True),
     ("capitalization_rate", "Taux de capitalisation", True, True),
     ("dscr", "Capacité à couvrir la dette (DSCR)", True, True),
-    ("score", "Score ImmoRadar", True, True),
+    ("score", "Score Cenlio", True, True),
     ("confidence", "Confiance des données", True, True),
 )
 

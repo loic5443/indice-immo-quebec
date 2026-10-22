@@ -98,7 +98,7 @@ class AlertCycleEndToEndTests(unittest.TestCase):
         self.assertEqual(second_delivery.status, "already_processed")
         self.assertEqual(len(deliveries), 1)
         _, subject, content, _ = deliveries[0]
-        self.assertEqual(subject, "ImmoRadar — une alerte est disponible")
+        self.assertEqual(subject, "Cenlio — une alerte est disponible")
         self.assertNotIn("Dossier suivi de test", content)
         self.assertNotIn("420 000", content)
         self.assertNotIn("alert-cycle@example.test", content)
@@ -184,7 +184,7 @@ finally:
         self.assertFalse(app.exception)
         self.assertEqual(len(app.session_state["test_email_contents"]), 1)
         subject, content = app.session_state["test_email_contents"][0]
-        self.assertEqual(subject, "ImmoRadar — une alerte est disponible")
+        self.assertEqual(subject, "Cenlio — une alerte est disponible")
         self.assertNotIn("Dossier suivi de test", content)
         self.assertNotIn("420 000", content)
         app.run()

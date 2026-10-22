@@ -77,7 +77,7 @@ class PropertyComparisonServiceTests(unittest.TestCase):
         score = next(item for item in result["indicators"] if item["key"] == "score")
         self.assertEqual(score["relation"], "non_comparable")
         self.assertIsNone(score["a"])
-        self.assertTrue(any("Score ImmoRadar" in item for item in result["checks"]["a"]))
+        self.assertTrue(any("Score Cenlio" in item for item in result["checks"]["a"]))
 
     def test_keeps_a_declared_asking_price_before_immovalue_is_available(self):
         with closing(sqlite3.connect(self.database_path)) as connection, connection:

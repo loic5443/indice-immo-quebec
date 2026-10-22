@@ -1,4 +1,23 @@
-# ImmoRadar — lot autonome de préparation au lancement
+# Cenlio — lot autonome de préparation au lancement
+
+État mis à jour le 20 octobre 2026. Aucun nouvel hébergement payant ni paiement réel n’est activé. Le propriétaire souhaite différer toute dépense jusqu’à la fin des préparatifs gratuits.
+
+## Stripe — recette du 20 octobre 2026
+
+Paiements Checkout fictifs acceptés et refusés, calcul TPS/TVQ de simulation, activation Premium, isolation des comptes, confirmation serveur, lecture du portail client français et résiliations vérifiés. Deux abonnements fictifs annulés en fin de recette. Formulaire et portail passent au français canadien; correction de l'adresse utilisée pour les taxes. 32 tests ciblés réussis. Voir [la recette et ses limites](STRIPE_RECETTE_2026-10-20.md).
+
+Les changements récents ne sont pas encore publiés sur GitHub ou déployés. Le retour navigateur vers une application publiée avec facturation active, le webhook public, la configuration réelle et le stockage persistant restent à valider; l'aperçu public n'encaisse rien.
+
+## Dernière recette — 18 et 19 octobre 2026
+
+- 427 tests locaux réussis après les correctifs d’adresses et de reprise des appartements. La suite distante est également exécutée à chaque sauvegarde de la branche.
+- Aperçu HTTPS gratuit : https://immoradar-apercu.onrender.com/ — paiements, courriels et opérations périodiques désactivés; base éphémère et données fictives uniquement.
+- 28 requêtes d’adresses réelles et entrées limites vérifiées auprès du MRNF; deux rôles municipaux importés et leurs valeurs affichées dans le navigateur public. Les résultats absents restent explicitement absents.
+- Mise en page Chromium vérifiée à 360 et 390 px; formulaire, suggestions, navigation Premium et démonstration contrôlés. Aucun vrai iPhone/Safari ni clavier tactile utilisé.
+- Comptes, dossiers, brouillons, isolation entre utilisateurs, réouverture dans un autre processus et restauration d’une sauvegarde contrôlés. La conservation après redémarrage du véritable hébergement persistant reste à valider.
+- L’espace Render My Workspace a été confirmé et contient le seul service gratuit d’aperçu. Le plan de production avec disque /app/var est préparé mais non créé, conformément au refus de frais avant la fin des préparatifs gratuits.
+
+Voir [la recette détaillée](VERIFICATION_ADRESSES_MOBILE_COMPTES_2026-10-18.md). Les sections datées du 16 octobre ci-dessous décrivent les contrôles antérieurs; leurs blocages visuels locaux ont été dépassés par les essais HTTPS, sans valider pour autant tous les appareils ou une exploitation payante.
 
 État mis à jour le 19 octobre 2026. Aucun nouvel hébergement payant ni paiement réel n’est activé. Le propriétaire souhaite différer toute dépense jusqu’à la fin des préparatifs gratuits.
 

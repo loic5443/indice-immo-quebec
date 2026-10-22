@@ -21,7 +21,7 @@ def show_privacy() -> None:
     st.markdown("<p class='eyebrow'>CONFIDENTIALITÉ</p>", unsafe_allow_html=True)
     st.markdown(
         "<div class='section-title' role='heading' aria-level='1'>Vos données servent votre dossier — pas un profil public.</div>"
-        "<p class='section-intro'>ImmoRadar conserve dans votre espace les renseignements nécessaires à votre compte, vos brouillons "
+        "<p class='section-intro'>Cenlio conserve dans votre espace les renseignements nécessaires à votre compte, vos brouillons "
         "et vos dossiers sauvegardés. Vous choisissez quand une recherche publique peut être effectuée et vous gardez "
         "le contrôle de vos données.</p>",
         unsafe_allow_html=True,
@@ -37,9 +37,9 @@ def show_privacy() -> None:
         _privacy_card("MESURES LIMITÉES", "Aucune adresse dans les mesures", "Les mesures analytiques sont désactivées par défaut. Si vous les activez, elles n’acceptent ni adresse, ni montant, ni comparable, ni mot de passe, ni contenu de rapport.")
 
     st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>CE QUI EST PARTAGÉ, ET CE QUI NE L’EST PAS</p><div class='section-title' role='heading' aria-level='2'>Une recherche publique reste ciblée.</div>", unsafe_allow_html=True)
-    payment_copy = ("<div><span class='data-pill real'>PAIEMENT SÉCURISÉ</span><h3>Votre carte reste chez Stripe</h3><p>Lors d’un abonnement, Stripe reçoit votre courriel et les informations nécessaires au paiement. ImmoRadar conserve les identifiants et le statut de l’abonnement, sans conserver de numéro de carte.</p></div>"
+    payment_copy = ("<div><span class='data-pill real'>PAIEMENT SÉCURISÉ</span><h3>Votre carte reste chez Stripe</h3><p>Lors d’un abonnement, Stripe reçoit votre courriel et les informations nécessaires au paiement. Cenlio conserve les identifiants et le statut de l’abonnement, sans conserver de numéro de carte.</p></div>"
                     if os.environ.get("IMMORADAR_BILLING_ENABLED") == "1" else
-                    "<div><span class='data-pill simulated'>PAS DE PAIEMENT</span><h3>Aucun traitement de carte pendant la bêta</h3><p>Premium est en préparation. ImmoRadar ne demande aucun paiement réel pendant la bêta privée.</p></div>")
+                    "<div><span class='data-pill simulated'>PAS DE PAIEMENT</span><h3>Aucun traitement de carte pendant la bêta</h3><p>Premium est en préparation. Cenlio ne demande aucun paiement réel pendant la bêta privée.</p></div>")
     st.markdown(
         "<div class='data-card'>"
         "<div><span class='data-pill real'>AVEC VOTRE CONSENTEMENT</span><h3>Recherche d’adresse publique</h3><p>La requête sert uniquement à obtenir des suggestions ou des renseignements publics autorisés auprès de la source officielle indiquée dans le dossier.</p></div>"

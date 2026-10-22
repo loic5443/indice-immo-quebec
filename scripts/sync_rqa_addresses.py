@@ -21,7 +21,7 @@ from services.quebec_address_repository import rqa_status, synchronize_rqa_snaps
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Synchronise le RQA officiel dans le cache local ImmoRadar.")
+    parser = argparse.ArgumentParser(description="Synchronise le RQA officiel dans le cache local Cenlio.")
     parser.add_argument("--confirm", action="store_true", help="Confirme le téléchargement officiel provincial temporaire.")
     parser.add_argument("--archive", type=Path, help="Archive officielle déjà téléchargée temporairement; évite un nouveau téléchargement.")
     arguments = parser.parse_args()

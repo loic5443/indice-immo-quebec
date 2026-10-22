@@ -48,7 +48,7 @@ def show_premium() -> None:
     free_limit_copy, free_comparison_copy = _free_estimation_limit(quota_is_enforced(DATABASE_PATH))
     st.markdown(
         "<section class='hero-image-panel premium-hero'><div class='hero-content'>"
-        "<p class='hero-eyebrow notranslate'>IMMORADAR PREMIUM</p>"
+        "<p class='hero-eyebrow notranslate'>CENLIO PREMIUM</p>"
         "<div class='hero-title' role='heading' aria-level='1'>Comparez vos achats. Gardez vos décisions sous contrôle.</div>"
         "<p class='hero-copy'>Premium rassemble vos critères d’achat, vos dossiers, les scénarios et les changements vérifiables "
         "pour vous aider à revenir à une décision avec le bon contexte.</p>"
@@ -153,7 +153,7 @@ def show_premium() -> None:
 
     st.markdown(
         "<div class='premium-notice'><div class='notice-title' role='heading' aria-level='3'>Une alerte n’est jamais inventée.</div>"
-        "<p>ImmoRadar montre une alerte seulement lorsqu’un changement peut être établi avec les instantanés "
+        "<p>Cenlio montre une alerte seulement lorsqu’un changement peut être établi avec les instantanés "
         "sauvegardés ou une source autorisée. Une valeur municipale demeure un repère fiscal, pas une valeur marchande.</p></div>",
         unsafe_allow_html=True,
     )
@@ -171,7 +171,7 @@ def show_premium() -> None:
         return
 
     st.markdown("<div id='m-avertir-au-lancement' class='section-space compact-space'></div><div class='section-title' role='heading' aria-level='2'>M’avertir au lancement</div>", unsafe_allow_html=True)
-    st.caption("Votre intérêt reste enregistré uniquement dans ImmoRadar. Aucun service externe n’est contacté.")
+    st.caption("Votre intérêt reste enregistré uniquement dans Cenlio. Aucun service externe n’est contacté.")
     if not is_authenticated():
         st.info("Connectez-vous pour gérer localement votre intérêt pour Premium.")
         st.button("Créer mon espace pour être averti", type="primary", on_click=go_to, args=("Mon compte",), key="premium_open_account")

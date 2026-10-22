@@ -1,8 +1,10 @@
-# ImmoRadar
+> Marque retenue : **Cenlio**. Voir [la vérification et la migration](docs/CENLIO_MARQUE_2026-10-22.md).
+
+# Cenlio
 
 Pour préparer l’hébergement avec disque persistant et une adresse HTTPS fournie par Render, consulter [le guide de déploiement](docs/HEBERGEMENT_RENDER.md). La création de ressources payantes reste soumise à l’accord du propriétaire.
 
-ImmoRadar aide à comprendre un dossier immobilier : renseignements publics autorisés, valeur municipale, calculs financiers, ImmoScore et suivi des changements vérifiables.
+Cenlio aide à comprendre un dossier immobilier : renseignements publics autorisés, valeur municipale, calculs financiers, ImmoScore et suivi des changements vérifiables.
 
 ## Ce que l’application fait
 
@@ -13,7 +15,7 @@ ImmoRadar aide à comprendre un dossier immobilier : renseignements publics auto
 
 ## Données et limites
 
-ImmoRadar ne fabrique pas de prix de vente, de rendement locatif ou de niveau de risque municipal. Les comparaisons de municipalités n’apparaissent que lorsque des indicateurs officiels comparables ont été chargés. Le Référentiel québécois des adresses (RQA) sert à améliorer la recherche d’adresse; le rôle municipal reste disponible territoire par territoire. Les chiffres financiers sont les hypothèses saisies par l’utilisateur.
+Cenlio ne fabrique pas de prix de vente, de rendement locatif ou de niveau de risque municipal. Les comparaisons de municipalités n’apparaissent que lorsque des indicateurs officiels comparables ont été chargés. Le Référentiel québécois des adresses (RQA) sert à améliorer la recherche d’adresse; le rôle municipal reste disponible territoire par territoire. Les chiffres financiers sont les hypothèses saisies par l’utilisateur.
 
 ## Lancer l’application
 

@@ -1,4 +1,4 @@
-"""Deterministic scenario and resilience calculations for ImmoRadar."""
+"""Deterministic scenario and resilience calculations for Cenlio."""
 
 from dataclasses import asdict, dataclass, replace
 

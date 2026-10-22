@@ -1,1 +1,1 @@
-"""Core business concepts for ImmoRadar and ImmoEngine."""
+"""Core business concepts for Cenlio and ImmoEngine."""

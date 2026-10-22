@@ -1,6 +1,6 @@
 # Comparer les municipalités
 
-ImmoRadar compare des repères municipaux officiels, et non un marché de transactions. Les valeurs ne sont ni des prix de vente actuels, ni des rendements locatifs, ni une recommandation.
+Cenlio compare des repères municipaux officiels, et non un marché de transactions. Les valeurs ne sont ni des prix de vente actuels, ni des rendements locatifs, ni une recommandation.
 
 ## Source intégrée
 

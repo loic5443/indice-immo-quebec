@@ -64,7 +64,7 @@ class ReportTests(unittest.TestCase):
             reader = PdfReader(path)
             self.assertGreaterEqual(len(reader.pages), 4)
             extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
-        for section in ("ImmoRadar", "Votre synthèse immobilière", "Résultats financiers", "Scénarios", "Tests de résistance", "Avertissement"):
+        for section in ("Cenlio", "Votre synthèse immobilière", "Résultats financiers", "Scénarios", "Tests de résistance", "Avertissement"):
             self.assertIn(section, extracted)
         self.assertIn("Exemple fictif", extracted)
         self.assertIn("Montréal", extracted)

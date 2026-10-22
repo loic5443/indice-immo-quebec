@@ -148,8 +148,8 @@ def send_test_alert_email(
         # information. The recipient is fetched locally and never logged.
         sender(
             str(email),
-            "ImmoRadar — test des alertes par courriel",
-            "<p>Votre livraison d’alertes ImmoRadar est prête.</p>"
+            "Cenlio — test des alertes par courriel",
+            "<p>Votre livraison d’alertes Cenlio est prête.</p>"
             "<p>Ceci est un test demandé depuis votre compte. Aucune donnée de propriété n’est incluse.</p>",
             environment=environment,
         )

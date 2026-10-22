@@ -1,4 +1,4 @@
-# ImmoRadar — UI/UX Design System
+# Cenlio — UI/UX Design System
 ## Expérience, contenu et composants
 
 **Version :** 1.0  
@@ -223,7 +223,7 @@ Calme, précise, directe, sans exagération.
 
 ### Limite
 
-« ImmoRadar est un outil d’aide à la décision. Il ne remplace pas une évaluation, une inspection ni un avis professionnel. »
+« Cenlio est un outil d’aide à la décision. Il ne remplace pas une évaluation, une inspection ni un avis professionnel. »
 
 ## 14. Parcours de test
 

@@ -1,4 +1,4 @@
-# ImmoRadar — Data, Legal & Operations Handbook
+# Cenlio — Data, Legal & Operations Handbook
 ## Sources, gouvernance, conformité et exploitation
 
 **Version :** 1.0  
@@ -162,7 +162,7 @@ Ne pas copier des conditions génériques. Faire valider les textes.
 
 Formulation de base :
 
-> ImmoRadar fournit des estimations et analyses indicatives à partir des données et hypothèses disponibles. Les résultats peuvent être incomplets ou inexacts et ne constituent ni une évaluation officielle, ni un conseil financier, juridique, fiscal ou immobilier. Faites vérifier les renseignements importants par des professionnels qualifiés avant une décision.
+> Cenlio fournit des estimations et analyses indicatives à partir des données et hypothèses disponibles. Les résultats peuvent être incomplets ou inexacts et ne constituent ni une évaluation officielle, ni un conseil financier, juridique, fiscal ou immobilier. Faites vérifier les renseignements importants par des professionnels qualifiés avant une décision.
 
 L’avis doit être adapté à chaque fonction et ne remplace pas des contrôles de qualité.
 
@@ -170,7 +170,7 @@ L’avis doit être adapté à chaque fonction et ne remplace pas des contrôles
 
 - Documenter versions, auteurs et décisions.
 - Conserver historique Git.
-- Vérifier disponibilité d’ImmoRadar et des sous-marques avant usage commercial.
+- Vérifier disponibilité de Cenlio et des sous-marques avant usage commercial.
 - Utiliser le symbole ™ seulement avec une stratégie cohérente; ne pas suggérer un enregistrement inexistant.
 - Les accords avec employés, pigistes et fournisseurs doivent céder les droits nécessaires.
 
@@ -269,4 +269,4 @@ Le registre versionné, la matrice de décision et les procédures d’ajout, de
 
 ## Mise à jour Sprint 5 — comparables fournis par l'utilisateur
 
-Les comparables ne sont ni collectés ni enrichis par ImmoRadar. L'utilisateur confirme le droit d'utilisation et la qualité de vente conclue; une annonce active est exclue. L'import CSV est local, volontaire et validé. Une provenance déclarée reste déclarée et ne devient pas une donnée officielle.
+Les comparables ne sont ni collectés ni enrichis par Cenlio. L'utilisateur confirme le droit d'utilisation et la qualité de vente conclue; une annonce active est exclue. L'import CSV est local, volontaire et validé. Une provenance déclarée reste déclarée et ne devient pas une donnée officielle.

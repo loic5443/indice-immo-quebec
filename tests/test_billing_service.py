@@ -91,6 +91,21 @@ class BillingTests(unittest.TestCase):
             with self.subTest(patch=patch), self.assertRaises(BillingError):
                 billing_config({**ENV, **patch})
 
+    def test_restricted_keys_keep_test_and_live_modes_separate(self):
+        for mode, key in (("test", "rk_test_placeholder"),
+                          ("test", "rkcs_test_placeholder"),
+                          ("live", "rk_live_placeholder")):
+            with self.subTest(mode=mode, key=key):
+                self.assertEqual(billing_config({**ENV, "IMMORADAR_BILLING_MODE": mode,
+                                                 "STRIPE_SECRET_KEY": key}).mode, mode)
+        for mode, key in (("live", "rk_test_placeholder"),
+                          ("live", "rkcs_test_placeholder"),
+                          ("test", "rk_live_placeholder"),
+                          ("test", "pk_test_placeholder"),
+                          ("live", "rkcs_live_placeholder")):
+            with self.subTest(mode=mode, key=key), self.assertRaises(BillingError):
+                billing_config({**ENV, "IMMORADAR_BILLING_MODE": mode, "STRIPE_SECRET_KEY": key})
+
     def test_price_is_retrieved_and_validated_before_checkout(self):
         self.assertEqual(premium_offer(ENV, self.client)["price_label"], "29,00 $ CA / mois")
         for patch in ({"active": False}, {"currency": "usd"}, {"livemode": True}, {"unit_amount": 0},
@@ -110,6 +125,9 @@ class BillingTests(unittest.TestCase):
         self.assertEqual(params["client_reference_id"], "1")
         self.assertEqual(params["line_items"], [{"price": "price_premium", "quantity": 1}])
         self.assertTrue(params["automatic_tax"]["enabled"])
+        self.assertEqual(params["customer_update"], {"address": "auto"})
+        self.assertEqual(params["locale"], "fr-CA")
+        self.assertRegex(params["integration_identifier"], r"^immoradar-premium-[a-z]{8}$")
         self.assertEqual(effective_plan(1, "free", self.db, environment=ENV), "free")
 
     def test_timeout_retry_keeps_same_idempotency_key(self):
@@ -120,6 +138,7 @@ class BillingTests(unittest.TestCase):
             self.assertNotIn("secret provider detail", str(raised.exception))
         calls = self.client.v1.checkout.sessions.create.call_args_list
         self.assertEqual(calls[0].kwargs["options"], calls[1].kwargs["options"])
+        self.assertEqual(calls[0].args[0], calls[1].args[0])
 
     def test_delayed_webhook_does_not_allow_second_subscription(self):
         self.checkout()
@@ -214,6 +233,7 @@ class BillingTests(unittest.TestCase):
         self.checkout()
         self.assertTrue(create_portal(1, self.db, ENV, self.client).startswith("https://billing.stripe.com/"))
         self.assertEqual(self.client.v1.billing_portal.sessions.create.call_args.args[0]["customer"], "cus_1")
+        self.assertEqual(self.client.v1.billing_portal.sessions.create.call_args.args[0]["locale"], "fr-CA")
         with self.assertRaises(BillingError):
             create_portal(2, self.db, ENV, self.client)
 

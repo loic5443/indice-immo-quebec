@@ -46,14 +46,14 @@ def save_key_from_clipboard(root: tk.Tk) -> None:
     # Do not print or render the key. Clear it only after successful local storage.
     root.clipboard_clear()
     root.update()
-    messagebox.showinfo("ImmoRadar", "Clé Brevo enregistrée localement. Vous pouvez fermer cette fenêtre.")
+    messagebox.showinfo("Cenlio", "Clé Brevo enregistrée localement. Vous pouvez fermer cette fenêtre.")
 
 
 def show_clipboard_installer() -> int:
     """Offer a one-click, local-only installer for users who copied an API key."""
 
     root = tk.Tk()
-    root.title("Configurer Brevo pour ImmoRadar")
+    root.title("Configurer Brevo pour Cenlio")
     root.resizable(False, False)
     frame = tk.Frame(root, padx=24, pady=20)
     frame.pack()
@@ -72,7 +72,7 @@ def show_clipboard_installer() -> int:
     ).pack(anchor="w")
     tk.Label(
         frame,
-        text="La clé reste seulement sur cet ordinateur et n'est jamais affichée par ImmoRadar.",
+        text="La clé reste seulement sur cet ordinateur et n'est jamais affichée par Cenlio.",
         wraplength=410,
         justify="left",
     ).pack(anchor="w", pady=(14, 0))

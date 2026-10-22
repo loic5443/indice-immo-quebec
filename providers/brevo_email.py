@@ -65,7 +65,7 @@ def send_email(recipient: str, subject: str, html_content: str, *, environment: 
     if delivery_status(environment) != "ready":
         raise BrevoUnavailable("La livraison courriel n’est pas configurée localement.")
     payload = json.dumps({
-        "sender": {"email": environment["BREVO_SENDER_EMAIL"], "name": "ImmoRadar"},
+        "sender": {"email": environment["BREVO_SENDER_EMAIL"], "name": "Cenlio"},
         "to": [{"email": recipient}], "subject": subject, "htmlContent": html_content,
     }).encode("utf-8")
     request = Request(BREVO_URL, data=payload, method="POST", headers={

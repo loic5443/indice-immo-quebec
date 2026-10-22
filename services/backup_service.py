@@ -22,7 +22,7 @@ def verify_backup(path):
             raise BackupError("La sauvegarde contient une référence invalide.")
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if not {"schema_migrations", "users", "analyses"}.issubset(tables):
-            raise BackupError("Ce fichier n’est pas une base ImmoRadar reconnue.")
+            raise BackupError("Ce fichier n’est pas une base Cenlio reconnue.")
         version = connection.execute("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1").fetchone()
     digest = hashlib.sha256()
     with path.open("rb") as file:

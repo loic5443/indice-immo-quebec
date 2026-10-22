@@ -1,4 +1,4 @@
-"""Trust-focused explanation of ImmoRadar outside the main product flow."""
+"""Trust-focused explanation of Cenlio outside the main product flow."""
 
 import streamlit as st
 
@@ -14,10 +14,10 @@ def _principle(title: str, copy: str, label: str) -> None:
 
 
 def show_about() -> None:
-    st.markdown("<p class='eyebrow notranslate'>À PROPOS D’IMMORADAR</p>", unsafe_allow_html=True)
+    st.markdown("<p class='eyebrow notranslate'>À PROPOS DE CENLIO</p>", unsafe_allow_html=True)
     st.markdown(
         "<div class='section-title' role='heading' aria-level='1'>Comprendre une propriété avant une grande décision.</div>"
-        "<p class='section-intro'>ImmoRadar rassemble les renseignements publics autorisés, vos chiffres et des "
+        "<p class='section-intro'>Cenlio rassemble les renseignements publics autorisés, vos chiffres et des "
         "méthodes expliquées pour rendre un dossier immobilier plus lisible. Vous restez responsable des hypothèses "
         "et de la décision finale.</p>",
         unsafe_allow_html=True,
@@ -26,7 +26,7 @@ def show_about() -> None:
     st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>UNE LECTURE TRANSPARENTE</p><div class='section-title' role='heading' aria-level='2'>Trois choses, clairement séparées.</div>", unsafe_allow_html=True)
     first, second, third = st.columns(3)
     with first:
-        _principle("Valeur municipale officielle", "Lorsqu’un rôle municipal public est disponible, ImmoRadar affiche sa source, son année et sa date de référence. C’est un repère fiscal, pas une valeur marchande.", "OFFICIEL")
+        _principle("Valeur municipale officielle", "Lorsqu’un rôle municipal public est disponible, Cenlio affiche sa source, son année et sa date de référence. C’est un repère fiscal, pas une valeur marchande.", "OFFICIEL")
     with second:
         _principle("Votre analyse financière", "Les paiements, dépenses, flux de trésorerie et ratios sont calculés à partir des chiffres que vous saisissez. Chaque résultat conserve son explication.", "VOS HYPOTHÈSES")
     with third:
@@ -45,7 +45,7 @@ def show_about() -> None:
         with column:
             st.markdown(f"<article class='benefit-card'><div class='card-title' role='heading' aria-level='3'>{title}</div><p>{copy}</p></article>", unsafe_allow_html=True)
 
-    st.markdown("<div class='section-space compact-space'></div><div class='premium-notice'><div class='notice-title' role='heading' aria-level='3'>Ce qu’ImmoRadar ne prétend pas faire.</div><p>ImmoRadar ne produit pas une évaluation officielle, ne remplace pas un courtier, un évaluateur, un prêteur ou un conseiller, et ne garantit jamais qu’une propriété constitue un bon achat. Une donnée absente reste indiquée comme indisponible.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-space compact-space'></div><div class='premium-notice'><div class='notice-title' role='heading' aria-level='3'>Ce que Cenlio ne prétend pas faire.</div><p>Cenlio ne produit pas une évaluation officielle, ne remplace pas un courtier, un évaluateur, un prêteur ou un conseiller, et ne garantit jamais qu’une propriété constitue un bon achat. Une donnée absente reste indiquée comme indisponible.</p></div>", unsafe_allow_html=True)
     st.caption("Les recherches publiques ne sont effectuées qu’avec votre consentement. Les adresses, montants et comparables ne sont pas envoyés à la télémétrie.")
 
     st.markdown("<div class='section-space compact-space'></div><div class='section-title' role='heading' aria-level='2'>Prêt à ouvrir votre dossier?</div><p class='section-intro'>Commencez par la propriété et les chiffres que vous connaissez déjà. Les étapes suivantes restent visibles et explicables.</p>", unsafe_allow_html=True)
@@ -53,4 +53,4 @@ def show_about() -> None:
     analyse.button("Analyser une propriété", type="primary", on_click=go_to, args=("Analyser",), width="stretch")
     premium.button("Découvrir Premium", on_click=go_to, args=("Premium",), width="stretch")
     import os
-    st.caption("ImmoRadar — Gratuit et Premium. Consultez les conditions de l’offre avant de vous abonner." if os.environ.get("IMMORADAR_BILLING_ENABLED") == "1" else "ImmoRadar — bêta privée. Aucun paiement réel n’est demandé pendant cette période.")
+    st.caption("Cenlio — Gratuit et Premium. Consultez les conditions de l’offre avant de vous abonner." if os.environ.get("IMMORADAR_BILLING_ENABLED") == "1" else "Cenlio — bêta privée. Aucun paiement réel n’est demandé pendant cette période.")

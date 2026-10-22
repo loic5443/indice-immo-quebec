@@ -103,7 +103,7 @@ def _fetch_image(url: str) -> tuple[bytes, str]:
         raise ValueError("official_host_required")
     response = requests.get(
         url,
-        headers={"Accept": "image/png", "User-Agent": "ImmoRadar/1.0"},
+        headers={"Accept": "image/png", "User-Agent": "Cenlio/1.0"},
         timeout=REQUEST_TIMEOUT_SECONDS,
         allow_redirects=False,
     )

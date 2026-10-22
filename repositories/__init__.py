@@ -1,1 +1,1 @@
-"""Persistence adapters for ImmoRadar."""
+"""Persistence adapters for Cenlio."""

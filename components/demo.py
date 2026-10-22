@@ -13,7 +13,7 @@ def _money(value):
 
 
 def show_demo():
-    st.html("<h1>Essayez ImmoRadar sur un exemple</h1>")
+    st.html("<h1>Essayez Cenlio sur un exemple</h1>")
     st.info("Démonstration fictive : aucune adresse réelle, aucune estimation marchande et aucun résultat garanti. Les calculs utilisent le même moteur que vos dossiers.")
     st.write("Modifiez trois hypothèses et observez leur effet. Aucun compte, aucune recherche publique et aucune sauvegarde de vos choix.")
     price, rent, rate = st.columns(3)
@@ -52,7 +52,7 @@ def show_demo():
     labels = {"matches": "Cet exemple respecte les trois seuils.", "outside": "Cet exemple ne respecte pas tous les seuils.", "incomplete": "Des critères ne sont pas calculables avec ces hypothèses."}
     st.write(labels[result["status"]])
     st.download_button("Voir le rapport PDF de cet exemple", generate_report_pdf(snapshot),
-                       "immoradar-demonstration-fictive.pdf", "application/pdf", key="demo_pdf", width="stretch")
+                       "cenlio-demonstration-fictive.pdf", "application/pdf", key="demo_pdf", width="stretch")
     first, second = st.columns(2)
     first.button("Analyser ma propre propriété", type="primary", on_click=go_to, args=("Analyser",), key="demo_start", width="stretch")
     second.button("Découvrir les outils Premium", on_click=go_to, args=("Premium",), key="demo_premium", width="stretch")

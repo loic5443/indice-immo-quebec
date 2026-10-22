@@ -1,4 +1,4 @@
-# Clôture de la refonte — ImmoRadar 0.7.0 bêta privée
+# Clôture de la refonte — Cenlio 0.7.0 bêta privée
 
 | Statut | Éléments |
 |---|---|

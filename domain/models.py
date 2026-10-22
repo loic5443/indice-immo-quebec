@@ -1,4 +1,4 @@
-"""Framework-agnostic models shared by ImmoRadar services."""
+"""Framework-agnostic models shared by Cenlio services."""
 
 from dataclasses import dataclass
 

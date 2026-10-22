@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 
 
 _component = components.declare_component(
-    "immoradar_live_text_input",
+    "cenlio_live_text_input",
     path=str(Path(__file__).with_name("live_text_input_frontend")),
 )
 

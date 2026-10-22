@@ -1,4 +1,4 @@
-# ImmoRadar — ImmoEngine Specification
+# Cenlio — ImmoEngine Specification
 ## Règles métier, scores, confiance et validation
 
 **Version :** 1.0  
@@ -67,7 +67,7 @@ Le module est activé seulement si :
 - les caractéristiques essentielles sont connues;
 - aucune anomalie bloquante n’est détectée.
 
-Sinon, ImmoRadar affiche une analyse financière et contextuelle sans estimation de valeur.
+Sinon, Cenlio affiche une analyse financière et contextuelle sans estimation de valeur.
 
 ### 4.2 Sélection des comparables
 

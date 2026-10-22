@@ -1,4 +1,4 @@
-# ImmoRadar — hébergement persistant sans domaine personnalisé
+# Cenlio — hébergement persistant sans domaine personnalisé
 
 ## Proposition préparée le 16 octobre 2026
 

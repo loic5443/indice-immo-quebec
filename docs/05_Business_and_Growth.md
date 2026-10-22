@@ -1,4 +1,4 @@
-# ImmoRadar — Business & Growth Plan
+# Cenlio — Business & Growth Plan
 ## Modèle économique, validation et lancement
 
 **Version :** 1.0  
@@ -7,7 +7,7 @@
 
 ## 1. Thèse
 
-Le problème n’est pas l’absence totale de données immobilières. Il est la fragmentation, la difficulté d’interprétation et le manque de personnalisation. ImmoRadar peut créer de la valeur en réduisant le temps d’analyse et en rendant l’incertitude visible.
+Le problème n’est pas l’absence totale de données immobilières. Il est la fragmentation, la difficulté d’interprétation et le manque de personnalisation. Cenlio peut créer de la valeur en réduisant le temps d’analyse et en rendant l’incertitude visible.
 
 L’avantage durable ne sera pas une page ou un modèle générique. Il reposera sur :
 
@@ -121,7 +121,7 @@ Chaque page doit citer des sources, indiquer la date et éviter les conseils per
 
 ### Rapport partageable
 
-Un utilisateur partage un rapport expurgé; le destinataire découvre ImmoRadar. Aucun renseignement personnel ou adresse complète n’est public par défaut.
+Un utilisateur partage un rapport expurgé; le destinataire découvre Cenlio. Aucun renseignement personnel ou adresse complète n’est public par défaut.
 
 ### Suivi de valeur
 

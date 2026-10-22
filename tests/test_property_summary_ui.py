@@ -53,7 +53,7 @@ class PropertySummaryUiTests(unittest.TestCase):
         results_section = source[source.index("def _show_results"):source.index("def _show_immovalue")]
         self.assertIn("Les indicateurs essentiels sont déjà résumés plus haut", results_section)
         self.assertIn("Estimation marchande ImmoValue", results_section)
-        self.assertNotIn('score.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Indisponible")', results_section)
+        self.assertNotIn('score.metric("Score Cenlio", f"{engine_result.score:.0f} / 100" if engine_result.score is not None else "Indisponible")', results_section)
 
     def test_authenticated_summary_makes_saving_the_clear_primary_action(self):
         app = AppTest.from_string(

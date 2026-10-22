@@ -230,7 +230,7 @@ def _download_archive(url: str, destination: Path) -> int:
     parsed = urlparse(url)
     if parsed.scheme != "https" or parsed.hostname != OFFICIAL_HOST:
         raise ValueError("official_host_required")
-    request = urllib.request.Request(url, headers={"User-Agent": "ImmoRadar/1.0 official-data"})
+    request = urllib.request.Request(url, headers={"User-Agent": "Cenlio/1.0 official-data"})
     try:
         with urllib.request.urlopen(request, timeout=60) as response, destination.open("wb") as output:
             declared = response.headers.get("Content-Length")

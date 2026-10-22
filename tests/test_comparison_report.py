@@ -17,7 +17,7 @@ class ComparisonReportTests(unittest.TestCase):
             "engine_versions_differ": True,
             "indicators": [
                 {"key": "cash_flow", "label": "Flux de trésorerie mensuel", "a": 250, "b": 100, "relation": "avantage_a"},
-                {"key": "score", "label": "Score ImmoRadar", "a": 72, "b": None, "relation": "non_comparable"},
+                {"key": "score", "label": "Score Cenlio", "a": 72, "b": None, "relation": "non_comparable"},
             ],
             "scenarios": {"current": {"label": "Situation actuelle", "a": 250, "b": 100}},
             "strengths": {"a": ["Flux plus favorable."], "b": []},

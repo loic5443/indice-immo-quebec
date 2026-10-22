@@ -1,4 +1,4 @@
-"""Local, interactive password reset for a known ImmoRadar account.
+"""Local, interactive password reset for a known Cenlio account.
 
 The new password is read with getpass, so it is never echoed, printed, or
 passed on the command line.
@@ -17,7 +17,7 @@ from data.database import DATABASE_PATH
 from services.auth_service import reset_user_password
 
 
-parser = argparse.ArgumentParser(description="Réinitialiser un mot de passe ImmoRadar local.")
+parser = argparse.ArgumentParser(description="Réinitialiser un mot de passe Cenlio local.")
 parser.add_argument("--email", required=True, help="Adresse courriel du compte à réinitialiser.")
 arguments = parser.parse_args()
 

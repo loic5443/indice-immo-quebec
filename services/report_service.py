@@ -55,11 +55,11 @@ def generate_report_pdf(analysis: dict[str, Any], criteria_result: dict | None =
     story = []
     date_label = "Démonstration fictive, sans adresse réelle" if analysis.get("is_demo") else "Analyse sauvegardée le " + str(analysis.get("created_at", ""))
 
-    story += [Spacer(1, 1.4 * inch), Paragraph("IMMORADAR", styles["cover_brand"]),
+    story += [Spacer(1, 1.4 * inch), Paragraph("CENLIO", styles["cover_brand"]),
               Paragraph("Rapport d'analyse immobilière", styles["cover_title"]), Spacer(1, 0.25 * inch),
               Paragraph(escape(str(analysis.get("property_name", "Analyse immobilière"))), styles["cover_property"]),
               Spacer(1, 0.18 * inch), Paragraph(escape(date_label), styles["center"]),
-              Spacer(1, 1.45 * inch), Paragraph("Fondé exclusivement sur les hypothèses saisies et les calculs déterministes ImmoRadar.", styles["center"]),
+              Spacer(1, 1.45 * inch), Paragraph("Fondé exclusivement sur les hypothèses saisies et les calculs déterministes Cenlio.", styles["center"]),
               Paragraph("Aucune donnée de ville simulée n'est utilisée dans ce rapport. Une estimation ImmoValue, lorsqu'elle est présente, provient uniquement des comparables déclarés dans le dossier.", styles["center"]), PageBreak()]
 
     story += _heading("1. Votre synthèse immobilière", styles)
@@ -67,7 +67,7 @@ def generate_report_pdf(analysis: dict[str, Any], criteria_result: dict | None =
     summary = [
         ["Type de propriété", property_type],
         ["Profil", analysis.get("user_profile", "Non renseigné")],
-        ["Score ImmoRadar", _score(analysis.get("immo_score"))],
+        ["Score Cenlio", _score(analysis.get("immo_score"))],
         ["Indice de confiance", _score(analysis.get("confidence_index"))],
         ["Verdict", analysis.get("engine_verdict") or "Données insuffisantes"],
         ["Résistance", resilience.get("status", "Non calculée") if has_income else "Non applicable sans revenu locatif"],
@@ -83,7 +83,7 @@ def generate_report_pdf(analysis: dict[str, Any], criteria_result: dict | None =
     financial_rows = _financial_rows(inputs, analysis)
     story += [_table(financial_rows, styles, [3.3 * inch, 3.45 * inch]), PageBreak()]
 
-    story += _heading("5. Score ImmoRadar et ImmoDNA", styles)
+    story += _heading("5. Score Cenlio et ImmoDNA", styles)
     story += [_table(_dimension_rows(dimensions), styles, [3.25 * inch, 0.95 * inch, 2.55 * inch])]
     story += _heading("6. Facteurs et données manquantes", styles)
     story += _list_section("Facteurs positifs", positives, styles)
@@ -131,7 +131,7 @@ def generate_comparison_report_pdf(comparison: dict[str, Any]) -> bytes:
     )
     first, second = comparison["a"], comparison["b"]
     story = [
-        Spacer(1, 1.15 * inch), Paragraph("IMMORADAR", styles["cover_brand"]),
+        Spacer(1, 1.15 * inch), Paragraph("CENLIO", styles["cover_brand"]),
         Paragraph("Rapport comparatif de propriétés", styles["cover_title"]), Spacer(1, 0.26 * inch),
         Paragraph(escape(str(first.get("name", "Propriété A"))), styles["cover_property"]),
         Paragraph("et", styles["center"]),
@@ -191,10 +191,10 @@ def _register_font() -> str:
     directory = Path(reportlab.__file__).resolve().parent / "fonts"
     if not (directory / "Vera.ttf").is_file():
         return "Helvetica"
-    for name, filename in (("ImmoRadarSans", "Vera.ttf"), ("ImmoRadarSans-Bold", "VeraBd.ttf"), ("ImmoRadarSans-Italic", "VeraIt.ttf"), ("ImmoRadarSans-BoldItalic", "VeraBI.ttf")):
+    for name, filename in (("CenlioSans", "Vera.ttf"), ("CenlioSans-Bold", "VeraBd.ttf"), ("CenlioSans-Italic", "VeraIt.ttf"), ("CenlioSans-BoldItalic", "VeraBI.ttf")):
         pdfmetrics.registerFont(TTFont(name, str(directory / filename)))
-    pdfmetrics.registerFontFamily("ImmoRadarSans", normal="ImmoRadarSans", bold="ImmoRadarSans-Bold", italic="ImmoRadarSans-Italic", boldItalic="ImmoRadarSans-BoldItalic")
-    return "ImmoRadarSans"
+    pdfmetrics.registerFontFamily("CenlioSans", normal="CenlioSans", bold="CenlioSans-Bold", italic="CenlioSans-Italic", boldItalic="CenlioSans-BoldItalic")
+    return "CenlioSans"
 
 
 def _styles(font: str):
@@ -423,6 +423,6 @@ def _footer(canvas, document):
     canvas.line(document.leftMargin, 0.45 * inch, LETTER[0] - document.rightMargin, 0.45 * inch)
     canvas.setFont(_register_font(), 7.5)
     canvas.setFillColor(MUTED)
-    canvas.drawString(document.leftMargin, 0.29 * inch, "ImmoRadar - Analyse indicative")
+    canvas.drawString(document.leftMargin, 0.29 * inch, "Cenlio - Analyse indicative")
     canvas.drawRightString(LETTER[0] - document.rightMargin, 0.29 * inch, f"Page {document.page}")
     canvas.restoreState()

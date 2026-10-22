@@ -1,9 +1,9 @@
-# Lancement ImmoRadar Premium — cible 22 octobre 2026
+# Lancement Cenlio Premium — cible 22 octobre 2026
 
 ## Livré dans cette branche
 
 - Offre mensuelle CAD affichée à partir du prix Stripe réel, sans montant inventé dans le produit.
-- Checkout hébergé Stripe, compte client lié au compte ImmoRadar, clés d’idempotence et protection contre un deuxième abonnement.
+- Checkout hébergé Stripe, compte client lié au compte Cenlio, clés d’idempotence et protection contre un deuxième abonnement.
 - Taxes automatiques dans Checkout : Stripe Tax doit être configuré avant un achat réel. Aucun taux fiscal n’est codé en dur.
 - Activation après vérification serveur du client, du propriétaire, du mode, du prix et de l’état de l’abonnement.
 - Webhooks signés avec refus des modes incompatibles, traitement idempotent et récupération de l’état courant pour les événements en retard.

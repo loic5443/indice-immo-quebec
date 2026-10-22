@@ -10,7 +10,7 @@ def show_immoengine_result(engine: ImmoEngineResult) -> None:
     st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>IMMOENGINE 1.0</p><h2>Lecture structurée de vos hypothèses</h2>", unsafe_allow_html=True)
     st.info("Ce résultat ne produit aucune estimation de valeur marchande et n'utilise aucune donnée de ville simulée. Il analyse seulement vos hypothèses et les calculs financiers affichés ci-dessus.")
     score_column, confidence_column, verdict_column = st.columns(3)
-    score_column.metric("Score ImmoRadar", f"{engine.score:.0f} / 100" if engine.score is not None else "Indisponible")
+    score_column.metric("Score Cenlio", f"{engine.score:.0f} / 100" if engine.score is not None else "Indisponible")
     confidence_column.metric("Indice de confiance", f"{engine.confidence_index} / 100")
     verdict_column.metric("Verdict", engine.verdict.capitalize())
     st.caption("La confiance mesure la complétude et la qualité des hypothèses saisies; elle n'est pas la probabilité qu'une propriété soit un bon achat.")

@@ -1,6 +1,6 @@
-# Documentation officielle ImmoRadar v1.0
+# Documentation officielle Cenlio v1.0
 
-Ce dossier conserve les six volumes Markdown de la documentation ImmoRadar v1.0. Ils constituent les références officielles du projet pour les décisions produit, moteur, architecture, interface, croissance et gouvernance des données.
+Ce dossier conserve les six volumes Markdown de la documentation Cenlio v1.0. Ils constituent les références officielles du projet pour les décisions produit, moteur, architecture, interface, croissance et gouvernance des données.
 
 1. [Product Bible](01_Product_Bible.md) — vision, profils, parcours et garde-fous produit.
 2. [ImmoEngine Specification](02_ImmoEngine_Specification.md) — contrats, scores, confiance, explicabilité et validation.

@@ -48,8 +48,8 @@ def request_recovery(email, database_path, environment=None, sender=send_email, 
     # Transactional recovery is independent of optional alert/marketing consent.
     delivery_env = {**env, "IMMORADAR_ALERT_DELIVERY_ENABLED": "true"}
     try:
-        sender(user["email"], "Réinitialisez votre mot de passe ImmoRadar",
-               "<p>Une demande de récupération a été faite pour votre compte ImmoRadar.</p>"
+        sender(user["email"], "Réinitialisez votre mot de passe Cenlio",
+               "<p>Une demande de récupération a été faite pour votre compte Cenlio.</p>"
                f"<p><a href='{escape(url, quote=True)}'>Choisir un nouveau mot de passe</a></p>"
                "<p>Ce lien expire dans 30 minutes et ne peut être utilisé qu’une fois. Si vous n’avez pas fait cette demande, ignorez ce message.</p>",
                environment=delivery_env)

@@ -34,7 +34,7 @@ def show_sidebar() -> str:
     st.session_state["main_navigation"] = current
 
     st.sidebar.markdown(
-        "<div class='brand-mark'>IM</div><h2 class='sidebar-brand'>ImmoRadar</h2>"
+        "<div class='brand-mark'>CE</div><h2 class='sidebar-brand'>Cenlio</h2>"
         "<p class='sidebar-tagline'>Valeur, analyse et suivi immobilier.</p>",
         unsafe_allow_html=True,
     )
@@ -73,5 +73,5 @@ def show_sidebar() -> str:
     import os
     commercial = os.environ.get("IMMORADAR_BILLING_ENABLED") == "1"
     live = os.environ.get("IMMORADAR_BILLING_MODE") == "live"
-    st.sidebar.caption("ImmoRadar · Gratuit et Premium" if commercial and live else "Paiement en mode test" if commercial else "Bêta privée · Aucun paiement réel n’est activé.")
+    st.sidebar.caption("Cenlio · Gratuit et Premium" if commercial and live else "Paiement en mode test" if commercial else "Bêta privée · Aucun paiement réel n’est activé.")
     return st.session_state.get("main_navigation", "Accueil")

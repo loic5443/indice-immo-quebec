@@ -1,4 +1,4 @@
-# ImmoRadar — Product Bible
+# Cenlio — Product Bible
 ## Vision produit, exigences et feuille de route
 
 **Version :** 1.0  
@@ -6,13 +6,13 @@
 **Portée :** Québec d’abord; expansion seulement après validation  
 **Promesse centrale :** Aider une personne à comprendre une propriété et à prendre une meilleure décision immobilière en moins de 60 secondes.
 
-> ImmoRadar ne vend pas une certitude. Il transforme des données, des hypothèses et des limites connues en une décision plus claire, expliquée et personnalisée.
+> Cenlio ne vend pas une certitude. Il transforme des données, des hypothèses et des limites connues en une décision plus claire, expliquée et personnalisée.
 
 ## 1. Résumé exécutif
 
-ImmoRadar est un copilote immobilier québécois. Le produit cible le moment qui suit la découverte d’une propriété et précède une offre, une décision de financement ou une analyse approfondie. Il rassemble les renseignements disponibles, calcule la viabilité financière, estime une valeur lorsque les données le permettent, mesure l’incertitude et explique les facteurs favorables ou défavorables.
+Cenlio est un copilote immobilier québécois. Le produit cible le moment qui suit la découverte d’une propriété et précède une offre, une décision de financement ou une analyse approfondie. Il rassemble les renseignements disponibles, calcule la viabilité financière, estime une valeur lorsque les données le permettent, mesure l’incertitude et explique les facteurs favorables ou défavorables.
 
-Le produit actuel est un MVP Streamlit. Il comprend un accueil, une analyse locative, des marchés d’exemple, une présentation Premium, des comptes locaux SQLite, la sauvegarde des analyses, les favoris et des tests unitaires. À ce jour, seul le taux directeur est récupéré d’une source externe; les indicateurs de ville sont simulés. ImmoRadar ne doit donc pas être commercialisé comme estimateur automatisé fiable avant l’intégration et la validation de données réelles.
+Le produit actuel est un MVP Streamlit. Il comprend un accueil, une analyse locative, des marchés d’exemple, une présentation Premium, des comptes locaux SQLite, la sauvegarde des analyses, les favoris et des tests unitaires. À ce jour, seul le taux directeur est récupéré d’une source externe; les indicateurs de ville sont simulés. Cenlio ne doit donc pas être commercialisé comme estimateur automatisé fiable avant l’intégration et la validation de données réelles.
 
 La stratégie produit est progressive :
 
@@ -30,11 +30,11 @@ Aider chaque Québécois à prendre une meilleure décision immobilière grâce 
 
 ### 2.2 Vision
 
-Devenir le réflexe québécois avant une décision immobilière importante : « Avant d’acheter, je passe la propriété dans ImmoRadar. »
+Devenir le réflexe québécois avant une décision immobilière importante : « Avant d’acheter, je passe la propriété dans Cenlio. »
 
 ### 2.3 Positionnement
 
-ImmoRadar se situe entre les plateformes d’annonces, les fournisseurs de données, les calculatrices financières et les professionnels. Il ne remplace ni un évaluateur agréé, ni un inspecteur, ni un courtier, ni un prêteur. Il aide l’utilisateur à préparer de meilleures questions et à prioriser les vérifications.
+Cenlio se situe entre les plateformes d’annonces, les fournisseurs de données, les calculatrices financières et les professionnels. Il ne remplace ni un évaluateur agréé, ni un inspecteur, ni un courtier, ni un prêteur. Il aide l’utilisateur à préparer de meilleures questions et à prioriser les vérifications.
 
 ### 2.4 Proposition de valeur
 
@@ -89,7 +89,7 @@ Les banques, assureurs, grands portefeuilles et API B2B ne sont pas des cibles d
 1. L’utilisateur crée un compte ou se connecte.
 2. Il choisit son profil et son objectif.
 3. Il saisit une adresse ou décrit la propriété.
-4. ImmoRadar indique immédiatement quelles données sont disponibles.
+4. Cenlio indique immédiatement quelles données sont disponibles.
 5. L’utilisateur complète les champs manquants.
 6. Le moteur produit valeur/fourchette, confiance, score, facteurs, risques et scénarios.
 7. L’utilisateur sauvegarde l’analyse ou télécharge un rapport s’il y a droit.

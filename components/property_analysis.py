@@ -871,7 +871,7 @@ def _show_municipal_coverage_hint() -> None:
     elif status == "available":
         st.success("Couverture municipale prête : les renseignements officiels sont déjà disponibles pour cette municipalité.")
     elif status == "sync_available":
-        st.info("Couverture municipale possible : après votre recherche consentie, ImmoRadar synchronisera uniquement cette municipalité.")
+        st.info("Couverture municipale possible : après votre recherche consentie, Cenlio synchronisera uniquement cette municipalité.")
     elif status == "retry_later":
         st.warning("Couverture municipale à réessayer : une synchronisation récente a échoué. Vous pouvez poursuivre manuellement.")
     elif status in {"source_disabled", "territory_disabled"}:
@@ -1418,7 +1418,7 @@ def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict 
     address = address_state.address
     postal = f", {address.postal_code}" if address.postal_code else ""
     unit = f", {address.unit}" if address.unit else ""
-    st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>RÉSUMÉ DU DOSSIER</p><h2>Ce qu’ImmoRadar sait pour l’instant</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='section-space compact-space'></div><p class='eyebrow'>RÉSUMÉ DU DOSSIER</p><h2>Ce que Cenlio sait pour l’instant</h2>", unsafe_allow_html=True)
     st.caption(f"Adresse normalisée : {address.street}{unit}, {address.city}{postal}")
     official, market, finances = st.columns(3)
     with official:
@@ -1444,10 +1444,10 @@ def _show_dossier_summary(address_state: AddressFormState, address_lookup: dict 
         with st.container(border=True):
             st.markdown("### Analyse financière")
             if engine_result and engine_result.score is not None:
-                st.metric("Score ImmoRadar", f"{engine_result.score:.0f} / 100")
+                st.metric("Score Cenlio", f"{engine_result.score:.0f} / 100")
                 st.caption(f"{engine_result.verdict.capitalize()} · confiance {engine_result.confidence_index} / 100")
             else:
-                st.metric("Score ImmoRadar", "À calculer")
+                st.metric("Score Cenlio", "À calculer")
                 st.caption("Ajoutez les chiffres de votre projet puis lancez l’analyse.")
 
     with st.container(border=True):
@@ -1507,7 +1507,7 @@ def _show_property_stage() -> None:
         "Quel est votre projet?",
         list(ANALYSIS_OBJECTIVES),
         key="workflow_objective_choice",
-        help="Ce choix adapte la lecture ImmoRadar à votre objectif. Il ne modifie jamais les renseignements publics affichés.",
+        help="Ce choix adapte la lecture Cenlio à votre objectif. Il ne modifie jamais les renseignements publics affichés.",
     )
     chosen_objective = st.session_state.get("workflow_objective_choice", "")
     if chosen_objective:
@@ -1681,7 +1681,7 @@ def show_property_analysis() -> None:
     ):
         st.markdown("**Votre première valeur, en trois gestes :** autorisez la recherche publique, saisissez l’adresse, puis choisissez une suggestion. Vous pouvez aussi poursuivre entièrement en mode manuel.")
         st.checkbox(
-            "J’accepte qu’ImmoRadar recherche des renseignements publics autorisés pour cette adresse.",
+            "J’accepte que Cenlio recherche des renseignements publics autorisés pour cette adresse.",
             key=ADDRESS_WIDGET_KEYS["consent"],
             on_change=_on_address_consent_change,
         )
@@ -2445,7 +2445,7 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
     """Guide manual/CSV comparables without changing the ImmoValue algorithm."""
 
     st.markdown("<div class='section-space'></div><h2>Estimation marchande (ImmoValue)</h2>", unsafe_allow_html=True)
-    st.caption("Expérimental : ajoutez vos ventes comparables autorisées. ImmoRadar ne collecte aucune transaction et ce résultat n’est pas une évaluation officielle.")
+    st.caption("Expérimental : ajoutez vos ventes comparables autorisées. Cenlio ne collecte aucune transaction et ce résultat n’est pas une évaluation officielle.")
     subject = _immovalue_subject()
     st.session_state.setdefault("iv_manual_comparables", [])
     manual_comparables = list(st.session_state["iv_manual_comparables"])
@@ -2519,7 +2519,7 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
 
     with st.expander("Import avancé (CSV local)", expanded=False):
         st.caption("Le fichier reste local. Utilisez l’assistant ci-dessus si vous préférez ajouter vos comparables un par un.")
-        st.download_button("Télécharger le modèle CSV", csv_template(), "comparables-immoradar.csv", "text/csv")
+        st.download_button("Télécharger le modèle CSV", csv_template(), "comparables-cenlio.csv", "text/csv")
         uploaded = st.file_uploader("Importer un CSV local (jamais transmis à un service externe)", type="csv", key="comparables_csv")
         sales_confirmed = st.checkbox("Je confirme que les lignes représentent des ventes conclues", key="csv_sales_confirmed")
         import_rights = st.checkbox("Je confirme mon droit d’utilisation pour ce fichier", key="csv_import_rights")

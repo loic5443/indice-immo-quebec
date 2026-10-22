@@ -80,7 +80,7 @@ def _official_download(url: str, maximum: int = MAX_BYTES) -> bytes:
     if parsed.scheme != "https" or parsed.hostname not in OFFICIAL_HOSTS:
         raise ValueError("official_host_required")
     opener = urllib.request.build_opener(_NoRedirect)
-    request = urllib.request.Request(url, headers={"User-Agent": "ImmoRadar/1.0 official-data"})
+    request = urllib.request.Request(url, headers={"User-Agent": "Cenlio/1.0 official-data"})
     try:
         with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
             if response.geturl() != url:
@@ -113,7 +113,7 @@ def _official_download_to_temporary_file(url: str, maximum: int = MAX_BYTES) -> 
     path = ""
     completed = False
     opener = urllib.request.build_opener(_NoRedirect)
-    request = urllib.request.Request(url, headers={"User-Agent": "ImmoRadar/1.0 official-data"})
+    request = urllib.request.Request(url, headers={"User-Agent": "Cenlio/1.0 official-data"})
     try:
         with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
             if response.geturl() != url:
@@ -151,7 +151,7 @@ def official_content_length(url: str) -> int | None:
     if parsed.scheme != "https" or parsed.hostname not in OFFICIAL_HOSTS:
         raise ValueError("official_host_required")
     opener = urllib.request.build_opener(_NoRedirect)
-    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "ImmoRadar/1.0 official-data"})
+    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Cenlio/1.0 official-data"})
     try:
         with opener.open(request, timeout=TIMEOUT_SECONDS) as response:
             if response.geturl() != url:
@@ -178,7 +178,7 @@ def probe_role_xml_version(url: str) -> str:
     opener = urllib.request.build_opener(_NoRedirect)
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "ImmoRadar/1.0 official-data", "Range": "bytes=0-4095"},
+        headers={"User-Agent": "Cenlio/1.0 official-data", "Range": "bytes=0-4095"},
     )
     try:
         with opener.open(request, timeout=TIMEOUT_SECONDS) as response:

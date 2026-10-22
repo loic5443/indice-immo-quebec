@@ -1,4 +1,4 @@
-"""Run one privacy-preserving alert-email check for opted-in ImmoRadar accounts.
+"""Run one privacy-preserving alert-email check for opted-in Cenlio accounts.
 
 This script is safe to run repeatedly: delivery fingerprints prevent duplicate
 messages. It emits aggregates only and never prints users, dossiers, emails,

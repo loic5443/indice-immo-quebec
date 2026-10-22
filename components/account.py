@@ -1,4 +1,4 @@
-"""Account screen for the local ImmoRadar MVP."""
+"""Account screen for the local Cenlio MVP."""
 
 from html import escape
 
@@ -120,7 +120,7 @@ def _show_alert_email_preferences(user: dict) -> None:
             st.markdown(
                 "<div class='premium-next-step'><p class='eyebrow'>APERÇU PREMIUM</p>"
                 "<p>Recevez un avis générique seulement lorsqu’un changement vérifiable "
-                "est détecté dans un dossier suivi. Les détails restent dans ImmoRadar.</p></div>",
+                "est détecté dans un dossier suivi. Les détails restent dans Cenlio.</p></div>",
                 unsafe_allow_html=True,
             )
             st.caption("Les alertes par courriel font partie de Premium. Cet accord reste distinct des communications marketing.")
@@ -137,7 +137,7 @@ def _show_alert_email_preferences(user: dict) -> None:
         if delivery["readiness"] != "ready":
             st.caption("Votre accord est enregistré séparément. La livraison par courriel n’est pas configurée sur ce serveur pour le moment.")
         elif delivery["latest_outcome"] == "failed":
-            st.warning("Le dernier essai de livraison n’a pas abouti. Vos alertes restent visibles dans ImmoRadar; vous pouvez refaire un test ci-dessous.")
+            st.warning("Le dernier essai de livraison n’a pas abouti. Vos alertes restent visibles dans Cenlio; vous pouvez refaire un test ci-dessous.")
         elif delivery["latest_outcome"] == "sent":
             st.caption("Livraison configurée · le dernier essai ou avis a été envoyé avec succès.")
         else:
@@ -258,7 +258,7 @@ def show_account() -> None:
                 "Autoriser les mesures d’utilisation anonymisées", value=bool(user.get("analytics_consent")), key="account_analytics_consent",
             )
             marketing_consent = st.checkbox(
-                "Accepter les communications liées à ImmoRadar", value=bool(user.get("marketing_consent")), key="account_marketing_consent",
+                "Accepter les communications liées à Cenlio", value=bool(user.get("marketing_consent")), key="account_marketing_consent",
             )
             if st.button("Enregistrer mes préférences", key="save_account_preferences", type="primary"):
                 if not profile or not objective:
@@ -285,7 +285,7 @@ def show_account() -> None:
             )
         st.divider()
         st.subheader("Vie privée et contrôle")
-        st.download_button("Télécharger mes données", export_user_data(user["id"], DATABASE_PATH), "immoradar-mes-donnees.json", "application/json")
+        st.download_button("Télécharger mes données", export_user_data(user["id"], DATABASE_PATH), "cenlio-mes-donnees.json", "application/json")
         st.caption("L'export contient votre profil et vos analyses, jamais votre mot de passe. La suppression efface définitivement le compte, ses analyses et ses retours.")
         confirmation = st.text_input("Pour supprimer, tapez SUPPRIMER", key="delete_account_confirmation")
         if st.button("Supprimer définitivement mon compte", type="secondary"):
@@ -356,7 +356,7 @@ def _show_onboarding(user: dict) -> None:
     """Render a resumable onboarding without mutating a profile on display."""
 
     step = int(user.get("onboarding_step") or 1)
-    st.markdown("<p class='eyebrow'>DÉMARRAGE</p><h1>Bienvenue dans ImmoRadar</h1>", unsafe_allow_html=True)
+    st.markdown("<p class='eyebrow'>DÉMARRAGE</p><h1>Bienvenue dans Cenlio</h1>", unsafe_allow_html=True)
     creation_notice = st.session_state.pop("account_creation_notice", None)
     if isinstance(creation_notice, str) and creation_notice:
         st.success(creation_notice)
@@ -391,7 +391,7 @@ def _show_onboarding(user: dict) -> None:
     elif step == 8:
         st.info("La confiance mesure la qualité et la complétude des données, pas la probabilité d’un bon achat.")
     else:
-        accepted = st.checkbox("Je reconnais qu’ImmoRadar n’est pas une évaluation officielle, ne remplace pas un professionnel et ne garantit aucune recommandation.", value=bool(user.get("limitations_accepted")))
+        accepted = st.checkbox("Je reconnais que Cenlio n’est pas une évaluation officielle, ne remplace pas un professionnel et ne garantit aucune recommandation.", value=bool(user.get("limitations_accepted")))
     left, later, right = st.columns(3)
     if left.button("Précédent", disabled=step == 1):
         progress(user["id"], DATABASE_PATH, onboarding_step=step - 1)

@@ -1,6 +1,6 @@
 # Couverture des rôles municipaux
 
-ImmoRadar utilise seulement les rôles d’évaluation foncière publiés par le MAMH. La valeur affichée est un repère fiscal officiel; elle n’est jamais une estimation de valeur marchande.
+Cenlio utilise seulement les rôles d’évaluation foncière publiés par le MAMH. La valeur affichée est un repère fiscal officiel; elle n’est jamais une estimation de valeur marchande.
 
 Le Référentiel québécois des adresses aide à trouver une adresse dans l’ensemble du Québec. La disponibilité du rôle municipal est distincte : chaque territoire est importé séparément, avec son année, son empreinte et ses champs publics autorisés.
 

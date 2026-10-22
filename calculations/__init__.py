@@ -1,1 +1,1 @@
-"""Financial calculation services used by the ImmoRadar interface."""
+"""Financial calculation services used by the Cenlio interface."""

@@ -4,6 +4,7 @@ Only Stripe objects retrieved by the server can change subscription rights.
 No card details, full webhook payloads or provider exception messages are stored.
 """
 
+import hashlib
 import os
 import time
 import uuid
@@ -39,7 +40,12 @@ def billing_config(environment=None):
     price = env.get("STRIPE_PREMIUM_PRICE_ID", "")
     url = env.get("IMMORADAR_PUBLIC_URL", "").rstrip("/")
     parsed = urlsplit(url)
-    if (mode not in {"test", "live"} or not key.startswith(f"sk_{mode}_")
+    # Restricted keys are preferred; claimable sandboxes issue rkcs_test_ keys.
+    # A claimable sandbox key must never be accepted for live billing.
+    key_prefixes = (f"sk_{mode}_", f"rk_{mode}_")
+    if mode == "test":
+        key_prefixes += ("rkcs_test_",)
+    if (mode not in {"test", "live"} or not key.startswith(key_prefixes)
             or not hook.startswith("whsec_") or not price.startswith("price_")
             or parsed.scheme != "https" or not parsed.hostname
             or parsed.username or parsed.password or parsed.query or parsed.fragment):
@@ -151,13 +157,19 @@ def create_checkout(user_id, database_path, environment=None, client=None):
         else:
             request_key = attempt["request_key"]
         connection.commit()
+        # Keep the flow tag stable when an idempotent request is retried.
+        flow_suffix = "".join(chr(97 + byte % 26) for byte in hashlib.sha256(request_key.encode()).digest()[:8])
         session = _call(client.v1.checkout.sessions.create, {
             "mode": "subscription", "customer": customer_id,
+            "locale": "fr-CA", "integration_identifier": "immoradar-premium-" + flow_suffix,
             "client_reference_id": str(user_id), "line_items": [{"price": config.price_id, "quantity": 1}],
             "subscription_data": {"metadata": {"immoradar_user_id": str(user_id)}},
             "success_url": config.app_url + "/?billing=success&session_id={CHECKOUT_SESSION_ID}",
             "cancel_url": config.app_url + "/?billing=cancel",
-            "billing_address_collection": "required", "automatic_tax": {"enabled": True},
+            # Customers are created before Checkout without an address. Tax must
+            # use and save the billing address collected on the hosted page.
+            "billing_address_collection": "required", "customer_update": {"address": "auto"},
+            "automatic_tax": {"enabled": True},
         }, options={"idempotency_key": request_key})
         with connection:
             connection.execute("UPDATE billing_checkouts SET session_id=? WHERE user_id=? AND request_key=?",
@@ -181,7 +193,7 @@ def create_portal(user_id, database_path, environment=None, client=None):
         raise BillingError("Aucun abonnement n’est associé à votre compte.")
     client = client or _provider(config)
     session = _call(client.v1.billing_portal.sessions.create,
-                    {"customer": account["customer_id"], "return_url": config.app_url + "/?billing=portal"})
+                    {"customer": account["customer_id"], "return_url": config.app_url + "/?billing=portal", "locale": "fr-CA"})
     return _safe_url(session.get("url"), "billing.stripe.com")
 
 

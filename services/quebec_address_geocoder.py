@@ -157,7 +157,7 @@ def _fetch_json(url: str) -> dict[str, Any]:
     # replace it with ``verify=False`` or a custom insecure SSL context.
     response = requests.get(
         url,
-        headers={"Accept": "application/json", "User-Agent": "ImmoRadar/1.0"},
+        headers={"Accept": "application/json", "User-Agent": "Cenlio/1.0"},
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()

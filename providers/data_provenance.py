@@ -8,5 +8,5 @@ from domain.models import ImmoEngineMetadata
 # or call a generative AI service.
 IMMOENGINE_METADATA = ImmoEngineMetadata(
     version="ImmoEngine 1.1.0-financial-scenarios",
-    data_provenance="Hypothèses saisies par l'utilisateur; calculs financiers ImmoRadar; aucune estimation de valeur.",
+    data_provenance="Hypothèses saisies par l'utilisateur; calculs financiers Cenlio; aucune estimation de valeur.",
 )

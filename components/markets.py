@@ -96,7 +96,7 @@ def show_markets() -> None:
     if not all_municipalities:
         st.warning(
             "La comparaison municipale officielle n’est pas encore disponible dans cet environnement. "
-            "ImmoRadar n’affiche aucune valeur de remplacement et ne crée aucun indicateur de marché sans source autorisée."
+            "Cenlio n’affiche aucune valeur de remplacement et ne crée aucun indicateur de marché sans source autorisée."
         )
         st.markdown(
             "<div class='account-summary'><p class='eyebrow'>EN ATTENDANT</p>"

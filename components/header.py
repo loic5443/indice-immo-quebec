@@ -2,12 +2,12 @@ import streamlit as st
 
 
 def show_header():
-    """Render the ImmoRadar home-page introduction."""
-    st.title("🏠 ImmoRadar")
+    """Render the Cenlio home-page introduction."""
+    st.title("🏠 Cenlio")
     st.caption("Un outil d'aide à la décision immobilière pour le Québec et le Canada")
     st.markdown(
         """
-        **Comprenez votre projet immobilier en quelques minutes.** ImmoRadar combine
+        **Comprenez votre projet immobilier en quelques minutes.** Cenlio combine
         les indicateurs économiques, votre budget et le type de propriété afin de
         produire une analyse de projet claire. La fiche d'analyse calcule votre
         financement, vos dépenses, votre flux de trésorerie et vos principaux ratios.

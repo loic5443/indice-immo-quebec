@@ -411,7 +411,7 @@ def _show_property_comparator(user: dict, analyses: list[dict]) -> None:
     st.success("Comparaison complète basée sur les instantanés sauvegardés.")
     st.download_button(
         "Télécharger le rapport comparatif PDF", _cached_comparison_report(user["id"], str(DATABASE_PATH), comparison),
-        file_name="immoradar-comparaison.pdf", mime="application/pdf",
+        file_name="cenlio-comparaison.pdf", mime="application/pdf",
         key="comparison_pdf", width="stretch",
     )
     for item in comparison["indicators"]:
@@ -458,7 +458,7 @@ def show_saved_analyses() -> None:
     st.markdown("<p class='section-intro'>Retrouvez vos dossiers sauvegardés, leurs points de repère et le suivi disponible.</p>", unsafe_allow_html=True)
     if not is_authenticated():
         st.markdown(
-            "<div class='account-summary'><p class='eyebrow'>VOTRE ESPACE IMMORADAR</p>"
+            "<div class='account-summary'><p class='eyebrow'>VOTRE ESPACE CENLIO</p>"
             "<div class='notice-title' role='heading' aria-level='2'>Gardez les décisions qui méritent d’être suivies.</div>"
             "<p>Un espace gratuit vous permet de conserver votre dossier après une analyse et de le retrouver "
             "avec les mêmes chiffres. Le suivi et les comparaisons détaillées restent des avantages Premium.</p>"
@@ -553,7 +553,7 @@ def show_saved_analyses() -> None:
             first, second, third = st.columns(3)
             first.metric("Prix retenu pour les calculs", _money(analysis["price"]))
             second.metric(financial_display["monthly_label"], financial_display["monthly_value"])
-            third.metric("Score ImmoRadar", f"{analysis['immo_score']:.0f} / 100" if analysis["immo_score"] is not None else "Indisponible")
+            third.metric("Score Cenlio", f"{analysis['immo_score']:.0f} / 100" if analysis["immo_score"] is not None else "Indisponible")
             st.markdown(
                 f"**Date :** {analysis['created_at']}  \n"
                 f"**Mise de fonds :** {_money(analysis['down_payment'])}  \n"
@@ -574,7 +574,7 @@ def show_saved_analyses() -> None:
             if analysis["immo_score"] is not None:
                 st.markdown(
                     f"**Profil ImmoEngine :** {analysis['user_profile']}  \n"
-                    f"**Score ImmoRadar :** {analysis['immo_score']:.0f} / 100  \n"
+                    f"**Score Cenlio :** {analysis['immo_score']:.0f} / 100  \n"
                     f"**Indice de confiance :** {analysis['confidence_index']:.0f} / 100  \n"
                     f"**Verdict :** {analysis['engine_verdict']}"
                 )
@@ -613,7 +613,7 @@ def show_saved_analyses() -> None:
             if can_use(user, "reports"):
                 st.download_button(
                     "Télécharger le rapport PDF", _cached_report(user["id"], str(DATABASE_PATH), analysis, screening_by_id.get(int(analysis["id"]))),
-                    file_name=f"immoradar-analyse-{analysis['id']}.pdf", mime="application/pdf",
+                    file_name=f"cenlio-analyse-{analysis['id']}.pdf", mime="application/pdf",
                     key=f"pdf_{analysis['id']}", width="stretch",
                 )
             else:
