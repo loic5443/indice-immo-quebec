@@ -1,4 +1,4 @@
-name: Vérification ImmoRadar
+name: Vérification Cenlio
 
 on:
   pull_request:

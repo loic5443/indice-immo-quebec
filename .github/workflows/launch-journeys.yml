@@ -2,7 +2,7 @@ name: Parcours de lancement
 
 on:
   push:
-    branches: ["codex/premium-journey-*"]
+    branches: ["codex/premium-journey-*", "codex/cenlio-*"]
   pull_request:
     paths:
       - "components/**"
