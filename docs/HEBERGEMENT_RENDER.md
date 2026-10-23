@@ -1,5 +1,13 @@
 # Cenlio — hébergement persistant sans domaine personnalisé
 
+## Préparation Cenlio du 23 octobre 2026
+
+Le Blueprint cible explicitement le dépôt `loic5443/indice-immo-quebec` et la branche `codex/hosting-persistent-cenlio-2026-10-23`, à partir du code Cenlio `f564e093`. Le service et le disque proposés se nomment `cenlio` et `cenlio-data`. Les identifiants techniques de la base restent compatibles avec les données existantes.
+
+Tarifs publics Render revérifiés le 23 octobre : serveur `0.5c-512mb` à **7 USD/mois**, disque de 1 Go à **0,25 USD/mois**, soit **7,25 USD/mois de base**. Taxes, conversion et dépassements éventuels en supplément. Ce montant n'est pas un plafond de facturation. Le récapitulatif du compte doit être vérifié avant création. Aucune ressource payante n'est créée par cette préparation.
+
+Le disque conserve les comptes après redémarrage; les paiements et courriels restent désactivés. Le workflow « Hébergement persistant » doit réussir sur cette branche avant activation. La recette sur le vrai service et une sauvegarde externe restent nécessaires après activation.
+
 ## Proposition préparée le 16 octobre 2026
 
 La branche part de `codex/launch-october-2026`, commit `0c16d53`. Aucun compte Render, abonnement payant, paiement Stripe ou envoi réel de courriel n’est créé par les fichiers de configuration.

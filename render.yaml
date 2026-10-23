@@ -1,7 +1,9 @@
 # Paid resource proposal. Do not create it before approving the provider quote.
 services:
   - type: web
-    name: immoradar
+    name: cenlio
+    repo: https://github.com/loic5443/indice-immo-quebec
+    branch: codex/hosting-persistent-cenlio-2026-10-23
     runtime: docker
     plan: 0.5c-512mb
     region: virginia
@@ -12,7 +14,7 @@ services:
     healthCheckPath: /_deployment/ready
     maxShutdownDelaySeconds: 30
     disk:
-      name: immoradar-data
+      name: cenlio-data
       mountPath: /app/var
       sizeGB: 1
     envVars:
