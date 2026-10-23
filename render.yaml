@@ -12,7 +12,6 @@ services:
     autoDeployTrigger: "off"
     numInstances: 1
     healthCheckPath: /_deployment/ready
-    maxShutdownDelaySeconds: 30
     disk:
       name: cenlio-data
       mountPath: /app/var
