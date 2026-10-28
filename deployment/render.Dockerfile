@@ -8,6 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && useradd --uid 10001 --create-home app \
     && mkdir -p /app/var && chown app:app /app/var
 COPY --from=proxy /usr/bin/caddy /usr/bin/caddy
+# Render does not grant NET_BIND_SERVICE. Our proxy uses unprivileged PORT,
+# so strip the upstream file capability before executing it as the app user.
+RUN python -c "import os; p='/usr/bin/caddy'; a='security.capability'; os.removexattr(p, a) if a in os.listxattr(p) else None"
 COPY --chown=app:app . .
 # The launcher owns the mounted directory, then drops root before migrations
 # or any server starts. No database is initialized in the build image.

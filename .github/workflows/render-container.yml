@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           docker volume create immoradar-test-data
           launch() {
-            docker run -d --name immoradar-test --memory 512m --cpus .5 \
+            docker run -d --name immoradar-test --cap-drop NET_BIND_SERVICE --memory 512m --cpus .5 \
               -e RENDER=true -e RENDER_EXTERNAL_URL=https://immoradar-ci.example \
               -e IMMORADAR_BILLING_ENABLED=0 -e IMMORADAR_AUTH_EMAIL_ENABLED=0 \
               -v immoradar-test-data:/app/var -p 127.0.0.1:10000:10000 immoradar-render
