@@ -28,6 +28,10 @@ services:
       - key: IMMORADAR_ALERT_DELIVERY_ENABLED
         value: "false"
       - key: IMMORADAR_OPERATIONS_ENABLED
-        value: "0"
+        value: "1"
       - key: IMMORADAR_BACKUPS_ENABLED
-        value: "0"
+        value: "1"
+      - key: IMMORADAR_OPERATIONS_INTERVAL_SECONDS
+        value: "86400"
+      - key: IMMORADAR_BACKUP_DIRECTORY
+        value: /app/var/backups
