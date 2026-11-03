@@ -25,6 +25,10 @@
 	handle /stripe/test-webhook {
 		reverse_proxy 127.0.0.1:8000
 	}
+	@legal path /conditions /confidentialite
+	handle @legal {
+		reverse_proxy 127.0.0.1:8000
+	}
 	handle {
 		reverse_proxy 127.0.0.1:8501
 	}

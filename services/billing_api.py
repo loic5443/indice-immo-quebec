@@ -8,6 +8,7 @@ from starlette.concurrency import run_in_threadpool
 from data.database import DATABASE_PATH, initialize_database
 from services.billing_service import BillingError, process_webhook
 from services.billing_qa_api import router as sandbox_router
+from services.legal_pages import router as legal_router
 
 
 @asynccontextmanager
@@ -18,6 +19,7 @@ async def lifespan(app):
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.include_router(sandbox_router)
+app.include_router(legal_router)
 
 
 @app.get("/health")

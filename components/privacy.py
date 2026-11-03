@@ -55,4 +55,5 @@ def show_privacy() -> None:
 
     st.markdown("### Courriels liés à votre compte")
     st.write("Une demande de récupération de mot de passe peut envoyer un lien temporaire à votre courriel. Les notifications d’alertes exigent un consentement séparé; les courriels de récupération ne vous inscrivent à aucune liste marketing.")
-    st.caption("Cette page résume le fonctionnement du produit. Les conditions applicables et les coordonnées de l’exploitant devront être accessibles avant l’ouverture commerciale.")
+    st.markdown("Exploitant et responsable : **Loic St-Pierre** · [loicstpierre29@gmail.com](mailto:loicstpierre29@gmail.com)")
+    st.markdown("[Politique de confidentialité complète](/confidentialite) · [Conditions d’abonnement](/conditions)")

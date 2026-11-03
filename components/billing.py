@@ -72,6 +72,7 @@ def show_billing_actions(user, database_path, offer):
         st.button("Créer mon compte pour choisir Premium", type="primary", on_click=_open_account_for_premium,
                   key="billing_signup", width="stretch")
         return
+    st.markdown("[Conditions d’abonnement](/conditions) · [Confidentialité](/confidentialite) · [Support](mailto:loicstpierre29@gmail.com)")
     account = billing_account(user["id"], database_path)
     if account:
         labels = {"active": "Actif", "trialing": "Essai actif", "past_due": "Paiement à régulariser",
