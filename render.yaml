@@ -21,6 +21,8 @@ services:
         value: /app/var/immoradar.db
       - key: IMMORADAR_BILLING_ENABLED
         value: "0"
+      - key: IMMORADAR_STRIPE_AUTOMATIC_TAX_ENABLED
+        value: "0"
       - key: IMMORADAR_BILLING_MODE
         value: test
       - key: IMMORADAR_AUTH_EMAIL_ENABLED

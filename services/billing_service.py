@@ -28,6 +28,7 @@ class BillingConfig:
     price_id: str
     app_url: str
     mode: str
+    automatic_tax: bool = False
 
 
 def billing_config(environment=None):
@@ -50,7 +51,10 @@ def billing_config(environment=None):
             or parsed.scheme != "https" or not parsed.hostname
             or parsed.username or parsed.password or parsed.query or parsed.fragment):
         raise BillingError("La configuration des abonnements est incomplète. Aucun paiement n’est proposé.")
-    return BillingConfig(key, hook, price, url, mode)
+    tax = env.get("IMMORADAR_STRIPE_AUTOMATIC_TAX_ENABLED", "0")
+    if tax not in {"0", "1"}:
+        raise BillingError("La configuration des taxes est invalide.")
+    return BillingConfig(key, hook, price, url, mode, tax == "1")
 
 
 def _provider(config):
@@ -169,7 +173,7 @@ def create_checkout(user_id, database_path, environment=None, client=None):
             # Customers are created before Checkout without an address. Tax must
             # use and save the billing address collected on the hosted page.
             "billing_address_collection": "required", "customer_update": {"address": "auto"},
-            "automatic_tax": {"enabled": True},
+            "automatic_tax": {"enabled": config.automatic_tax},
         }, options={"idempotency_key": request_key})
         with connection:
             connection.execute("UPDATE billing_checkouts SET session_id=? WHERE user_id=? AND request_key=?",

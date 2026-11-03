@@ -124,11 +124,17 @@ class BillingTests(unittest.TestCase):
         params = self.client.v1.checkout.sessions.create.call_args.args[0]
         self.assertEqual(params["client_reference_id"], "1")
         self.assertEqual(params["line_items"], [{"price": "price_premium", "quantity": 1}])
-        self.assertTrue(params["automatic_tax"]["enabled"])
+        self.assertFalse(params["automatic_tax"]["enabled"])
         self.assertEqual(params["customer_update"], {"address": "auto"})
         self.assertEqual(params["locale"], "fr-CA")
         self.assertRegex(params["integration_identifier"], r"^immoradar-premium-[a-z]{8}$")
         self.assertEqual(effective_plan(1, "free", self.db, environment=ENV), "free")
+
+    def test_automatic_tax_requires_explicit_configuration(self):
+        create_checkout(1, self.db, {**ENV, "IMMORADAR_STRIPE_AUTOMATIC_TAX_ENABLED": "1"}, self.client)
+        self.assertTrue(self.client.v1.checkout.sessions.create.call_args.args[0]["automatic_tax"]["enabled"])
+        with self.assertRaises(BillingError):
+            billing_config({**ENV, "IMMORADAR_STRIPE_AUTOMATIC_TAX_ENABLED": "yes"})
 
     def test_timeout_retry_keeps_same_idempotency_key(self):
         self.client.v1.checkout.sessions.create.side_effect = stripe.APIConnectionError("secret provider detail")
