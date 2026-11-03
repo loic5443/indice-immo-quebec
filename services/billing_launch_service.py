@@ -7,6 +7,10 @@ from services.billing_service import _provider, billing_config, premium_offer
 from services.billing_risk_service import RISK_EVENTS
 
 
+def _data(value):
+    return value.to_dict() if isinstance(value, stripe.StripeObject) else value
+
+
 def prepare_launch(environment, client=None):
     stage = "configuration"
     customer_id = session_id = None
@@ -23,7 +27,7 @@ def prepare_launch(environment, client=None):
         stage = "portal_configuration"
         portal_id = env["STRIPE_LAUNCH_PORTAL_ID"]
         stage = "portal_read"
-        portal = client.v1.billing_portal.configurations.retrieve(portal_id)
+        portal = _data(client.v1.billing_portal.configurations.retrieve(portal_id))
         stage = "portal_validation"
         if (not portal.get("livemode") or not portal.get("active") or not portal.get("is_default")
                 or not portal["features"]["subscription_cancel"]["enabled"]
@@ -37,7 +41,7 @@ def prepare_launch(environment, client=None):
             "default_return_url": config.app_url + "/?billing=portal"})
         stage = "webhook_configuration"
         webhook_id = env["STRIPE_LAUNCH_WEBHOOK_ID"]
-        webhook = client.v1.webhook_endpoints.retrieve(webhook_id)
+        webhook = _data(client.v1.webhook_endpoints.retrieve(webhook_id))
         if (not webhook.get("livemode") or webhook.get("status") != "enabled"
                 or webhook.get("url") != config.app_url + "/stripe/webhook"):
             raise ValueError("Unexpected webhook configuration")
@@ -52,24 +56,24 @@ def prepare_launch(environment, client=None):
         customer = client.v1.customers.create({"name": "Cenlio — vérification technique",
             "metadata": {"purpose": "cenlio_launch_probe"}})
         customer_id = customer["id"]
-        portal_session = client.v1.billing_portal.sessions.create({"customer": customer_id,
-            "return_url": config.app_url + "/", "locale": "fr-CA"})
+        portal_session = _data(client.v1.billing_portal.sessions.create({"customer": customer_id,
+            "return_url": config.app_url + "/", "locale": "fr-CA"}))
         if not portal_session.get("livemode"):
             raise ValueError("Wrong portal mode")
         stage = "checkout"
-        checkout = client.v1.checkout.sessions.create({
+        checkout = _data(client.v1.checkout.sessions.create({
             "mode": "subscription", "customer": customer_id, "locale": "fr-CA",
             "integration_identifier": "cenlio-launch-" + "".join(secrets.choice("abcdefghijklmnopqrstuvwxyz") for _ in range(8)),
             "line_items": [{"price": config.price_id, "quantity": 1}],
             "billing_address_collection": "required", "customer_update": {"address": "auto"},
             "automatic_tax": {"enabled": config.automatic_tax},
             "success_url": config.app_url + "/?billing=success&session_id={CHECKOUT_SESSION_ID}",
-            "cancel_url": config.app_url + "/?billing=cancel"})
+            "cancel_url": config.app_url + "/?billing=cancel"}))
         session_id = checkout["id"]
         if not checkout.get("livemode") or checkout.get("status") != "open":
             raise ValueError("Wrong checkout mode")
         stage = "expire_unpaid_checkout"
-        expired = client.v1.checkout.sessions.expire(session_id)
+        expired = _data(client.v1.checkout.sessions.expire(session_id))
         if expired.get("status") != "expired":
             raise ValueError("Checkout not expired")
         session_id = None

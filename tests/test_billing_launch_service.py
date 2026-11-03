@@ -58,3 +58,9 @@ class LaunchPreflightTests(unittest.TestCase):
         self.client.v1.prices.retrieve.return_value["unit_amount"] = 2900
         self.assertEqual(prepare_launch(self.env, self.client), {"status": "blocked", "stage": "price", "error_type": "ValueError"})
         self.customers.create.assert_not_called()
+
+    def test_actual_sdk_objects_are_normalized_before_validation(self):
+        for operation in (self.portal_config.retrieve, self.hooks.retrieve, self.sessions.create,
+                          self.sessions.expire, self.client.v1.billing_portal.sessions.create):
+            operation.return_value = stripe.StripeObject.construct_from(operation.return_value, None)
+        self.assertEqual(prepare_launch(self.env, self.client)["status"], "ready")
