@@ -37,6 +37,21 @@ def runtime_environment(source):
     return env
 
 
+def prepare_sandbox_database(database, uid, gid):
+    """Shell-created QA files must be writable after the normal privilege drop."""
+    production = Path(database).resolve()
+    qa = production.parent / "cenlio-stripe-qa.sqlite"
+    for path in (qa, Path(str(qa) + "-journal"), Path(str(qa) + "-wal"), Path(str(qa) + "-shm")):
+        if path.is_symlink():
+            raise ValueError("Sandbox database must not be a symbolic link.")
+        if not path.exists():
+            continue
+        if not path.is_file() or path.stat().st_nlink != 1 or path.resolve() == production:
+            raise ValueError("Sandbox database must be separate from production.")
+        os.chown(path, uid, gid)
+        os.chmod(path, 0o600)
+
+
 def prepare_directory_and_drop_privileges(database):
     directory = Path(database).parent
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -45,6 +60,8 @@ def prepare_directory_and_drop_privileges(database):
         account = pwd.getpwnam("app")
         os.chown(directory, account.pw_uid, account.pw_gid)
         os.chmod(directory, 0o700)
+        if os.environ.get("IMMORADAR_STRIPE_QA_WEBHOOK_ENABLED") == "1":
+            prepare_sandbox_database(database, account.pw_uid, account.pw_gid)
         os.initgroups(account.pw_name, account.pw_gid)
         os.setgid(account.pw_gid)
         os.setuid(account.pw_uid)
