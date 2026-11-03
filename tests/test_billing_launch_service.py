@@ -56,5 +56,5 @@ class LaunchPreflightTests(unittest.TestCase):
 
     def test_wrong_price_never_creates_a_customer_or_checkout(self):
         self.client.v1.prices.retrieve.return_value["unit_amount"] = 2900
-        self.assertEqual(prepare_launch(self.env, self.client), {"status": "blocked", "stage": "price"})
+        self.assertEqual(prepare_launch(self.env, self.client), {"status": "blocked", "stage": "price", "error_type": "ValueError"})
         self.customers.create.assert_not_called()

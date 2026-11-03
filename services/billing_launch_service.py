@@ -22,11 +22,14 @@ def prepare_launch(environment, client=None):
             raise ValueError("Unexpected launch price")
         stage = "portal_configuration"
         portal_id = env["STRIPE_LAUNCH_PORTAL_ID"]
+        stage = "portal_read"
         portal = client.v1.billing_portal.configurations.retrieve(portal_id)
+        stage = "portal_validation"
         if (not portal.get("livemode") or not portal.get("active") or not portal.get("is_default")
                 or not portal["features"]["subscription_cancel"]["enabled"]
                 or portal["features"]["subscription_cancel"]["mode"] != "at_period_end"):
             raise ValueError("Unexpected portal configuration")
+        stage = "portal_links"
         client.v1.billing_portal.configurations.update(portal_id, {
             "business_profile": {"headline": "Cenlio — gérer mon abonnement",
                                  "terms_of_service_url": config.app_url + "/conditions",
@@ -73,8 +76,8 @@ def prepare_launch(environment, client=None):
         report = {"status": "ready", "stage": "complete", "price": "14.99 CAD/month", "charged": False}
     except stripe.StripeError as error:
         report = {"status": "blocked", "stage": stage, "http_status": error.http_status}
-    except Exception:
-        report = {"status": "blocked", "stage": stage}
+    except Exception as error:
+        report = {"status": "blocked", "stage": stage, "error_type": type(error).__name__}
     finally:
         if client and session_id:
             try:
