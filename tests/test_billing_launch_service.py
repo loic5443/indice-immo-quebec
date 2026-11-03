@@ -12,6 +12,7 @@ class LaunchPreflightTests(unittest.TestCase):
         self.env = {"STRIPE_SECRET_KEY": "rk_live_placeholder", "STRIPE_WEBHOOK_SECRET": "whsec_placeholder",
                     "STRIPE_PREMIUM_PRICE_ID": "price_live", "IMMORADAR_PUBLIC_URL": "https://cenlio.example",
                     "STRIPE_LAUNCH_PORTAL_ID": "bpc_live", "STRIPE_LAUNCH_WEBHOOK_ID": "we_live"}
+        self.env["CENLIO_LIVE_WEBHOOK_EVENTS_VERIFIED"] = "1"
         self.portal_config = SimpleNamespace(retrieve=Mock(return_value={"active": True, "is_default": True,
             "livemode": True, "features": {"subscription_cancel": {"enabled": True, "mode": "at_period_end"}}}), update=Mock())
         self.hooks = SimpleNamespace(retrieve=Mock(return_value={"livemode": True, "status": "enabled",
@@ -34,14 +35,14 @@ class LaunchPreflightTests(unittest.TestCase):
         self.sessions.expire.assert_called_once_with("cs_live")
         self.customers.delete.assert_called_once_with("cus_live")
         self.assertNotIn("rk_live_placeholder", str(report))
-        events = self.hooks.update.call_args.args[1]["enabled_events"]
-        for kind in ("invoice.paid", "charge.refunded", "charge.dispute.created", "radar.early_fraud_warning.created", "customer.created"):
-            self.assertIn(kind, events)
+        self.hooks.update.assert_not_called()
 
     def test_permission_failure_stops_without_creating_a_live_checkout_or_leaking_errors(self):
-        self.hooks.update.side_effect = stripe.PermissionError("private provider detail", http_status=403)
+        self.client.v1.charges.list.side_effect = stripe.PermissionError("private provider detail", http_status=403)
+        self.client.v1.invoice_payments.list.side_effect = stripe.PermissionError("private provider detail", http_status=403)
         report = prepare_launch(self.env, self.client)
-        self.assertEqual(report, {"status": "blocked", "stage": "webhook_configuration", "http_status": 403})
+        self.assertEqual(report, {"status": "blocked", "stage": "risk_api_permissions", "required_reads": [
+            {"resource": "charges", "http_status": 403}, {"resource": "invoice_payments", "http_status": 403}]})
         self.customers.create.assert_not_called()
         self.sessions.create.assert_not_called()
 
@@ -64,3 +65,8 @@ class LaunchPreflightTests(unittest.TestCase):
                           self.sessions.expire, self.client.v1.billing_portal.sessions.create):
             operation.return_value = stripe.StripeObject.construct_from(operation.return_value, None)
         self.assertEqual(prepare_launch(self.env, self.client)["status"], "ready")
+
+    def test_owner_webhook_configuration_must_be_verified_before_creating_probe(self):
+        self.env.pop("CENLIO_LIVE_WEBHOOK_EVENTS_VERIFIED")
+        self.assertEqual(prepare_launch(self.env, self.client), {"status": "blocked", "stage": "webhook_events_not_verified"})
+        self.customers.create.assert_not_called()

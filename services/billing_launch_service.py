@@ -4,7 +4,6 @@ import secrets
 import stripe
 
 from services.billing_service import _provider, billing_config, premium_offer
-from services.billing_risk_service import RISK_EVENTS
 
 
 def _data(value):
@@ -39,19 +38,22 @@ def prepare_launch(environment, client=None):
                                  "terms_of_service_url": config.app_url + "/conditions",
                                  "privacy_policy_url": config.app_url + "/confidentialite"},
             "default_return_url": config.app_url + "/?billing=portal"})
-        stage = "webhook_configuration"
-        webhook_id = env["STRIPE_LAUNCH_WEBHOOK_ID"]
-        webhook = _data(client.v1.webhook_endpoints.retrieve(webhook_id))
-        if (not webhook.get("livemode") or webhook.get("status") != "enabled"
-                or webhook.get("url") != config.app_url + "/stripe/webhook"):
-            raise ValueError("Unexpected webhook configuration")
-        events = set(webhook["enabled_events"]) | RISK_EVENTS | {"customer.created"}
-        client.v1.webhook_endpoints.update(webhook_id, {"enabled_events": sorted(events)})
         # Check reads required by the refund/dispute object graph, without logging data.
         stage = "risk_api_permissions"
-        client.v1.charges.list({"limit": 1})
-        client.v1.invoice_payments.list({"limit": 1})
-        client.v1.invoices.list({"limit": 1})
+        denied_reads = []
+        for resource, operation in (("charges", client.v1.charges.list),
+                                     ("invoice_payments", client.v1.invoice_payments.list),
+                                     ("invoices", client.v1.invoices.list)):
+            try:
+                operation({"limit": 1})
+            except stripe.StripeError as error:
+                denied_reads.append({"resource": resource, "http_status": error.http_status})
+        if denied_reads:
+            return {"status": "blocked", "stage": stage, "required_reads": denied_reads}
+        # Endpoint administration is done by the account owner or operator, not
+        # by granting webhook-management permission to the application key.
+        if env.get("CENLIO_LIVE_WEBHOOK_EVENTS_VERIFIED") != "1":
+            return {"status": "blocked", "stage": "webhook_events_not_verified"}
         stage = "customer_and_portal"
         customer = client.v1.customers.create({"name": "Cenlio — vérification technique",
             "metadata": {"purpose": "cenlio_launch_probe"}})
