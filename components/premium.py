@@ -118,7 +118,7 @@ def show_premium() -> None:
             unsafe_allow_html=True,
         )
         if offer:
-            st.caption("Taxes comprises" if offer["tax_inclusive"] else "Taxes applicables calculées au paiement")
+            st.caption("Taxes comprises" if offer["tax_inclusive"] else "Taxes applicables calculées au paiement" if offer.get("automatic_tax") else "Montant total affiché avant confirmation du paiement")
             show_billing_actions(current_user() if is_authenticated() else None, DATABASE_PATH, offer)
         else:
             st.markdown("<a class='premium-cta-link' href='#m-avertir-au-lancement'>M’avertir au lancement</a>", unsafe_allow_html=True)

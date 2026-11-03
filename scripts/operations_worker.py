@@ -13,6 +13,9 @@ def main():
         print(json.dumps({"operations": "disabled"}))
         return 0
     initialize_database(DATABASE_PATH)
+    if os.environ.get("CENLIO_PREPARE_LAUNCH") == "1":
+        from services.billing_launch_service import prepare_launch
+        print(json.dumps({"billing_launch_check": prepare_launch(os.environ)}, ensure_ascii=False), flush=True)
     interval = max(3600, min(86400, int(os.environ.get("IMMORADAR_OPERATIONS_INTERVAL_SECONDS", "86400"))))
     directory = Path(os.environ.get("IMMORADAR_BACKUP_DIRECTORY", str(DATABASE_PATH.parent / "backups")))
     stop = Event()

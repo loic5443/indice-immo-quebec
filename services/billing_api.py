@@ -1,5 +1,6 @@
 """Independent HTTPS webhook service; shares the app's persistent database."""
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -36,7 +37,11 @@ async def webhook(request: Request):
         if len(payload) > 1_000_000:
             return JSONResponse({"error": "payload_too_large"}, status_code=413)
     try:
-        result = await run_in_threadpool(process_webhook, bytes(payload), request.headers.get("stripe-signature", ""), DATABASE_PATH)
+        environment = dict(os.environ)
+        # Provider events can be verified before the public purchase buttons open.
+        if environment.get("IMMORADAR_STRIPE_WEBHOOK_ENABLED") == "1":
+            environment["IMMORADAR_BILLING_ENABLED"] = "1"
+        result = await run_in_threadpool(process_webhook, bytes(payload), request.headers.get("stripe-signature", ""), DATABASE_PATH, environment=environment)
     except BillingError as error:
         invalid = str(error) in {"Signature de paiement invalide.", "Mode de paiement incompatible."}
         # Provider/DB failures must be retried by Stripe, not acknowledged.

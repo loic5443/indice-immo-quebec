@@ -5,6 +5,7 @@ No card details, full webhook payloads or provider exception messages are stored
 """
 
 import hashlib
+import logging
 import os
 import time
 import uuid
@@ -15,6 +16,7 @@ from urllib.parse import urlsplit
 import stripe
 
 from repositories.sqlite_repository import SQLiteRepository
+from services.billing_risk_service import RISK_EVENTS, affected_subscriptions
 
 
 class BillingError(Exception):
@@ -95,7 +97,7 @@ def premium_offer(environment=None, client=None):
     price = _price(config, client or _provider(config))
     amount = f"{price['unit_amount'] / 100:.2f}".replace(".", ",")
     return {"price_label": f"{amount} $ CA / mois", "mode": config.mode,
-            "tax_inclusive": price.get("tax_behavior") == "inclusive"}
+            "tax_inclusive": price.get("tax_behavior") == "inclusive", "automatic_tax": config.automatic_tax}
 
 
 def billing_account(user_id, database_path):
@@ -291,6 +293,13 @@ def process_webhook(payload, signature, database_path, environment=None, client=
         obj = event["data"]["object"]
         kind = event["type"]
         subscription_id = None
+        if kind in RISK_EVENTS:
+            for risk_subscription_id in affected_subscriptions(kind, obj, client, config):
+                subscription = _call(client.v1.subscriptions.retrieve, risk_subscription_id)
+                if _save_subscription(connection, subscription, config):
+                    connection.execute("INSERT INTO billing_risk_reviews(event_id,subscription_id,reason,created_at) VALUES(?,?,?,?)",
+                                       (event["id"], risk_subscription_id, kind, int(time.time())))
+                    logging.getLogger("uvicorn.error").warning("Cenlio: billing risk review required in Administration.")
         if kind.startswith("customer.subscription."):
             subscription_id = obj.get("id")
         elif kind in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
@@ -302,4 +311,7 @@ def process_webhook(payload, signature, database_path, environment=None, client=
             subscription = _call(client.v1.subscriptions.retrieve, subscription_id)
             _save_subscription(connection, subscription, config)
         connection.execute("INSERT INTO billing_events VALUES(?,?,?)", (event["id"], kind, int(time.time())))
+    if (kind == "customer.created" and config.mode == "live"
+            and obj.get("metadata", {}).get("purpose") == "cenlio_launch_probe"):
+        logging.getLogger("uvicorn.error").info("Cenlio live webhook probe: signature and delivery verified.")
     return "processed"

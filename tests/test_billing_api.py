@@ -1,5 +1,6 @@
 """HTTP webhook contract: authenticate, bound buffering and retry failures."""
 import unittest
+import os
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from services.billing_api import app
@@ -37,3 +38,11 @@ class BillingApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "processed"})
         self.assertEqual(processor.call_args.args[:2], (b"{}", "signature"))
+
+    def test_webhooks_can_be_verified_without_opening_public_purchases(self):
+        with patch.dict(os.environ, {"IMMORADAR_BILLING_ENABLED": "0", "IMMORADAR_STRIPE_WEBHOOK_ENABLED": "1"}):
+            with patch("services.billing_api.process_webhook", return_value="processed") as processor:
+                response = self.client.post("/stripe/webhook", content=b"{}")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(processor.call_args.kwargs["environment"]["IMMORADAR_BILLING_ENABLED"], "1")
+            self.assertEqual(os.environ["IMMORADAR_BILLING_ENABLED"], "0")

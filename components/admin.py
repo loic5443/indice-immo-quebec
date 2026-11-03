@@ -11,6 +11,7 @@ from services.diagnostics_service import set_source_enabled
 from providers.source_registry import load_source_registry
 from services.quebec_role_admin_service import refresh_index,territories,import_territory,set_territory_enabled,remove_local_cache,coverage_summary
 from services.municipal_comparison_service import import_profile
+from services.billing_risk_service import open_reviews, resolve_review
 
 def _show_role_data_admin(actor):
  with st.expander("Données foncières du Québec",expanded=True):
@@ -58,6 +59,16 @@ def show_admin():
  with repo._connect() as c:
   settings=dict(c.execute("SELECT * FROM beta_settings WHERE id=1").fetchone()); accounts=c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
  st.html("<h1>Administration</h1>")
+ with st.expander("Remboursements, litiges et alertes de fraude",expanded=True):
+  reviews=open_reviews(actor,DATABASE_PATH)
+  if not reviews: st.caption("Aucun dossier de facturation en attente de vérification.")
+  for review in reviews:
+   st.warning(f"À vérifier dans Stripe : {review['reason']} · événement {review['event_id']} · abonnement {review['subscription_id']}")
+   st.caption("Vérifiez le paiement, les droits d’accès et les échéances du dossier dans Stripe. Cette action ne rembourse ni n’annule automatiquement un abonnement.")
+   key=review['event_id']+'_'+review['subscription_id']
+   confirmed=st.checkbox("J’ai traité ce dossier dans Stripe et vérifié les droits d’accès",key='risk_confirm_'+key)
+   if st.button("Marquer le dossier traité",key='risk_resolve_'+key,disabled=not confirmed):
+    resolve_review(actor,DATABASE_PATH,review['event_id'],review['subscription_id']);st.rerun()
  _show_role_data_admin(actor)
  st.metric("Comptes bêta",accounts);st.write(f"Inscriptions : {'ouvertes' if settings['registrations_open'] else 'fermées'} · limite {settings['max_participants']}");st.caption("Migrations : "+", ".join(applied_migrations(DATABASE_PATH)))
  with st.expander("Invitations",expanded=True):
