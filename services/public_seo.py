@@ -19,6 +19,7 @@ def metadata(title=TITLE, description=DESCRIPTION, path="/"):
     return (f'<title>{escape(title)}</title>\n'
             f'<meta name="description" content="{escape(description, quote=True)}">\n'
             f'<link rel="canonical" href="{url}">\n'
+            '<meta name="google-site-verification" content="ru_zdMYM8dMsKIbKy08xdxPFOB8mIg8LakDqlcDz74M">\n'
             '<meta property="og:type" content="website">\n'
             '<meta property="og:site_name" content="Cenlio">\n'
             '<meta property="og:locale" content="fr_CA">\n'
