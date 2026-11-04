@@ -5,7 +5,8 @@ import sqlite3
 from urllib.error import URLError
 from urllib.request import urlopen
 
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+from services.public_seo import guide_html, robots_text, sitemap_xml
 
 from data.database import DATABASE_PATH
 from services.billing_api import app
@@ -24,3 +25,18 @@ def ready():
     except (OSError, sqlite3.Error, URLError, ValueError):
         return JSONResponse({"status": "unavailable"}, status_code=503)
     return {"status": "ok"}
+
+
+@app.get("/valeur-propriete-quebec", response_class=HTMLResponse)
+def property_value_guide():
+    return HTMLResponse(guide_html(), headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def public_robots():
+    return Response(robots_text(), media_type="text/plain")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def public_sitemap():
+    return Response(sitemap_xml(), media_type="application/xml")
