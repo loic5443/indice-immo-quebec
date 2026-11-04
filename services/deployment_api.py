@@ -40,3 +40,8 @@ def public_robots():
 @app.get("/sitemap.xml", include_in_schema=False)
 def public_sitemap():
     return Response(sitemap_xml(), media_type="application/xml")
+
+
+@app.get("/google3f133c0ebac158cc.html", include_in_schema=False)
+def google_site_verification():
+    return Response("google-site-verification: google3f133c0ebac158cc.html", media_type="text/html")
