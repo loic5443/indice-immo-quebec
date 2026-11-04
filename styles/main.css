@@ -267,3 +267,29 @@ button, .stButton > button { white-space: normal; overflow-wrap: anywhere; min-h
     background-color: #ffffff !important;
     color: #123765 !important;
 }
+
+
+/* Current Streamlit releases render select controls with React Aria instead
+   of Base Web. Cover both renderers so the selected value stays readable. */
+[data-testid="stSelectbox"] [role="group"],
+[data-testid="stMultiSelect"] [role="group"] {
+    background-color: #ffffff !important;
+    color: #172033 !important;
+    border-color: #98a2b3 !important;
+}
+[data-testid="stSelectbox"] input,
+[data-testid="stSelectbox"] button,
+[data-testid="stMultiSelect"] input,
+[data-testid="stMultiSelect"] button {
+    background-color: #ffffff !important;
+    color: #172033 !important;
+    -webkit-text-fill-color: #172033;
+}
+[data-testid="stSelectbox"] input::placeholder,
+[data-testid="stMultiSelect"] input::placeholder {
+    color: #536174 !important;
+    -webkit-text-fill-color: #536174;
+    opacity: 1;
+}
+[data-testid="stSelectbox"] button *,
+[data-testid="stMultiSelect"] button * { color: inherit !important; }
