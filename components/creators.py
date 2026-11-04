@@ -65,7 +65,7 @@ def show_creator_admin(actor):
     with st.expander('Créateurs et commissions'):
         st.caption('10 $ CA par premier abonnement admissible. Validation de 30 jours. Effectuez le versement séparément, puis notez sa référence ici. Aucun virement automatique.')
         st.dataframe(creators.admin_profiles(actor,DATABASE_PATH),hide_index=True,width='stretch')
-        st.caption('Le code loic est le lien personnel de Cenlio : suivi des inscriptions, sans commission à verser à soi-même.')
+        st.caption('Le lien interne de Cenlio sert au suivi des inscriptions, sans commission à verser à soi-même.')
         rows=creators.admin_rows(actor,DATABASE_PATH)
         if not rows: st.info('Aucune commission réelle enregistrée.')
         for x in rows:
