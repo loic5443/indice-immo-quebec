@@ -68,7 +68,7 @@ def show_sidebar() -> str:
     with st.sidebar.expander("Informations et aide"):
         st.link_button("Conditions d’abonnement", "/conditions", width="stretch")
         st.link_button("Politique de confidentialité", "/confidentialite", width="stretch")
-        st.link_button("Contacter le support", "mailto:loicstpierre29@gmail.com", width="stretch")
+        st.link_button("Contacter le support", "mailto:contactcenlio@gmail.com", width="stretch")
         st.button("À propos", key="secondary_about", width="stretch", on_click=_secondary, args=("À propos",))
         st.button("Confidentialité", key="secondary_privacy", width="stretch", on_click=_secondary, args=("Confidentialité",))
         st.button("Donner mon avis", key="secondary_feedback", width="stretch", on_click=_secondary, args=("Donner mon avis",))
