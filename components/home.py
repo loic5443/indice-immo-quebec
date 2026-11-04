@@ -95,3 +95,5 @@ def show_home() -> None:
             st.markdown(f"<article class='benefit-card'><h3>{title}</h3><p>{copy}</p></article>", unsafe_allow_html=True)
     st.markdown("<div class='final-cta'><h2>Avant votre prochaine visite, prenez le réflexe Cenlio.</h2><p>Une maison repérée ? Relevez son adresse et ses chiffres, puis commencez une analyse gratuite.</p></div>", unsafe_allow_html=True)
     st.button("Analyser une propriété", type="primary", on_click=_start_from_home, key="home_final_analysis")
+
+    st.markdown('<p><a href="/valeur-propriete-quebec">Comprendre la valeur d’une propriété et l’analyse immobilière au Québec</a></p>', unsafe_allow_html=True)
