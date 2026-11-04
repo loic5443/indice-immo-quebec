@@ -12,6 +12,8 @@ COPY --from=proxy /usr/bin/caddy /usr/bin/caddy
 # so strip the upstream file capability before executing it as the app user.
 RUN python -c "import os; p='/usr/bin/caddy'; a='security.capability'; os.removexattr(p, a) if a in os.listxattr(p) else None"
 COPY --chown=app:app . .
+# Search and sharing metadata must be present before JavaScript starts.
+RUN python -m services.public_seo
 # The launcher owns the mounted directory, then drops root before migrations
 # or any server starts. No database is initialized in the build image.
 EXPOSE 10000
