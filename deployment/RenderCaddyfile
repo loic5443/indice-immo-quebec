@@ -25,7 +25,7 @@
 	handle /stripe/test-webhook {
 		reverse_proxy 127.0.0.1:8000
 	}
-	@legal path /conditions /confidentialite /createurs /valeur-propriete-quebec /robots.txt /sitemap.xml
+	@legal path /conditions /confidentialite /createurs /valeur-propriete-quebec /robots.txt /sitemap.xml /google3f133c0ebac158cc.html
 	handle @legal {
 		reverse_proxy 127.0.0.1:8000
 	}
