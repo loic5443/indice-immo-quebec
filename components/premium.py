@@ -49,9 +49,9 @@ def show_premium() -> None:
     st.markdown(
         "<section class='hero-image-panel premium-hero'><div class='hero-content'>"
         "<p class='hero-eyebrow notranslate'>CENLIO PREMIUM</p>"
-        "<div class='hero-title' role='heading' aria-level='1'>Avant d’acheter, voyez ce que les chiffres vous disent.</div>"
-        "<p class='hero-copy'>Comparez vos propriétés, testez une hausse de taux et gardez vos calculs au même endroit. "
-        "Avancez avec des chiffres clairs, selon vos hypothèses.</p>"
+        "<div class='hero-title' role='heading' aria-level='1'>Vous comparez des maisons ? Comparez aussi leurs chiffres.</div>"
+        "<p class='hero-copy'>Une maison repérée sur Centris ? Relevez ses chiffres et analysez votre projet dans Cenlio. "
+        "Avec Premium, gardez vos dossiers, comparez vos options et testez votre budget avant de vous engager.</p>"
         "<p class='hero-proof'><span>Vos critères d’achat</span><span>Comparaisons claires</span>"
         "<span>Suivi utile</span></p></div></section>",
         unsafe_allow_html=True,
@@ -108,9 +108,9 @@ def show_premium() -> None:
         price_label = offer["price_label"] if offer else "Tarif à confirmer"
         access_label = "Abonnement mensuel" if offer else "Accès bêta technique"
         st.markdown(
-            "<article class='plan-card premium-card'><p class='plan-label accent-label'>PREMIUM</p><div class='plan-title' role='heading' aria-level='3'>Suivre vos décisions</div>"
+            "<article class='plan-card premium-card'><p class='plan-label accent-label'>PREMIUM</p><div class='plan-title' role='heading' aria-level='3'>Mieux préparer votre prochain achat</div>"
             f"<p class='plan-price'>{price_label}</p>"
-            "<p><b>Des estimations sans limite</b>, des dossiers complets et les outils utiles quand une décision mérite d’être suivie.</p>"
+            "<p><b>Plusieurs maisons en tête ? Mettez leurs chiffres côte à côte.</b> Gardez vos analyses, testez vos scénarios et téléchargez vos rapports. Les estimations ImmoValue sont sans limite lorsque les données nécessaires sont fournies.</p>"
             "<p class='plan-feature'>✓ <span>Vos critères, comparaisons et simulations de prix</span></p>"
             "<p class='plan-feature'>✓ <span>Rapports PDF complets et dossiers suivis</span></p>"
             "<p class='plan-feature'>✓ <span>Alertes fondées sur des changements vérifiables</span></p>"

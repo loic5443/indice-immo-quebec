@@ -59,12 +59,12 @@ def show_admin():
  with repo._connect() as c:
   settings=dict(c.execute("SELECT * FROM beta_settings WHERE id=1").fetchone()); accounts=c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
  st.html("<h1>Administration</h1>")
- with st.expander("Remboursements, litiges et alertes de fraude",expanded=True):
+ with st.expander("Paiements à vérifier",expanded=True):
   reviews=open_reviews(actor,DATABASE_PATH)
   if not reviews: st.caption("Aucun dossier de facturation en attente de vérification.")
   for review in reviews:
    st.warning(f"À vérifier dans Stripe : {review['reason']} · événement {review['event_id']} · abonnement {review['subscription_id']}")
-   st.caption("Vérifiez le paiement, les droits d’accès et les échéances du dossier dans Stripe. Cette action ne rembourse ni n’annule automatiquement un abonnement.")
+   st.caption("Vérifiez le paiement, les droits d’accès et les échéances du dossier dans Stripe. Cette action classe le dossier. Elle ne modifie aucun paiement ni abonnement.")
    key=review['event_id']+'_'+review['subscription_id']
    confirmed=st.checkbox("J’ai traité ce dossier dans Stripe et vérifié les droits d’accès",key='risk_confirm_'+key)
    if st.button("Marquer le dossier traité",key='risk_resolve_'+key,disabled=not confirmed):

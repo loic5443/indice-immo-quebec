@@ -24,7 +24,7 @@ def capture_referral():
 def show_creators():
     st.caption('PROGRAMME CRÉATEURS CENLIO')
     st.title('Votre contenu aide. Chaque nouveau client peut vous rapporter 10 $.')
-    st.write('Montrez comment Cenlio aide à vérifier les chiffres d’une propriété avant de se décider. Partagez votre lien. Gagnez 10 $ CA une seule fois par nouveau client Premium admissible.')
+    st.write('Votre public regarde des maisons sur Centris ? Montrez-lui le réflexe Cenlio : analyser les chiffres avant de se décider. Partagez votre lien. Gagnez 10 $ CA une seule fois par nouveau client Premium admissible.')
     columns=st.columns(3)
     for col,n in zip(columns,(10,50,100)):
         col.metric(f'{n} nouveaux clients validés',f'{n*10:,} $'.replace(',',' '))

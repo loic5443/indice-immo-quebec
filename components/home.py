@@ -31,8 +31,8 @@ def show_home() -> None:
     st.markdown(
         f"<section class='hero-image-panel' style=\"{_hero()}\"><div class='hero-content'>"
         "<p class='hero-eyebrow'><span class='notranslate'>CENLIO</span> — L’immobilier, plus clair.</p>"
-        "<div class='hero-title' role='heading' aria-level='1'>Avant d’acheter, voyez si les chiffres tiennent.</div>"
-        "<p class='hero-copy'>Calculez le coût ou le flux mensuel, testez un scénario prudent et comparez vos dossiers. Cenlio relie vos hypothèses aux renseignements publics disponibles au Québec.</p>"
+        "<div class='hero-title' role='heading' aria-level='1'>Une maison vous plaît sur Centris ? Regardez aussi ses chiffres.</div>"
+        "<p class='hero-copy'>Le prix affiché est un point de départ. Sur Cenlio, analysez la propriété, comparez vos options et voyez son impact sur votre budget avant de vous engager. Pour votre premier achat ou votre prochaine maison au Québec.</p>"
         "<p class='hero-proof'><span>Valeur expliquée</span><span>Hypothèses transparentes</span><span>Suivi utile</span></p>"
         "</div></section>",
         unsafe_allow_html=True,
@@ -46,6 +46,8 @@ def show_home() -> None:
             st.write("")
             st.button("Découvrir Premium", on_click=go_to, args=("Premium",), width="stretch")
     st.button("Essayer un exemple complet", on_click=go_to, args=("Démonstration",), key="home_demo")
+    st.caption("Vous consultez Centris ? Relevez l’adresse, le prix demandé et les caractéristiques, puis saisissez-les dans Cenlio. Les annonces ne sont pas importées automatiquement. Cenlio est un service indépendant, sans affiliation avec Centris.")
+    st.link_button("Chercher une propriété sur Centris", "https://www.centris.ca/fr")
     st.caption("Commencez sans compte ni document. À l’étape suivante, vous choisissez si Cenlio peut consulter les renseignements publics disponibles.")
     st.caption(
         "Lorsqu’elle est disponible, la première valeur révélée est celle du rôle municipal officiel : un repère fiscal, "
@@ -91,5 +93,5 @@ def show_home() -> None:
     ):
         with column:
             st.markdown(f"<article class='benefit-card'><h3>{title}</h3><p>{copy}</p></article>", unsafe_allow_html=True)
-    st.markdown("<div class='final-cta'><h2>Prêt à ouvrir votre dossier immobilier?</h2><p>Commencez avec une adresse. Vous ajouterez vos chiffres seulement lorsque vous serez prêt.</p></div>", unsafe_allow_html=True)
+    st.markdown("<div class='final-cta'><h2>Avant votre prochaine visite, prenez le réflexe Cenlio.</h2><p>Une maison repérée ? Relevez son adresse et ses chiffres, puis commencez une analyse gratuite.</p></div>", unsafe_allow_html=True)
     st.button("Analyser une propriété", type="primary", on_click=_start_from_home, key="home_final_analysis")
