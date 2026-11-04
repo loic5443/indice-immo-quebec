@@ -36,7 +36,7 @@ page.show_premium()
         app = self._app(False)
         self.assertFalse(app.exception)
         text = " ".join(item.value for item in app.markdown) + " ".join(item.value for item in app.info)
-        self.assertIn("Le dossier ne s’arrête pas au premier calcul", text)
+        self.assertIn("Et si le taux monte ? Et si les loyers baissent ?", text)
         self.assertIn("Aucun paiement n’est demandé", text)
         self.assertIn("Créer mon espace pour être averti", [button.label for button in app.button])
 
