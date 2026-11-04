@@ -169,3 +169,101 @@ div.stFormSubmitButton > button[kind="primaryFormSubmit"]:hover { background: va
 .notranslate, .sidebar-brand, .brand-mark { white-space: nowrap; }
 button, .stButton > button { white-space: normal; overflow-wrap: anywhere; min-height: 2.7rem; }
 @media (max-width: 700px) { .hero-content, .plan-card, .market-card { padding: 1.25rem; } }
+
+
+/* Cenlio uses light content surfaces even when the device selects dark mode.
+   Set both surfaces and foregrounds; nested Markdown must inherit the control
+   color instead of the global dark p/label rule. */
+.stApp { color-scheme: light; }
+
+[data-testid="stButton"] > button,
+[data-testid="stDownloadButton"] > button,
+[data-testid="stLinkButton"] > a,
+[data-testid="stFormSubmitButton"] > button {
+    background-color: #ffffff !important;
+    color: #1d4ed8 !important;
+    border-color: #2563eb !important;
+}
+[data-testid="stButton"] > button *,
+[data-testid="stDownloadButton"] > button *,
+[data-testid="stLinkButton"] > a *,
+[data-testid="stFormSubmitButton"] > button * {
+    color: inherit !important;
+    -webkit-text-fill-color: currentColor;
+}
+[data-testid="stButton"] > button[kind="primary"],
+[data-testid="stLinkButton"] > a[kind="primary"],
+[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+}
+[data-testid="stButton"] > button:hover,
+[data-testid="stDownloadButton"] > button:hover,
+[data-testid="stLinkButton"] > a:hover,
+[data-testid="stFormSubmitButton"] > button:hover {
+    background-color: #eaf1ff !important;
+    color: #1d4ed8 !important;
+}
+[data-testid="stButton"] > button[kind="primary"]:hover,
+[data-testid="stLinkButton"] > a[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"]:hover {
+    background-color: #1d4ed8 !important;
+    color: #ffffff !important;
+}
+[data-testid="stButton"] > button:disabled,
+[data-testid="stDownloadButton"] > button:disabled,
+[data-testid="stFormSubmitButton"] > button:disabled {
+    background-color: #e4e8ef !important;
+    color: #475467 !important;
+    border-color: #98a2b3 !important;
+    opacity: 1;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div,
+[data-testid="stTextInput"] [data-baseweb="input"],
+[data-testid="stNumberInput"] [data-baseweb="input"],
+[data-testid="stDateInput"] [data-baseweb="input"],
+[data-testid="stTextArea"] textarea {
+    background-color: #ffffff !important;
+    color: #172033 !important;
+    border-color: #98a2b3 !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] *,
+[data-testid="stMultiSelect"] [data-baseweb="select"] *,
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input,
+[data-testid="stTextArea"] textarea {
+    color: #172033 !important;
+    -webkit-text-fill-color: #172033;
+}
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input {
+    background-color: #ffffff !important;
+}
+[data-testid="stMultiSelect"] [data-baseweb="tag"] {
+    background-color: #eaf1ff !important;
+}
+[role="listbox"], [role="option"] {
+    background-color: #ffffff !important;
+    color: #172033 !important;
+}
+[role="option"] * { color: inherit !important; }
+[role="option"]:hover, [role="option"][aria-selected="true"] {
+    background-color: #eaf1ff !important;
+}
+[data-testid="stSegmentedControl"] button {
+    background-color: #ffffff !important;
+    color: #1d4ed8 !important;
+}
+[data-testid="stSegmentedControl"] button * { color: inherit !important; }
+[data-testid="stSegmentedControl"] button[aria-pressed="true"] {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+}
+[data-testid="stSidebar"] [data-testid="stLinkButton"] > a,
+[data-testid="stSidebar"] [data-testid="stLinkButton"] > a * {
+    background-color: #ffffff !important;
+    color: #123765 !important;
+}
