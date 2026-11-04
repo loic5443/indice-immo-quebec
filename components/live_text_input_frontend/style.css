@@ -5,3 +5,17 @@ label { display: block; margin: 0 0 6px; font-size: 0.875rem; line-height: 1.2; 
 .input-wrap { border: 1px solid #b8c5cd; border-radius: 8px; background: var(--background); }
 .input-wrap:focus-within { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
 input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 1rem; padding: 10px 12px; }
+
+/* This iframe sits on Cenlio's light content card, including in dark mode. */
+:root {
+    color-scheme: light;
+    --primary: #2563eb !important;
+    --text: #172033 !important;
+    --background: #ffffff !important;
+}
+label, input { color: #172033; -webkit-text-fill-color: #172033; }
+input::placeholder {
+    color: #536174;
+    -webkit-text-fill-color: #536174;
+    opacity: 1;
+}
