@@ -37,7 +37,7 @@ def registration_allowed(code,database_path,development_mode=False):
  return True,""
 
 
-def register_beta_user(name, email, password, database_path, invitation_code="", profile=None, development_mode=False):
+def register_beta_user(name, email, password, database_path, invitation_code="", profile=None, development_mode=False, referral_code=""):
  """Create an account and consume its invitation in one SQLite transaction.
 
  The former UI flow checked an invitation, created the account, then consumed
@@ -84,6 +84,8 @@ def register_beta_user(name, email, password, database_path, invitation_code="",
      _now(), profile.user_type, profile.investment_horizon, profile.risk_tolerance,
     ),
    )
+   from services.creator_service import attach
+   attach(connection, connection.execute("SELECT last_insert_rowid()").fetchone()[0], referral_code)
    if invitation is not None:
     consumed = connection.execute(
      "UPDATE beta_invitations SET uses_count=uses_count+1 WHERE rowid=? AND uses_count<max_uses AND active=1",
@@ -93,6 +95,9 @@ def register_beta_user(name, email, password, database_path, invitation_code="",
      connection.rollback()
      return False, "Code d'invitation invalide ou indisponible."
    connection.commit()
+  except ValueError as error:
+   connection.rollback()
+   return False, str(error)
   except sqlite3.IntegrityError:
    connection.rollback()
    return False, "Un compte existe déjà pour cette adresse courriel."

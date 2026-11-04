@@ -4,6 +4,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from components.creators import capture_referral, show_creators
 from components.about import show_about
 from components.admin import show_admin
 from components.feedback import show_feedback
@@ -24,6 +25,7 @@ st.markdown("<script>document.documentElement.lang='fr-CA';document.documentElem
 
 initialize_database()
 initialize_session()
+capture_referral()
 
 css_path = Path(__file__).resolve().parent / "styles" / "main.css"
 with css_path.open(encoding="utf-8") as css:
@@ -49,6 +51,8 @@ elif page == "Marché":
     show_markets()
 elif page == "Démonstration":
     show_demo()
+elif page == "Espace créateur":
+    show_creators()
 elif page == "Premium":
     show_premium()
 elif page == "Mes propriétés":

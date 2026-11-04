@@ -165,11 +165,14 @@ def create_checkout(user_id, database_path, environment=None, client=None):
         connection.commit()
         # Keep the flow tag stable when an idempotent request is retried.
         flow_suffix = "".join(chr(97 + byte % 26) for byte in hashlib.sha256(request_key.encode()).digest()[:8])
+        from services.creator_service import referral_metadata
+        creator_tags = referral_metadata(connection, user_id)
         session = _call(client.v1.checkout.sessions.create, {
             "mode": "subscription", "customer": customer_id,
             "locale": "fr-CA", "integration_identifier": "immoradar-premium-" + flow_suffix,
             "client_reference_id": str(user_id), "line_items": [{"price": config.price_id, "quantity": 1}],
-            "subscription_data": {"metadata": {"immoradar_user_id": str(user_id)}},
+            "metadata": creator_tags,
+            "subscription_data": {"metadata": {"immoradar_user_id": str(user_id), **creator_tags}},
             "success_url": config.app_url + "/?billing=success&session_id={CHECKOUT_SESSION_ID}",
             "cancel_url": config.app_url + "/?billing=cancel",
             # Customers are created before Checkout without an address. Tax must
@@ -296,6 +299,8 @@ def process_webhook(payload, signature, database_path, environment=None, client=
         if kind in RISK_EVENTS:
             for risk_subscription_id in affected_subscriptions(kind, obj, client, config):
                 subscription = _call(client.v1.subscriptions.retrieve, risk_subscription_id)
+                from services.creator_service import hold_subscription
+                hold_subscription(connection, risk_subscription_id, config.mode)
                 if _save_subscription(connection, subscription, config):
                     connection.execute("INSERT INTO billing_risk_reviews(event_id,subscription_id,reason,created_at) VALUES(?,?,?,?)",
                                        (event["id"], risk_subscription_id, kind, int(time.time())))
@@ -310,6 +315,17 @@ def process_webhook(payload, signature, database_path, environment=None, client=
             # Retrieve current state, rather than trusting an out-of-order event.
             subscription = _call(client.v1.subscriptions.retrieve, subscription_id)
             _save_subscription(connection, subscription, config)
+        if (kind == "invoice.paid" and subscription_id and connection.execute(
+                "SELECT 1 FROM creator_referrals r JOIN billing_accounts b ON b.user_id=r.user_id WHERE b.customer_id=?",
+                (_id(subscription.get("customer")),)).fetchone()):
+            from services.creator_service import record_invoice
+            invoice = _call(client.v1.invoices.retrieve, obj["id"])
+            history = _call(client.v1.invoices.list, {"customer": _id(subscription.get("customer")), "status": "paid", "limit": 100})
+            if not history.get("has_more") and not any(
+                    other.get("id") != invoice.get("id") and other.get("amount_paid", 0) > 0
+                    and other.get("created", 0) <= invoice.get("created", 0)
+                    for other in history.get("data", [])):
+                record_invoice(connection, invoice, subscription, config)
         connection.execute("INSERT INTO billing_events VALUES(?,?,?)", (event["id"], kind, int(time.time())))
     if (kind == "customer.created" and config.mode == "live"
             and obj.get("metadata", {}).get("purpose") == "cenlio_launch_probe"):

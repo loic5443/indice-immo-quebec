@@ -4,7 +4,7 @@ import streamlit as st
 
 
 PRIMARY_PAGES = ["Accueil", "Analyser", "Mes propriétés", "Marché", "Premium"]
-SECONDARY_PAGES = ["Mon compte", "À propos", "Confidentialité", "Donner mon avis", "Démonstration"]
+SECONDARY_PAGES = ["Espace créateur", "Mon compte", "À propos", "Confidentialité", "Donner mon avis", "Démonstration"]
 PAGE_ALIASES = {
     "Analyse immobilière": "Analyser",
     "Mes analyses": "Mes propriétés",
@@ -47,6 +47,7 @@ def show_sidebar() -> str:
         label_visibility="collapsed",
     )
 
+    st.sidebar.button("Gagner avec Cenlio", key="secondary_creators", width="stretch", on_click=_secondary, args=("Espace créateur",))
     st.sidebar.divider()
     account_label = "Mon compte" if "current_user" in st.session_state else "Se connecter"
     account_hint = (

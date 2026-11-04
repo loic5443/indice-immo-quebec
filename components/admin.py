@@ -69,6 +69,8 @@ def show_admin():
    confirmed=st.checkbox("J’ai traité ce dossier dans Stripe et vérifié les droits d’accès",key='risk_confirm_'+key)
    if st.button("Marquer le dossier traité",key='risk_resolve_'+key,disabled=not confirmed):
     resolve_review(actor,DATABASE_PATH,review['event_id'],review['subscription_id']);st.rerun()
+ from components.creators import show_creator_admin
+ show_creator_admin(actor)
  _show_role_data_admin(actor)
  st.metric("Comptes bêta",accounts);st.write(f"Inscriptions : {'ouvertes' if settings['registrations_open'] else 'fermées'} · limite {settings['max_participants']}");st.caption("Migrations : "+", ".join(applied_migrations(DATABASE_PATH)))
  with st.expander("Invitations",expanded=True):

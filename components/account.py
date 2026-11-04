@@ -184,6 +184,8 @@ def show_account() -> None:
     st.html("<h1>Mon compte</h1>")
     if is_authenticated():
         user = current_user()
+        if st.session_state.pop("creator_join_pending", False):
+            go_to("Espace créateur"); st.rerun()
         if not user.get("onboarding_completed"):
             _show_onboarding(user)
             return
@@ -293,7 +295,7 @@ def show_account() -> None:
             elif delete_account(user["id"], DATABASE_PATH):
                 logout(); st.success("Compte supprimé."); st.rerun()
             else:
-                st.error("Un dossier de facturation est associé à votre compte. Annulez le renouvellement dans votre espace Premium et contactez le support pour supprimer le compte sans laisser de paiement actif.")
+                st.error("Un dossier de facturation ou de commissions est associé à votre compte. Annulez tout renouvellement dans Premium et contactez le support pour régler ce dossier et demander la suppression de vos données.")
         if not billing_offer:
             st.caption("Le statut Premium est prévu techniquement; aucun paiement réel n'est activé.")
         return
@@ -325,6 +327,8 @@ def show_account() -> None:
             email = st.text_input("Adresse courriel", key="register_email")
             password = st.text_input("Mot de passe", type="password", key="register_password")
             confirmation = st.text_input("Confirmer le mot de passe", type="password")
+            referral_code = st.text_input("Code créateur (facultatif)", value=st.session_state.get("creator_referral", ""), max_chars=50)
+            st.caption("Si vous utilisez un code, votre inscription sera liée à ce créateur. Il peut recevoir 10 $ pour votre premier abonnement admissible, sans changer votre prix. Votre nom et votre courriel ne lui sont pas transmis.")
             invitation_code = st.text_input("Code d'invitation bêta (si requis)")
             st.caption("Vous choisirez votre profil et vos préférences dans le court démarrage suivant."
                        " Ces choix peuvent être modifiés plus tard dans Mon compte.")
@@ -336,7 +340,7 @@ def show_account() -> None:
                     st.error(error)
             else:
                 created, message = register_beta_user(
-                    name, email, password, DATABASE_PATH, invitation_code=invitation_code,
+                    name, email, password, DATABASE_PATH, invitation_code=invitation_code, referral_code=referral_code,
                 )
                 if created:
                     # The account and its invitation, when required, are now

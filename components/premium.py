@@ -49,9 +49,9 @@ def show_premium() -> None:
     st.markdown(
         "<section class='hero-image-panel premium-hero'><div class='hero-content'>"
         "<p class='hero-eyebrow notranslate'>CENLIO PREMIUM</p>"
-        "<div class='hero-title' role='heading' aria-level='1'>Comparez vos achats. Gardez vos décisions sous contrôle.</div>"
-        "<p class='hero-copy'>Premium rassemble vos critères d’achat, vos dossiers, les scénarios et les changements vérifiables "
-        "pour vous aider à revenir à une décision avec le bon contexte.</p>"
+        "<div class='hero-title' role='heading' aria-level='1'>Avant d’acheter, voyez ce que les chiffres vous disent.</div>"
+        "<p class='hero-copy'>Comparez vos propriétés, testez une hausse de taux et gardez vos calculs au même endroit. "
+        "Avancez avec des chiffres clairs, selon vos hypothèses.</p>"
         "<p class='hero-proof'><span>Vos critères d’achat</span><span>Comparaisons claires</span>"
         "<span>Suivi utile</span></p></div></section>",
         unsafe_allow_html=True,
@@ -70,9 +70,9 @@ def show_premium() -> None:
 
     st.markdown(
         "<div class='section-space compact-space'></div><p class='eyebrow'>POURQUOI PASSER À PREMIUM</p>"
-        "<div class='section-title' role='heading' aria-level='2'>Le dossier ne s’arrête pas au premier calcul.</div>"
-        "<p class='section-intro'>Le gratuit vous aide à comprendre une propriété. Premium vous aide à conserver le fil "
-        "quand vos hypothèses, vos comparables ou les données publiques évoluent.</p>",
+        "<div class='section-title' role='heading' aria-level='2'>Et si le taux monte ? Et si les loyers baissent ?</div>"
+        "<p class='section-intro'>Essayez gratuitement une première analyse. Avec Premium, comparez vos options et retrouvez vos chiffres "
+        "quand votre projet change.</p>",
         unsafe_allow_html=True,
     )
     st.button("Voir un exemple complet avant de choisir", on_click=go_to, args=("Démonstration",), key="premium_demo", width="stretch")
