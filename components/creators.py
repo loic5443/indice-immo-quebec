@@ -23,10 +23,10 @@ def capture_referral():
 
 def show_creators():
     st.caption('PROGRAMME CRÉATEURS CENLIO')
-    st.title('Votre contenu aide. Chaque nouveau client peut vous rapporter 10 $.')
-    st.write('Votre public regarde des maisons sur Centris ? Montrez-lui le réflexe Cenlio : analyser les chiffres avant de se décider. Partagez votre lien. Gagnez 10 $ CA une seule fois par nouveau client Premium admissible.')
+    st.title('Vos abonnés regardent des maisons. Aidez-les à analyser leurs chiffres.')
+    st.write('Votre public regarde Centris, pense acheter ou possède déjà une propriété ? Montrez comment Cenlio aide à analyser le paiement hypothécaire, les taxes et les dépenses. Un contenu utile pour une grande décision. Gagnez 10 $ CA une seule fois par nouveau client Premium admissible.')
     columns=st.columns(3)
-    for col,n in zip(columns,(10,50,100)):
+    for col,n in zip(columns,(10,100,1000)):
         col.metric(f'{n} nouveaux clients validés',f'{n*10:,} $'.replace(',',' '))
     st.caption('Exemples de calcul, pas une promesse de ventes. Aucun frais pour rejoindre le programme.')
     st.link_button('Lire les règles simples du programme','/createurs')
@@ -59,7 +59,7 @@ def show_creators():
     else: st.info('Votre première commission apparaîtra ici après un paiement admissible confirmé par Stripe.')
     st.download_button('Télécharger mon relevé',creators.export_csv(user['id'],DATABASE_PATH,mode),'mes-commissions.csv','text/csv')
     st.caption('Les noms, courriels et cartes des clients restent privés. Pour préparer votre versement, contactez Cenlio avec votre code. Ne partagez jamais vos mots de passe ou numéros de carte.')
-    st.link_button('Contacter Cenlio','mailto:loicstpierre29@gmail.com')
+    st.link_button('Contacter Cenlio','mailto:contactcenlio@gmail.com')
 
 def show_creator_admin(actor):
     with st.expander('Créateurs et commissions'):
