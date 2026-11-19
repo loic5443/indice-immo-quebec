@@ -7,8 +7,26 @@ from contextlib import closing
 from repositories.sqlite_repository import SQLiteRepository
 from services.beta_service import _admin
 
-TERMS_VERSION = "2026-11-04"
+TERMS_VERSION = "2026-11-19"
 WINDOW = 30 * 86400
+
+def commission_cents(invoice):
+    """90% of collected first-invoice revenue, excluding tax and free credits.
+
+    Missing tax totals fail closed; integer arithmetic rounds to the cent.
+    Existing ledger entries are never recalculated.
+    """
+    net = invoice.get('total_excluding_tax')
+    total = invoice.get('total')
+    paid = invoice.get('amount_paid')
+    if any(type(x) is not int for x in (net, total, paid)):
+        return 0
+    if net < 0 or total < net or paid < 0:
+        return 0
+    collected_net = min(net, max(0, paid - (total - net)))
+    if collected_net < 1499:
+        return 0
+    return (collected_net * 90 + 50) // 100
 
 def _user(c, actor):
     row = c.execute("SELECT id,email,name FROM users WHERE id=?", (actor,)).fetchone()
@@ -53,6 +71,8 @@ def record_invoice(c, invoice, subscription, config, now=None):
         or invoice.get('currency')!='cad'
         or invoice.get('billing_reason')!='subscription_create'
         or not isinstance(invoice.get('amount_paid'),int) or invoice['amount_paid']<1499): return
+    amount = commission_cents(invoice)
+    if not amount: return
     account=c.execute("SELECT * FROM billing_accounts WHERE customer_id=? AND mode=?",(ident(invoice.get('customer')),config.mode)).fetchone()
     if not account or account['customer_id']!=ident(subscription.get('customer')) or account['status']!='active': return
     invoice_sub=ident(invoice.get('subscription')) or ident((invoice.get('parent') or {}).get('subscription_details',{}).get('subscription'))
@@ -70,7 +90,7 @@ def record_invoice(c, invoice, subscription, config, now=None):
     # Risk events can precede invoice.paid. Never erase a hold with a late invoice.
     risk=c.execute("SELECT 1 FROM billing_risk_reviews WHERE subscription_id=?",(subscription['id'],)).fetchone()
     c.execute("INSERT OR IGNORE INTO creator_commissions VALUES(?,?,?,?,?,?,?,?,?,?,?,NULL,NULL)",
-        (secrets.token_hex(8),ref['creator_code'],account['user_id'],config.mode,account['customer_id'],subscription['id'],invoice['id'],1000,paid_at,paid_at+WINDOW,'review' if risk else 'pending'))
+        (secrets.token_hex(8),ref['creator_code'],account['user_id'],config.mode,account['customer_id'],subscription['id'],invoice['id'],amount,paid_at,paid_at+WINDOW,'review' if risk else 'pending'))
 
 def hold_subscription(c, subscription_id, mode):
     c.execute("UPDATE creator_commissions SET status='review' WHERE subscription_id=? AND mode=? AND status!='void'",(subscription_id,mode))
@@ -125,3 +145,4 @@ def admin_profiles(actor, database_path):
     _admin(actor,database_path)
     with closing(SQLiteRepository(database_path)._connect()) as c:
         return [dict(x) for x in c.execute("SELECT p.code,p.display_name,p.kind,p.active,COUNT(r.user_id) AS registrations FROM creator_profiles p LEFT JOIN creator_referrals r ON r.creator_code=p.code GROUP BY p.code ORDER BY p.accepted_at DESC")]
+
