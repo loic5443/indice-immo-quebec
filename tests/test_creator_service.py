@@ -1,5 +1,7 @@
 """Financial referral invariants, real migrations, signed billing events and scoped UI."""
 import copy
+import gc
+from contextlib import contextmanager, closing
 import tempfile
 import time
 import unittest
@@ -22,12 +24,17 @@ class CreatorTests(unittest.TestCase):
         ok,msg=register_beta_user('Buyer','buyer@example.test','long-safe-password',self.db,referral_code=self.code)
         self.assertTrue(ok,msg);self.now=int(time.time())
         self.sub={'id':'sub_1','customer':'cus_1','livemode':False,'metadata':{'immoradar_user_id':'2'},'status':'active','items':{'data':[{'price':{'id':'price_premium'},'quantity':1,'current_period_end':self.now+86400}]}}
-        self.invoice={'id':'in_1','customer':'cus_1','subscription':'sub_1','livemode':False,'status':'paid','paid':True,'currency':'cad','billing_reason':'subscription_create','amount_paid':1499,'created':self.now,'status_transitions':{'paid_at':self.now}}
+        self.invoice={'id':'in_1','customer':'cus_1','subscription':'sub_1','livemode':False,'status':'paid','paid':True,'currency':'cad','billing_reason':'subscription_create','amount_paid':1499,'total':1499,'total_excluding_tax':1499,'created':self.now,'status_transitions':{'paid_at':self.now}}
         with self.conn() as c:
             c.execute("INSERT INTO billing_accounts(user_id,customer_id,mode,subscription_id,status) VALUES(2,'cus_1','test','sub_1','active')")
         self.config=billing_config(ENV)
-    def tearDown(self): self.tmp.cleanup()
-    def conn(self): return SQLiteRepository(self.db)._connect()
+    def tearDown(self):
+        gc.collect()
+        self.tmp.cleanup()
+    @contextmanager
+    def conn(self):
+        with closing(SQLiteRepository(self.db)._connect()) as c, c:
+            yield c
     def record(self, invoice=None):
         with self.conn() as c: cs.record_invoice(c,invoice or self.invoice,self.sub,self.config)
     def rows(self): return cs.dashboard(1,self.db,'test')['commissions']
@@ -35,13 +42,26 @@ class CreatorTests(unittest.TestCase):
         self.record();self.record()
         other={**self.invoice,'id':'in_2','billing_reason':'subscription_cycle'};self.record(other)
         self.assertEqual(len(self.rows()),1)
-        self.assertEqual(self.rows()[0]['amount_cents'],1000)
+        self.assertEqual(self.rows()[0]['amount_cents'],1349)
         self.assertEqual(cs.dashboard(1,self.db,'live')['commissions'],[])
         self.assertIsNone(cs.dashboard(2,self.db,'test'))
     def test_ineligible_provider_objects(self):
         for change in ({'status':'draft'},{'status':'open'},{'currency':'usd'},{'livemode':True},{'amount_paid':0},{'amount_paid':1498},{'customer':'cus_stranger'},{'subscription':'sub_stranger'},{'status_transitions':{'paid_at':self.now+cs.WINDOW+1}},{'status_transitions':{'paid_at':self.now-5}}):
             with self.subTest(change=change):
                 self.record({**self.invoice,**change});self.assertEqual(self.rows(),[])
+    def test_tax_credits_and_variable_invoice_amounts(self):
+        for paid,total,net,expected in [(1723,1723,1499,1349),(2298,2298,1999,1799),(1698,1723,1499,0),(3000,1723,1499,1349),(1499,1499,1499,1349),(1505,1505,1505,1355)]:
+            with self.subTest(paid=paid,total=total,net=net):
+                self.assertEqual(cs.commission_cents({'amount_paid':paid,'total':total,'total_excluding_tax':net}),expected)
+        for bad in ({'amount_paid':1499}, {'amount_paid':1499,'total':1499,'total_excluding_tax':None}, {'amount_paid':1499,'total':1498,'total_excluding_tax':1499}):
+            self.assertEqual(cs.commission_cents(bad),0)
+        self.record({**self.invoice,'amount_paid':1723,'total':1723})
+        self.assertEqual(self.rows()[0]['amount_cents'],1349)
+    def test_existing_commission_amount_is_preserved_on_replay(self):
+        self.record()
+        with self.conn() as c: c.execute('UPDATE creator_commissions SET amount_cents=1000')
+        self.record()
+        self.assertEqual(self.rows()[0]['amount_cents'],1000)
     def test_registration_rolls_back_invalid_code(self):
         ok,_=register_beta_user('Bad','bad@example.test','long-safe-password',self.db,referral_code='unknown')
         self.assertFalse(ok)
@@ -92,7 +112,7 @@ class CreatorTests(unittest.TestCase):
     def test_creator_landing_plain_and_clear(self):
         from services.legal_pages import creator_landing
         html=creator_landing()
-        for text in ('1 000 $','10 $ CA une seule fois','14,99','Aucun minimum','Publicité','pas des revenus garantis'): self.assertIn(text,html)
+        for text in ('1 349 $','90 % du premier paiement hors taxes, une seule fois','14,99','Aucun minimum','Publicité','pas une promesse'): self.assertIn(text,html)
     def test_guest_creator_ui(self):
         from streamlit.testing.v1 import AppTest
         app=AppTest.from_string('from components.creators import show_creators\nshow_creators()').run()
@@ -112,3 +132,4 @@ class CreatorTests(unittest.TestCase):
             app=AppTest.from_string('from components.creators import show_creators\nshow_creators()').run()
         self.assertFalse(app.exception)
         self.assertIn(self.code,app.code[0].value)
+
