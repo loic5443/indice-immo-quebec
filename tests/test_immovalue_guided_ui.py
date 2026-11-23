@@ -45,6 +45,30 @@ class GuidedImmoValueUiTests(unittest.TestCase):
         self.assertTrue(any("prix demandé" in item.value.casefold() for item in app.info))
         self.assertTrue(any("Pourquoi cette estimation" in item.label for item in app.expander))
 
+    def test_valuation_without_finances_and_return(self):
+        app = AppTest.from_string(
+            "from unittest.mock import patch\n"
+            "import components.property_analysis as page\n"
+            "with patch.object(page, 'is_authenticated', lambda: False), patch.object(page, 'quota_is_enforced', lambda _path: False):\n"
+            "    page.show_property_analysis()\n"
+        ).run(timeout=20)
+        app.selectbox(key="workflow_property_type").set_value("Maison").run(timeout=20)
+        app.button(key="open_market_estimate").click().run(timeout=20)
+        self.assertFalse(app.exception)
+        self.assertEqual(app.selectbox(key="iv_type").value, "Maison")
+        app.number_input(key="iv_area").set_value(100.0)
+        self._add(app, 1, 500000.0)
+        self._add(app, 2, 510000.0)
+        self._add(app, 3, 520000.0)
+        app.button(key="generate_immovalue").click().run(timeout=20)
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["immovalue_generated_result"]["estimated_value"], 510000)
+        app.button(key="close_market_estimate").click().run(timeout=20)
+        app.button(key="open_market_estimate").click().run(timeout=20)
+        self.assertFalse(app.exception)
+        self.assertEqual(app.number_input(key="iv_area").value, 100.0)
+        self.assertIn("Valeur expérimentale", [metric.label for metric in app.metric])
+
     def test_guided_comparable_can_be_opened_for_edit_then_removed_before_calculation(self):
         app = self._app()
         self._add(app, 1, 500_000.0)

@@ -84,7 +84,14 @@ p, li, label { color: var(--ink); }
 [data-testid="stVerticalBlockBorderWrapper"] { border: 1px solid var(--line) !important; border-radius: 16px !important; background: var(--surface); box-shadow: 0 5px 20px rgba(16,35,63,0.04); }
 [data-testid="stMetric"] { background: var(--surface); padding: 1rem; border: 1px solid var(--line); border-radius: 14px; }
 [data-testid="stMetricLabel"] { color: var(--muted) !important; }
-[data-testid="stMetricValue"] { color: var(--ink) !important; }
+[data-testid="stMetricValue"] { color: var(--ink) !important; font-size: clamp(1.25rem, 2.2vw, 2rem) !important; }
+[data-testid="stMetricValue"], [data-testid="stMetricValue"] > div,
+[data-testid="stMetricLabel"], [data-testid="stMetricLabel"] p {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere;
+}
 [data-testid="stExpander"] { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 
 .plan-label { color: var(--muted) !important; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; }

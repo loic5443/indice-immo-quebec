@@ -88,9 +88,29 @@ class FinancialDraftUiTests(unittest.TestCase):
         }, 3, self.db)
         malformed = AppTest.from_string(self.source, default_timeout=20).run()
         self.assertFalse(malformed.exception)
-        self.assertEqual(malformed.number_input(key="property_price").value, 0.0)
-        self.assertEqual(malformed.number_input(key="mortgage_rate").value, 0.0)
+        self.assertEqual(malformed.number_input(key="property_price").value, None)
+        self.assertEqual(malformed.number_input(key="mortgage_rate").value, None)
         self.assertEqual(malformed.date_input(key="mortgage_renewal_date").value, None)
+
+    def test_empty_editors_and_optional_empty_values(self):
+        app = AppTest.from_string(self.source, default_timeout=20).run()
+        app.text_input(key="workflow_property_name").set_value("Dossier test").run()
+        app.selectbox(key="workflow_property_type").set_value("Maison").run()
+        app.button(key="continue_to_finances").click().run()
+        self.assertIsNone(app.number_input(key="property_price").value)
+        self.assertIsNone(app.number_input(key="mortgage_rate").value)
+        app.number_input(key="property_price").set_value(475123.0)
+        app.number_input(key="down_payment").set_value(95000.0)
+        app.number_input(key="mortgage_rate").set_value(4.75)
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.number_input(key="property_price").value, 475123.0)
+        app.number_input(key="municipal_taxes").set_value(None).run()
+        self.assertFalse(app.exception)
+        self.assertEqual(load_draft(self.user["id"], self.db)[0]["financial_values"]["municipal_taxes"], 0.0)
+        app.button(key="calculate_analysis").click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any(metric.label == "Paiement hypothécaire" for metric in app.metric))
 
     def test_reset_replaces_persisted_financial_values(self):
         app = AppTest.from_string(self.source, default_timeout=20).run()
@@ -102,7 +122,7 @@ class FinancialDraftUiTests(unittest.TestCase):
         app.button(key="reset_analysis").click().run()
         self.assertEqual(load_draft(self.user["id"], self.db)[0]["financial_values"]["property_price"], 0.0)
         resumed = AppTest.from_string(self.source, default_timeout=20).run()
-        self.assertEqual(resumed.number_input(key="property_price").value, 0.0)
+        self.assertEqual(resumed.number_input(key="property_price").value, None)
 
 
 if __name__ == "__main__":

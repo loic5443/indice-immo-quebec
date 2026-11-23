@@ -1137,21 +1137,35 @@ def _official_lookup_fields(
     return response
 
 
+def _number_input(label: str, **kwargs):
+    """Leave zero-valued editors empty; calculations still receive numeric zero."""
+    key = kwargs.get("key")
+    current = st.session_state.get(key, kwargs.get("value", 0))
+    if current == 0 or current is None:
+        st.session_state[key] = None
+    kwargs["value"] = None
+    kwargs.setdefault("placeholder", "Saisir un montant" if "$" in label else "Saisir un nombre")
+    value = st.number_input(label, **kwargs)
+    return value if value is not None else 0
+
+
 def _inputs_from_state() -> PropertyInputs:
-    household_income = st.session_state["household_income"] or None
+    values = {key: st.session_state.get(key) if st.session_state.get(key) is not None else default
+              for key, default in DEFAULTS.items()}
+    household_income = values["household_income"] or None
     return PropertyInputs(
-        price=st.session_state["property_price"], down_payment=st.session_state["down_payment"],
-        annual_interest_rate=st.session_state["mortgage_rate"], amortization_years=st.session_state["amortization_years"],
-        municipal_taxes_annual=st.session_state["municipal_taxes"], school_taxes_annual=st.session_state["school_taxes"],
-        insurance_monthly=st.session_state["insurance"], condo_fees_monthly=st.session_state["condo_fees"],
-        rental_income_monthly=st.session_state["rental_income"], other_expenses_monthly=st.session_state["other_expenses"],
-        household_income_annual=household_income, other_debt_payments_monthly=st.session_state["other_debts"],
-        vacancy_rate_pct=st.session_state["vacancy_rate"], maintenance_monthly=st.session_state["maintenance"],
-        management_monthly=st.session_state["management"], owner_paid_utilities_monthly=st.session_state["utilities"],
-        capital_reserve_monthly=st.session_state["capital_reserve"], initial_repairs=st.session_state["initial_repairs"],
-        acquisition_costs=st.session_state["acquisition_costs"], other_income_monthly=st.session_state["other_income"],
-        rent_growth_annual_pct=st.session_state["rent_growth"], expense_growth_annual_pct=st.session_state["expense_growth"],
-        holding_period_years=st.session_state["holding_period"],
+        price=values["property_price"], down_payment=values["down_payment"],
+        annual_interest_rate=values["mortgage_rate"], amortization_years=values["amortization_years"],
+        municipal_taxes_annual=values["municipal_taxes"], school_taxes_annual=values["school_taxes"],
+        insurance_monthly=values["insurance"], condo_fees_monthly=values["condo_fees"],
+        rental_income_monthly=values["rental_income"], other_expenses_monthly=values["other_expenses"],
+        household_income_annual=household_income, other_debt_payments_monthly=values["other_debts"],
+        vacancy_rate_pct=values["vacancy_rate"], maintenance_monthly=values["maintenance"],
+        management_monthly=values["management"], owner_paid_utilities_monthly=values["utilities"],
+        capital_reserve_monthly=values["capital_reserve"], initial_repairs=values["initial_repairs"],
+        acquisition_costs=values["acquisition_costs"], other_income_monthly=values["other_income"],
+        rent_growth_annual_pct=values["rent_growth"], expense_growth_annual_pct=values["expense_growth"],
+        holding_period_years=values["holding_period"],
     )
 
 
@@ -1166,8 +1180,8 @@ def _workflow_values() -> dict:
         "objective": st.session_state.get("workflow_objective", ""),
         "property_name": _property_name(),
         "property_type": _property_type(),
-        "price": st.session_state.get("property_price", 0),
-        "down_payment": st.session_state.get("down_payment", 0),
+        "price": st.session_state.get("property_price") or 0,
+        "down_payment": st.session_state.get("down_payment") or 0,
     }
 
 
@@ -1222,7 +1236,8 @@ def _restore_property_draft(draft: dict) -> None:
 def _financial_draft_values() -> dict:
     """Serialize only the known local form fields, never telemetry or provider data."""
 
-    values = {key: st.session_state.get(key, default) for key, default in DEFAULTS.items()}
+    values = {key: st.session_state.get(key) if st.session_state.get(key) is not None else default
+              for key, default in DEFAULTS.items()}
     renewal_date = values["mortgage_renewal_date"]
     values["mortgage_renewal_date"] = renewal_date.isoformat() if isinstance(renewal_date, date) else None
     return values
@@ -1564,44 +1579,44 @@ def _show_finance_stage() -> None:
     rental_already_entered = bool(st.session_state.get("rental_income", 0))
     acquisition, financing = st.columns(2)
     with acquisition:
-        st.number_input(price_label, min_value=0.0, step=5_000.0, key="property_price")
-        st.number_input("Mise de fonds ($)", min_value=0.0, step=5_000.0, key="down_payment")
+        _number_input(price_label, min_value=0.0, step=5_000.0, key="property_price")
+        _number_input("Mise de fonds ($)", min_value=0.0, step=5_000.0, key="down_payment")
         if rental_objective or rental_already_entered:
-            st.number_input("Revenus locatifs mensuels prévus ($)", min_value=0.0, step=100.0, key="rental_income")
+            _number_input("Revenus locatifs mensuels prévus ($)", min_value=0.0, step=100.0, key="rental_income")
             st.caption("Indiquez les loyers prévus avant vacance. Les résultats locatifs restent non applicables tant qu’aucun revenu n’est saisi.")
         else:
             st.caption("Votre projet ne nécessite pas de revenu locatif. Ajoutez-en seulement si la propriété sera louée, en tout ou en partie.")
             with st.expander("Ajouter des revenus locatifs (facultatif)", expanded=False):
-                st.number_input("Revenus locatifs mensuels prévus ($)", min_value=0.0, step=100.0, key="rental_income")
-        st.number_input("Autres dépenses mensuelles liées au projet ($, facultatif)", min_value=0.0, step=25.0, key="other_expenses")
+                _number_input("Revenus locatifs mensuels prévus ($)", min_value=0.0, step=100.0, key="rental_income")
+        _number_input("Autres dépenses mensuelles liées au projet ($, facultatif)", min_value=0.0, step=25.0, key="other_expenses")
     with financing:
-        st.number_input("Taux hypothécaire annuel (%)", min_value=0.0, max_value=25.0, step=0.05, format="%.2f", key="mortgage_rate")
-        st.number_input("Amortissement (années)", min_value=5, max_value=30, step=1, key="amortization_years")
-        st.number_input("Taxes municipales annuelles ($)", min_value=0.0, step=100.0, key="municipal_taxes")
-        st.number_input("Assurances mensuelles ($)", min_value=0.0, step=25.0, key="insurance")
+        _number_input("Taux hypothécaire annuel (%)", min_value=0.0, max_value=25.0, step=0.05, format="%.2f", key="mortgage_rate")
+        _number_input("Amortissement (années)", min_value=5, max_value=30, step=1, key="amortization_years")
+        _number_input("Taxes municipales annuelles ($)", min_value=0.0, step=100.0, key="municipal_taxes")
+        _number_input("Assurances mensuelles ($)", min_value=0.0, step=25.0, key="insurance")
     st.caption("Le prix retenu peut correspondre au prix demandé, à votre offre ou à une autre hypothèse. Il reste distinct du rôle municipal et d’ImmoValue.")
 
     with st.expander("Options avancées", expanded=False):
         st.caption("Ces champs restent facultatifs. Ils améliorent la précision de votre lecture sans modifier les formules.")
         first, second, third = st.columns(3)
         with first:
-            st.number_input("Travaux initiaux ($)", min_value=0.0, step=1_000.0, key="initial_repairs")
-            st.number_input("Frais d'acquisition ($)", min_value=0.0, step=1_000.0, key="acquisition_costs")
-            st.number_input("Autres revenus mensuels ($)", min_value=0.0, step=50.0, key="other_income")
-            st.number_input("Taux de vacance (%)", min_value=0.0, max_value=100.0, step=0.5, key="vacancy_rate")
-            st.number_input("Revenu brut annuel du ménage ($, facultatif)", min_value=0.0, step=5_000.0, key="household_income")
-            st.number_input("Autres dettes mensuelles ($, facultatif)", min_value=0.0, step=100.0, key="other_debts")
+            _number_input("Travaux initiaux ($)", min_value=0.0, step=1_000.0, key="initial_repairs")
+            _number_input("Frais d'acquisition ($)", min_value=0.0, step=1_000.0, key="acquisition_costs")
+            _number_input("Autres revenus mensuels ($)", min_value=0.0, step=50.0, key="other_income")
+            _number_input("Taux de vacance (%)", min_value=0.0, max_value=100.0, step=0.5, key="vacancy_rate")
+            _number_input("Revenu brut annuel du ménage ($, facultatif)", min_value=0.0, step=5_000.0, key="household_income")
+            _number_input("Autres dettes mensuelles ($, facultatif)", min_value=0.0, step=100.0, key="other_debts")
         with second:
-            st.number_input("Taxes scolaires annuelles ($)", min_value=0.0, step=50.0, key="school_taxes")
-            st.number_input("Frais de copropriété mensuels ($)", min_value=0.0, step=25.0, key="condo_fees")
-            st.number_input("Entretien courant mensuel ($)", min_value=0.0, step=25.0, key="maintenance")
-            st.number_input("Frais de gestion mensuels ($)", min_value=0.0, step=25.0, key="management")
-            st.number_input("Services publics mensuels ($)", min_value=0.0, step=25.0, key="utilities")
-            st.number_input("Réserve mensuelle dépenses majeures ($)", min_value=0.0, step=25.0, key="capital_reserve")
+            _number_input("Taxes scolaires annuelles ($)", min_value=0.0, step=50.0, key="school_taxes")
+            _number_input("Frais de copropriété mensuels ($)", min_value=0.0, step=25.0, key="condo_fees")
+            _number_input("Entretien courant mensuel ($)", min_value=0.0, step=25.0, key="maintenance")
+            _number_input("Frais de gestion mensuels ($)", min_value=0.0, step=25.0, key="management")
+            _number_input("Services publics mensuels ($)", min_value=0.0, step=25.0, key="utilities")
+            _number_input("Réserve mensuelle dépenses majeures ($)", min_value=0.0, step=25.0, key="capital_reserve")
         with third:
-            st.number_input("Croissance annuelle hypothétique des loyers (%)", min_value=-25.0, max_value=25.0, step=0.25, key="rent_growth")
-            st.number_input("Croissance annuelle hypothétique des dépenses (%)", min_value=-25.0, max_value=25.0, step=0.25, key="expense_growth")
-            st.number_input("Horizon de détention (années)", min_value=1, max_value=40, step=1, key="holding_period")
+            _number_input("Croissance annuelle hypothétique des loyers (%)", min_value=-25.0, max_value=25.0, step=0.25, key="rent_growth")
+            _number_input("Croissance annuelle hypothétique des dépenses (%)", min_value=-25.0, max_value=25.0, step=0.25, key="expense_growth")
+            _number_input("Horizon de détention (années)", min_value=1, max_value=40, step=1, key="holding_period")
             st.date_input("Date de renouvellement hypothécaire (facultatif)", value=None, key="mortgage_renewal_date")
             st.caption("Elle sert à afficher un rappel vérifiable dans vos alertes suivies. Vous pouvez autoriser les avis par courriel séparément dans Mon compte.")
             st.caption("Les projections utilisent uniquement les taux que vous saisissez. Elles ne prévoient pas le marché ni une valeur future.")
@@ -1648,6 +1663,12 @@ def show_property_analysis() -> None:
             "workflow_profile", "workflow_objective", "workflow_objective_choice",
         ):
             st.session_state.pop(key, None)
+    valuation_owner = st.session_state.get("valuation_owner", owner_id)
+    if valuation_owner is not None and valuation_owner != owner_id:
+        for key in list(st.session_state):
+            if key.startswith(("iv_", "immovalue_generated")) or key == "analysis_valuation_open":
+                st.session_state.pop(key, None)
+    st.session_state["valuation_owner"] = owner_id
     st.session_state[FINANCIAL_OWNER_KEY] = owner_id
     financial_values = st.session_state.setdefault(FINANCIAL_STATE_KEY, dict(DEFAULTS))
     restore_financial_values = bool(st.session_state.get("analysis_calculation_signature")) or bool(
@@ -1782,7 +1803,6 @@ def show_property_analysis() -> None:
                 # browser/component combination, without storing an address
                 # or requiring Enter, Tab or a second search.
                 with suggestion_actions.container(height=220, border=False):
-                    st.caption("Choisissez une suggestion pour remplir les renseignements disponibles.")
                     for index, suggestion in enumerate(suggestion_response.suggestions):
                         st.button(
                             suggestion.label,
@@ -1829,6 +1849,26 @@ def show_property_analysis() -> None:
     _show_dossier_summary(address_state, address_lookup, inputs, profile)
     _show_role_overview(address_lookup)
     _show_aerial_view(address_lookup)
+    valuation_identity = (str(owner_id), str(address_state.address), _property_name())
+    previous_identity = st.session_state.get("valuation_identity")
+    if previous_identity is not None and previous_identity != valuation_identity:
+        for key in list(st.session_state):
+            if key.startswith(("iv_", "immovalue_generated")) and key != "iv_asking":
+                st.session_state.pop(key, None)
+    st.session_state["valuation_identity"] = valuation_identity
+    # Retain subject editors while switching between valuation and finances.
+    for key in ("iv_name", "iv_type", "iv_area", "iv_asking", "iv_units", "iv_land", "iv_year", "iv_notes"):
+        if key in st.session_state:
+            st.session_state[key] = st.session_state[key]
+    if st.session_state.get("analysis_valuation_open"):
+        if st.button("Revenir à mon analyse", key="close_market_estimate"):
+            st.session_state["analysis_valuation_open"] = False
+            st.rerun()
+        _show_immovalue(address_lookup)
+        return
+    if st.button("Calculer l’estimation marchande", key="open_market_estimate"):
+        st.session_state["analysis_valuation_open"] = True
+        st.rerun()
     visible_stage = (
         1
         if st.session_state.get("analysis_reopen_show_property_stage")
@@ -2087,7 +2127,7 @@ def _show_summary_financial_cards(inputs: PropertyInputs, result: AnalysisResult
         ("Rendement sur mise", f"{result.cash_on_cash_return:.2f} %" if has_rental_context else "Non applicable", "Flux annuel / capital investi." if has_rental_context else "Dépend des revenus locatifs."),
         ("Capacité à couvrir la dette (DSCR)", f"{result.debt_service_coverage_ratio:.2f}x" if has_rental_context else "Non applicable", "RNE annuel / dette." if has_rental_context else "Dépend des revenus locatifs."),
     )
-    for group in (items[:4], items[4:]):
+    for group in (items[:2], items[2:4], items[4:6], items[6:]):
         columns = st.columns(len(group))
         for column, (label, value, description) in zip(columns, group):
             with column:
@@ -2367,6 +2407,8 @@ def _immovalue_subject() -> SubjectProperty:
     address_name = ""
     if isinstance(state, AddressFormState) and state.address:
         address_name = ", ".join(part for part in (state.address.street, state.address.city) if part)
+    st.session_state.setdefault("iv_name", address_name or _property_name())
+    st.session_state.setdefault("iv_type", _property_type() if _property_type() in PROPERTY_TYPES else "")
     name = st.text_input("Adresse ou nom de la propriété", key="iv_name", placeholder=address_name or "Ex. Projet résidentiel")
     first, second, third = st.columns(3)
     with first:
@@ -2445,7 +2487,7 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
     """Guide manual/CSV comparables without changing the ImmoValue algorithm."""
 
     st.markdown("<div class='section-space'></div><h2>Estimation marchande (ImmoValue)</h2>", unsafe_allow_html=True)
-    st.caption("Expérimental : ajoutez vos ventes comparables autorisées. Cenlio ne collecte aucune transaction et ce résultat n’est pas une évaluation officielle.")
+    st.caption("Ajoutez trois ventes comparables et la superficie de la propriété pour obtenir une fourchette de valeur. Cenlio ne récupère pas automatiquement les prix de vente.")
     subject = _immovalue_subject()
     st.session_state.setdefault("iv_manual_comparables", [])
     manual_comparables = list(st.session_state["iv_manual_comparables"])
@@ -2555,7 +2597,12 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
         st.caption(quota["label"] + (" · Le quota est désactivé pendant la bêta." if not quota_is_enforced(DATABASE_PATH) else ""))
     if estimate is None:
         if not candidate["available"]:
-            st.info("Estimation non prête : ajoutez les renseignements manquants et au moins trois comparables admissibles. Cette étape ne consomme aucune estimation.")
+            missing = []
+            if not subject.living_area:
+                missing.append("la superficie habitable de la propriété")
+            if admissible < 3:
+                missing.append(f"{3 - admissible} vente(s) comparable(s) admissible(s)")
+            st.info("Pour calculer votre estimation, ajoutez : " + "; ".join(missing) + ".")
         elif st.button("Produire l’estimation ImmoValue", type="primary", key="generate_immovalue"):
             if quota_is_enforced(DATABASE_PATH) and not is_authenticated():
                 st.info("Créez votre compte gratuit pour produire une estimation ImmoValue complète. Vos comparables restent dans cette session.")
@@ -2565,7 +2612,7 @@ def _show_immovalue(address_lookup: dict | None = None) -> dict:
                 st.session_state["immovalue_generated_key"] = draft_key
                 st.session_state["immovalue_generated_at"] = today_iso()
                 estimate = candidate
-                st.success("Estimation ImmoValue produite.")
+                st.rerun()
             else:
                 st.warning("Votre estimation gratuite du mois est utilisée. L’analyse financière reste disponible.")
                 show_premium_teaser(
