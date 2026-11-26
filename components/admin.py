@@ -69,6 +69,11 @@ def show_admin():
    confirmed=st.checkbox("J’ai traité ce dossier dans Stripe et vérifié les droits d’accès",key='risk_confirm_'+key)
    if st.button("Marquer le dossier traité",key='risk_resolve_'+key,disabled=not confirmed):
     resolve_review(actor,DATABASE_PATH,review['event_id'],review['subscription_id']);st.rerun()
+ from services.usage_measurement import summary
+ with st.expander("Visites et essais — 7 derniers jours UTC", expanded=True):
+  st.caption("Sessions ayant accepté la mesure uniquement. Une session ne correspond pas nécessairement à une personne. Démonstrations distinctes des analyses personnelles; paiements à vérifier dans Stripe.")
+  labels={"visit":"Visites mesurées", "demo":"Exemples essayés", "analysis_started":"Analyses ouvertes", "analysis_completed":"Analyses calculées", "premium":"Premium consulté", "checkout_started":"Paiements ouverts"}
+  st.dataframe([{"Étape":labels[key],"Sessions":value} for key,value in summary(DATABASE_PATH).items()], hide_index=True, width="stretch")
  from components.creators import show_creator_admin
  show_creator_admin(actor)
  _show_role_data_admin(actor)

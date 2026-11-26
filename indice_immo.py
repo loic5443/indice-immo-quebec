@@ -43,7 +43,12 @@ if st.query_params.get("reset_token"):
     st.session_state["main_navigation"] = "Mon compte"
     st.session_state.pop("current_user", None)
 
+from components.usage_measurement import measure, show_measurement_choice
+
 page = show_sidebar()
+show_measurement_choice()
+if page in {"Démonstration", "Analyser", "Premium"}:
+    measure({"Démonstration": "demo", "Analyser": "analysis_started", "Premium": "premium"}[page])
 
 if page == "Accueil":
     show_home()

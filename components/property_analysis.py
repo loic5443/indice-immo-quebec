@@ -1911,6 +1911,8 @@ def show_property_analysis() -> None:
     else:
         profile = st.session_state["workflow_profile"]
         st.caption("Créez un compte pour enregistrer votre profil et sauvegarder cette analyse.")
+    from components.usage_measurement import measure
+    measure("analysis_completed")
     _show_results(inputs, calculate_analysis(inputs), profile, address_lookup)
 
 

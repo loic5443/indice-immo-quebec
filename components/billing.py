@@ -72,7 +72,7 @@ def show_billing_actions(user, database_path, offer):
         st.button("Créer mon compte pour choisir Premium", type="primary", on_click=_open_account_for_premium,
                   key="billing_signup", width="stretch")
         return
-    st.markdown("[Conditions d’abonnement](/conditions) · [Confidentialité](/confidentialite) · [Support](mailto:loicstpierre29@gmail.com)")
+    st.markdown("[Conditions d’abonnement](/conditions) · [Confidentialité](/confidentialite) · [Support](mailto:contactcenlio@gmail.com)")
     account = billing_account(user["id"], database_path)
     if account:
         labels = {"active": "Actif", "trialing": "Essai actif", "past_due": "Paiement à régulariser",
@@ -103,6 +103,8 @@ def show_billing_actions(user, database_path, offer):
             try:
                 st.session_state["billing_checkout_url"] = create_checkout(user["id"], database_path)
                 st.session_state["billing_checkout_owner"] = user["id"]
+                from components.usage_measurement import measure
+                measure("checkout_started")
             except BillingError as error:
                 st.error(str(error))
         if st.session_state.get("billing_checkout_owner") == user["id"] and st.session_state.get("billing_checkout_url"):
