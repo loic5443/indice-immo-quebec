@@ -2287,8 +2287,8 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
             "<span>✓ Sauvegarde privée possible</span>"
             "<span>🔒 Alertes factuelles et suivi Premium</span>"
             "<span>🔒 Comparaisons et rapport complet</span>"
-            "</div><p class='premium-next-step-note'>Premium est en préparation commerciale. "
-            "Aucun paiement n’est demandé pendant la bêta privée.</p></div>"
+            "</div><p class='premium-next-step-note'>Consultez Premium pour voir le prix et les fonctions disponibles. "
+            "Votre première analyse financière reste gratuite.</p></div>"
         )
     st.markdown(next_step_copy, unsafe_allow_html=True)
     if is_authenticated():
@@ -2398,7 +2398,7 @@ def _show_results(inputs: PropertyInputs, result: AnalysisResult, profile: str, 
             st.button("Modifier mes chiffres", on_click=_return_to_summary_inputs, key="guest_edit_analysis_hypotheses", width="stretch")
         with premium:
             st.button("Découvrir Premium", on_click=go_to, args=("Premium",), key="guest_summary_premium", width="stretch")
-        st.caption("Premium est en préparation commerciale. Aucun paiement n’est demandé pendant la bêta privée.")
+        st.caption("Consultez Premium pour voir le prix et les fonctions disponibles. Votre première analyse financière reste gratuite.")
     st.markdown("</div>", unsafe_allow_html=True)
 
 
